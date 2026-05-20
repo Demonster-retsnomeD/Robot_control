@@ -1400,6 +1400,29 @@ function renderMap() {
       `x:${mapPose.x.toFixed(2)} y:${mapPose.y.toFixed(2)} θ:${(mapPose.theta * 180/Math.PI).toFixed(0)}°`;
   }
 
+  // Ghost robot (pending localization drag)
+  if (locatePending) {
+    const [rx, ry, rs] = worldToCanvas(locatePending.wx, locatePending.wy, mapData, cw, ch);
+    const rr = Math.max(7, rs * 2.2);
+    ctx.save(); ctx.globalAlpha = 0.85;
+    ctx.beginPath(); ctx.arc(rx, ry, rr, 0, Math.PI*2);
+    ctx.fillStyle = '#22c55e'; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2 / mapZoom; ctx.stroke();
+    const ang = -locatePending.theta;
+    ctx.beginPath();
+    ctx.moveTo(rx, ry);
+    ctx.lineTo(rx + Math.cos(ang) * rr * 2.8, ry + Math.sin(ang) * rr * 2.8);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3 / mapZoom; ctx.stroke();
+    // Arrowhead
+    ctx.beginPath();
+    const ax = rx + Math.cos(ang) * rr * 2.8, ay = ry + Math.sin(ang) * rr * 2.8;
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(ax + Math.cos(ang + 2.4) * rr * 0.8, ay + Math.sin(ang + 2.4) * rr * 0.8);
+    ctx.lineTo(ax + Math.cos(ang - 2.4) * rr * 0.8, ay + Math.sin(ang - 2.4) * rr * 0.8);
+    ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.restore();
+  }
+
   ctx.restore(); // end zoom+pan transform
 
   // ── Scale bar (bottom-right, no transform) ────────────────────────────────
@@ -1536,7 +1559,7 @@ function initMapClick() {
   const canvas = document.getElementById('map-canvas');
   if (!canvas) return;
   canvas.addEventListener('click', (e) => {
-    if (!mapData || drawMode || _didPan) return;
+    if (!mapData || drawMode || locateMode || _didPan) return;
     const rect = canvas.getBoundingClientRect();
     const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
     const cy = (e.clientY - rect.top)  * (canvas.height / rect.height);
@@ -1569,14 +1592,7 @@ function initMapClick() {
     popup.style.left = px + 'px';
     popup.style.top  = py + 'px';
     popup.style.display = 'block';
-    // Show/hide sections based on mode
-    document.getElementById('locate-section').style.display = locateMode ? 'block' : 'none';
-    if (locateMode) {
-      document.getElementById('locate-theta').value = '0';
-      document.getElementById('locate-theta-val').textContent = '0°';
-    } else {
-      setTimeout(() => document.getElementById('popup-name').focus(), 50);
-    }
+    setTimeout(() => document.getElementById('popup-name').focus(), 50);
   });
   // Close popup on outside click
   document.addEventListener('click', (e) => {
@@ -1933,36 +1949,36 @@ function _updateMeasureResult() {
 
 // ── Localization ──────────────────────────────────────────────────────────
 let locateMode = false;
+let locatePending = null;  // {wx,wy,theta} while dragging
+let _locateDragging = false, _locateStartCX = 0, _locateStartCY = 0;
 
 function toggleLocateMode() {
   locateMode = !locateMode;
+  locatePending = null; _locateDragging = false;
   const btn = document.getElementById('locate-mode-btn');
-  btn.style.background  = locateMode ? 'rgba(14,165,233,.2)' : '';
-  btn.style.borderColor = locateMode ? 'var(--accent)' : '';
-  btn.style.color       = locateMode ? 'var(--accent)' : '';
-  document.getElementById('locate-section').style.display = locateMode ? 'block' : 'none';
-  toast(locateMode ? '📍 定位模式：点击地图设置机器人初始位置' : '已退出定位模式');
+  btn.style.background  = locateMode ? 'rgba(34,197,94,.2)' : '';
+  btn.style.borderColor = locateMode ? 'var(--green)' : '';
+  btn.style.color       = locateMode ? 'var(--green)' : '';
+  const canvas = document.getElementById('map-canvas');
+  if (canvas) canvas.style.cursor = locateMode ? 'crosshair' : 'crosshair';
+  toast(locateMode ? '📍 定位：在地图上按住拖动 — 落点=位置，拖动方向=朝向' : '已退出定位模式');
+  if (mapData) renderMap();
 }
 
-async function confirmSetPose() {
-  const thetaDeg = parseFloat(document.getElementById('locate-theta').value) || 0;
-  const theta = thetaDeg * Math.PI / 180;
-  closeMapPopup();
+async function _doSetPose(wx, wy, theta) {
   try {
     const r = await fetch('/api/set_pose', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({x: clickWorldX, y: clickWorldY, theta})
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({x: wx, y: wy, theta})
     });
     const d = await r.json();
     if (d.ok) {
-      toast('📍 初始位置已设置，机器人正在扫描定位...', 'green');
+      toast(`📍 定位已发送  θ:${(theta*180/Math.PI).toFixed(0)}°`, 'green');
       _showLocalizingBadge();
       locateMode = false;
       const btn = document.getElementById('locate-mode-btn');
       btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = '';
-      document.getElementById('locate-section').style.display = 'none';
-    } else { toast('定位失败: ' + (d.error || '未知错误'), 'red'); }
+    } else { toast('定位失败: ' + (d.error || ''), 'red'); }
   } catch(e) { toast('发送失败', 'red'); }
 }
 
@@ -2096,6 +2112,14 @@ function _getCanvasXY(e, canvas) {
   // ── Mouse events ──────────────────────────────────────────────────────────
   canvas.addEventListener('mousedown', e => {
     const [cx, cy] = _getCanvasXY(e, canvas);
+    if (locateMode) {
+      if (!mapData) return;
+      const [wx, wy] = canvasToWorld(cx, cy, mapData, canvas.width, canvas.height);
+      locatePending = {wx, wy, theta: 0};
+      _locateDragging = true;
+      _locateStartCX = cx; _locateStartCY = cy;
+      renderMap(); e.stopPropagation(); return;
+    }
     if (drawMode) {
       if (lineMode) {
         const [gx, gy] = _canvasToGrid(cx, cy);
@@ -2115,6 +2139,11 @@ function _getCanvasXY(e, canvas) {
 
   canvas.addEventListener('mousemove', e => {
     const [cx, cy] = _getCanvasXY(e, canvas);
+    if (locateMode && _locateDragging && locatePending) {
+      const dx = cx - _locateStartCX, dy = cy - _locateStartCY;
+      if (Math.hypot(dx, dy) > 4) locatePending.theta = Math.atan2(-dy, dx);
+      renderMap(); return;
+    }
     if (drawMode && _isDrawing) {
       if (lineMode && lineStart) {
         const [gx, gy] = _canvasToGrid(cx, cy);
@@ -2134,6 +2163,13 @@ function _getCanvasXY(e, canvas) {
   });
 
   canvas.addEventListener('mouseup', e => {
+    if (locateMode && _locateDragging && locatePending) {
+      _locateDragging = false;
+      const {wx, wy, theta} = locatePending;
+      locatePending = null;
+      _doSetPose(wx, wy, theta);
+      renderMap(); return;
+    }
     if (drawMode && lineMode && lineStart && _isDrawing) {
       const [cx, cy] = _getCanvasXY(e, canvas);
       const [gx, gy] = _canvasToGrid(cx, cy);
