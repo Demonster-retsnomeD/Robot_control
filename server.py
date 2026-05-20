@@ -856,7 +856,9 @@ def api_map_save():
         return jsonify({"ok": False, "error": "地图名称不能为空"}), 400
 
     cfg = load_config()
-    if cfg.get("simulation_mode", True):
+    with sim_lock:
+        drawing = sim.get("_mode", 2) == 1
+    if cfg.get("simulation_mode", True) or drawing:
         m = _sim_map()
     else:
         m, err = rget(cfg, "/reeman/map")
