@@ -328,6 +328,7 @@ body.user-mode #page-user{display:flex!important;align-items:stretch}
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:.7rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px" data-i18n="map.title">🗺 SLAM 地图</span>
         <button class="btn-sm" id="map-mode-btn" onclick="toggleMapMode()" style="font-size:.65rem" data-i18n="map.mapping">🔴 建图模式</button>
+        <button class="btn-sm" onclick="newBlankMap()" style="font-size:.65rem;background:rgba(14,165,233,.12);border-color:var(--accent);color:var(--accent)" title="清空地图，从零手绘">🆕 新建地图</button>
         <span style="font-size:.62rem;padding:2px 7px;border-radius:10px;background:rgba(245,158,11,.15);color:var(--yellow);display:none" id="map-scan-badge">● 扫描中</span>
         <span id="fog-badge" style="display:none;font-size:.62rem;padding:2px 7px;border-radius:10px;background:rgba(239,68,68,.12);color:var(--red)">🌫 雾效</span>
         <button class="btn-sm" id="locate-mode-btn" onclick="toggleLocateMode()" style="font-size:.65rem">📍 定位</button>
@@ -351,6 +352,12 @@ body.user-mode #page-user{display:flex!important;align-items:stretch}
         <span id="measure-result" style="display:none;font-size:.7rem;font-family:monospace;padding:2px 8px;border-radius:6px;background:rgba(245,158,11,.15);border:1px solid var(--yellow);color:var(--yellow)"></span>
         <button class="btn-sm" onclick="openMapLibrary()" data-i18n="btn.maplibrary" style="font-size:.65rem">🗂️ 地图库</button>
         <span style="font-size:.62rem;color:var(--text2)" id="map-scale">—</span>
+        <span style="font-size:.62rem;color:var(--text2)">|</span>
+        <label style="font-size:.62rem;color:var(--text2);display:flex;align-items:center;gap:3px" title="调整比例尺：每格实际距离(米)">⚖️
+          <input id="res-input" type="number" step="0.01" min="0.01" max="2" value="0.05"
+            style="width:48px;background:var(--panel2);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:2px 4px;font-size:.62rem;outline:none"
+            onchange="setCustomResolution(this.value)" title="每格实际距离(米)，改变比例尺">m/格
+        </label>
         <span style="font-size:.62rem;color:var(--accent);font-family:monospace" id="map-pos">x:— y:—</span>
         <button class="btn-sm" onclick="fetchMap(true)" style="font-size:.65rem">刷新</button>
       </div>
@@ -1196,18 +1203,23 @@ async function fetchMap(force) {
   try {
     const r = await fetch('/api/map');
     const d = await r.json();
+    document.getElementById('map-loading').style.display = 'none';
     if (d.width) {
       mapData = d;
       if (!drawLayer || drawLayer.length !== d.width * d.height)
         drawLayer = new Int8Array(d.width * d.height).fill(-1);
-      document.getElementById('map-loading').style.display = 'none';
+      const res = customResolution || d.resolution;
       document.getElementById('map-scale').textContent =
-        `${d.width}×${d.height} · ${d.resolution*100}cm/格 · ${(d.width*d.resolution).toFixed(1)}×${(d.height*d.resolution).toFixed(1)}m`;
+        `${d.width}×${d.height} · ${(res*100).toFixed(1)}cm/格 · ${(d.width*res).toFixed(1)}×${(d.height*res).toFixed(1)}m`;
+      if (!document.getElementById('res-input')._userSet)
+        document.getElementById('res-input').value = d.resolution;
       document.getElementById('fog-badge').style.display = d.fog ? 'inline' : 'none';
       renderMap();
       if (uiUserMode) renderUserMap();
     }
-  } catch(e) {}
+  } catch(e) {
+    document.getElementById('map-loading').style.display = 'none';
+  }
   if (force) clearTimeout(mapFetchTimer);
   mapFetchTimer = setTimeout(fetchMap, 3000);
 }
@@ -1330,6 +1342,36 @@ function renderMap() {
     document.getElementById('map-pos').textContent =
       `x:${mapPose.x.toFixed(2)} y:${mapPose.y.toFixed(2)} θ:${(mapPose.theta * 180/Math.PI).toFixed(0)}°`;
   }
+
+  // ── Scale bar (bottom-right) ──────────────────────────────────────────────
+  const res = customResolution || mapData.resolution;
+  const pxPerM = (cw / W) / res;
+  const niceLengths = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50];
+  const barM = niceLengths.reduce((best, m) => {
+    const px = m * pxPerM;
+    return (px >= 40 && px <= cw * 0.28) ? m : best;
+  }, niceLengths[0]);
+  const barPx = barM * pxPerM;
+  const bx = cw - barPx - 14;
+  const by = ch - 14;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.beginPath();
+  ctx.roundRect(bx - 6, by - 16, barPx + 12, 22, 4);
+  ctx.fill();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(bx, by - 4); ctx.lineTo(bx, by + 4);
+  ctx.moveTo(bx, by); ctx.lineTo(bx + barPx, by);
+  ctx.moveTo(bx + barPx, by - 4); ctx.lineTo(bx + barPx, by + 4);
+  ctx.stroke();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 10px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(barM >= 1 ? `${barM}m` : `${barM*100}cm`, bx + barPx / 2, by - 3);
+  ctx.restore();
 }
 
 // Hook into pollStatus to update map pose
@@ -1345,6 +1387,40 @@ function updateMapFromStatus(d) {
 // ── Map click → navigate / save waypoint ─────────────────────────────────
 let clickWorldX = 0, clickWorldY = 0;
 let mapScanMode = false;
+let customResolution = null;
+
+function setCustomResolution(v) {
+  const n = parseFloat(v);
+  customResolution = (n > 0) ? n : null;
+  document.getElementById('res-input')._userSet = true;
+  if (mapData) {
+    const res = customResolution || mapData.resolution;
+    document.getElementById('map-scale').textContent =
+      `${mapData.width}×${mapData.height} · ${(res*100).toFixed(1)}cm/格 · ${(mapData.width*res).toFixed(1)}×${(mapData.height*res).toFixed(1)}m`;
+    renderMap();
+  }
+}
+
+async function newBlankMap() {
+  if (!confirm('新建空白地图会清除当前地图内容，确认？')) return;
+  try {
+    const r = await fetch('/api/map/new', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    const d = await r.json();
+    if (d.ok) {
+      drawLayer = null;
+      mapScanMode = true;
+      const btn = document.getElementById('map-mode-btn');
+      btn.textContent = t('map.nav');
+      btn.style.background = 'rgba(34,197,94,.15)';
+      btn.style.borderColor = 'var(--green)';
+      btn.style.color = 'var(--green)';
+      document.getElementById('map-scan-badge').style.display = 'inline';
+      document.getElementById('draw-mode-btn').style.display = 'inline';
+      toast('🆕 新建空白地图 — 可用✏️手绘工具绘制地形', 'green');
+      fetchMap(true);
+    } else { toast(d.error || '新建失败', 'red'); }
+  } catch(e) { toast('新建地图失败', 'red'); }
+}
 
 function canvasToWorld(cx, cy, map, cw, ch) {
   const cellW = cw / map.width, cellH = ch / map.height;

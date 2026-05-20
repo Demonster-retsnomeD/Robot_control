@@ -790,6 +790,22 @@ def api_set_pose():
     _log(f"SET_POSE ({x:.2f},{y:.2f})", ok, err or "")
     return jsonify({"ok": ok, "error": err} if not ok else {"ok": True})
 
+@app.route("/api/map/new", methods=["POST"])
+@login_required
+def api_map_new():
+    """Reset to a blank editable map (all free space, fully visible, no fog)."""
+    global SIM_GRID
+    cfg = load_config()
+    if not cfg.get("simulation_mode", True):
+        return jsonify({"ok": False, "error": "仅支持仿真模式新建地图"}), 400
+    with sim_lock:
+        SIM_GRID = [0] * (SIM_W * SIM_H)          # all free space
+        sim["_mode"] = 1
+        sim["_revealed"] = bytearray(b'\x01' * (SIM_W * SIM_H))  # all revealed
+        sim["x"] = 0.0; sim["y"] = 0.0; sim["theta"] = 0.0
+    _log("NEW_MAP: blank canvas", True, "SIM")
+    return jsonify({"ok": True})
+
 @app.route("/api/map/apply_draw", methods=["POST"])
 @login_required
 def api_apply_draw():
