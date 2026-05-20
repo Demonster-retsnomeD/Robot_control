@@ -865,6 +865,16 @@ def api_map_save():
         if err or not m:
             return jsonify({"ok": False, "error": err or "无法获取地图"}), 500
 
+    # Use client-supplied custom_resolution if provided (user-adjusted scale bar)
+    custom_res = d.get("custom_resolution")
+    if custom_res:
+        try:
+            custom_res = float(custom_res)
+            if custom_res > 0:
+                m = dict(m); m["resolution"] = custom_res
+        except (ValueError, TypeError):
+            pass
+
     created = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     data_json = json.dumps(m["data"])
     try:

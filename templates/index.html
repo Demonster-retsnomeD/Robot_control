@@ -2274,7 +2274,8 @@ async function saveCurrentMap() {
   }
   try {
     const r = await fetch('/api/map/save', {method:'POST',
-      headers:{'Content-Type':'application/json'}, body: JSON.stringify({name})});
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name, custom_resolution: customResolution || null})});
     const d = await r.json();
     if (d.ok) {
       toast(`✅ 地图「${name}」已保存`,'green');
@@ -2328,11 +2329,14 @@ async function loadSavedMap(id, name) {
       mapData = d;
       mapData.fog = false;
       viewingSavedMap = true;
+      // Restore saved resolution as custom scale
+      customResolution = d.resolution;
+      const resInput = document.getElementById('res-input');
+      if (resInput) { resInput.value = d.resolution; resInput._userSet = true; }
       document.getElementById('map-loading').style.display = 'none';
       document.getElementById('live-map-btn').style.display = 'inline';
-      const res = customResolution || d.resolution;
       document.getElementById('map-scale').textContent =
-        `${d.width}×${d.height} · ${(res*100).toFixed(1)}cm/格 · 📂「${name}」`;
+        `${d.width}×${d.height} · ${(d.resolution*100).toFixed(1)}cm/格 · 📂「${name}」`;
       document.getElementById('fog-badge').style.display = 'none';
       renderMap();
       document.getElementById('map-library-modal').classList.remove('open');
