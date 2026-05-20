@@ -1495,7 +1495,19 @@ async function newBlankMap() {
     const r = await fetch('/api/map/new', {method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
     const d = await r.json();
     if (d.ok) {
-      drawLayer = null;
+      // Reset client state immediately — don't wait for fetchMap
+      viewingSavedMap = false;
+      document.getElementById('live-map-btn').style.display = 'none';
+      const W = mapData ? mapData.width  : 100;
+      const H = mapData ? mapData.height : 80;
+      mapData = {
+        width: W, height: H,
+        resolution: (mapData ? mapData.resolution : 0.05),
+        origin: (mapData ? mapData.origin : {x: -2.5, y: -2.0}),
+        data: new Array(W * H).fill(0),
+        fog: false
+      };
+      drawLayer = new Int8Array(W * H).fill(-1);
       mapScanMode = true;
       const btn = document.getElementById('map-mode-btn');
       btn.textContent = t('map.nav');
@@ -1504,6 +1516,7 @@ async function newBlankMap() {
       btn.style.color = 'var(--green)';
       document.getElementById('map-scan-badge').style.display = 'inline';
       document.getElementById('draw-mode-btn').style.display = 'inline';
+      renderMap();
       toast('🆕 新建空白地图 — 可用✏️手绘工具绘制地形', 'green');
       fetchMap(true);
     } else { toast(d.error || '新建失败', 'red'); }
