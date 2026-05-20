@@ -338,8 +338,12 @@ body.user-mode #page-user{display:flex!important;align-items:stretch}
           <button class="btn-sm dt-btn" id="dt-wall"  onclick="setDrawTool('wall')"  style="font-size:.63rem">⬛墙</button>
           <button class="btn-sm dt-btn" id="dt-free"  onclick="setDrawTool('free')"  style="font-size:.63rem">⬜空地</button>
           <button class="btn-sm dt-btn" id="dt-erase" onclick="setDrawTool('erase')" style="font-size:.63rem">🔲擦除</button>
-          <button class="btn-sm dt-btn" id="dt-line"  onclick="setDrawTool('line')"  style="font-size:.63rem">📐直线</button>
-          <input type="range" id="brush-sz" min="1" max="10" value="3" title="笔刷大小" style="width:48px;vertical-align:middle">
+          <span style="width:1px;background:var(--border);height:16px;display:inline-block;margin:0 2px"></span>
+          <button class="btn-sm" id="line-mode-btn" onclick="toggleLineMode()" style="font-size:.63rem" title="直线模式：按住拖动画笔直线">📐直线</button>
+          <span style="width:1px;background:var(--border);height:16px;display:inline-block;margin:0 2px"></span>
+          <span style="font-size:.6rem;color:var(--text2)">粗细</span>
+          <input type="range" id="brush-sz" min="0" max="8" value="0" title="笔刷粗细(0=1格)" style="width:52px;vertical-align:middle" oninput="document.getElementById('brush-sz-val').textContent=this.value==0?'1格':(+this.value*2+1)+'格'">
+          <span id="brush-sz-val" style="font-size:.6rem;color:var(--accent);min-width:22px">1格</span>
           <button class="btn-sm" onclick="clearDrawLayer()" style="font-size:.63rem;color:var(--red)">🗑清除</button>
           <button class="btn-sm" onclick="applyDrawLayer()" style="font-size:.63rem;background:rgba(34,197,94,.15);border-color:var(--green);color:var(--green)">✅应用到地图</button>
         </span>
@@ -1344,8 +1348,8 @@ function renderMap() {
     }
   }
 
-  // Line tool preview
-  if (drawMode && drawTool === 'line') {
+  // Line mode preview
+  if (drawMode && lineMode) {
     if (linePreview) {
       ctx.fillStyle = 'rgba(14,165,233,0.7)';
       linePreview.forEach(([lx, ly]) => {
@@ -1448,6 +1452,7 @@ let customResolution = null;
 let mapZoom = 1, mapPanX = 0, mapPanY = 0;
 let _isPanning = false, _panStartX = 0, _panStartY = 0, _panStartPX = 0, _panStartPY = 0, _didPan = false;
 let lineStart = null, linePreview = null;
+let lineMode = false;
 
 function setCustomResolution(v) {
   const n = parseFloat(v);
@@ -2010,9 +2015,22 @@ function setDrawTool(t) {
     el.style.borderColor = 'var(--accent)';
     el.style.color       = 'var(--accent)';
   }
-  const canvas = document.getElementById('map-canvas');
-  if (canvas) canvas.style.cursor = t === 'line' ? 'crosshair' : 'cell';
-  if (t === 'line') toast('📐 直线模式：点击设起点，再点设终点');
+}
+
+function toggleLineMode() {
+  lineMode = !lineMode;
+  lineStart = null; linePreview = null;
+  const btn = document.getElementById('line-mode-btn');
+  if (lineMode) {
+    btn.style.background  = 'rgba(14,165,233,.2)';
+    btn.style.borderColor = 'var(--accent)';
+    btn.style.color       = 'var(--accent)';
+    toast('📐 直线模式开 — 按住拖动画直线，配合当前工具');
+  } else {
+    btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = '';
+    toast('📐 直线模式关 — 自由手绘');
+  }
+  if (mapData) renderMap();
 }
 
 function bresenhamLine(x0, y0, x1, y1) {
@@ -2049,7 +2067,6 @@ function _paintCells(cells) {
 
 function _drawAt(canvasX, canvasY) {
   if (!mapData || !drawLayer) return;
-  if (drawTool === 'line') return; // line tool handled separately
   const [gx, gy] = _canvasToGrid(canvasX, canvasY);
   _paintCells([[gx, gy]]);
   renderMap();
@@ -2080,7 +2097,7 @@ function _getCanvasXY(e, canvas) {
   canvas.addEventListener('mousedown', e => {
     const [cx, cy] = _getCanvasXY(e, canvas);
     if (drawMode) {
-      if (drawTool === 'line') {
+      if (lineMode) {
         const [gx, gy] = _canvasToGrid(cx, cy);
         lineStart = {gx, gy}; linePreview = null;
         _isDrawing = true;
@@ -2099,7 +2116,7 @@ function _getCanvasXY(e, canvas) {
   canvas.addEventListener('mousemove', e => {
     const [cx, cy] = _getCanvasXY(e, canvas);
     if (drawMode && _isDrawing) {
-      if (drawTool === 'line' && lineStart) {
+      if (lineMode && lineStart) {
         const [gx, gy] = _canvasToGrid(cx, cy);
         linePreview = bresenhamLine(lineStart.gx, lineStart.gy, gx, gy);
         renderMap();
@@ -2117,18 +2134,17 @@ function _getCanvasXY(e, canvas) {
   });
 
   canvas.addEventListener('mouseup', e => {
-    if (drawMode && drawTool === 'line' && lineStart && _isDrawing) {
+    if (drawMode && lineMode && lineStart && _isDrawing) {
       const [cx, cy] = _getCanvasXY(e, canvas);
       const [gx, gy] = _canvasToGrid(cx, cy);
       _paintCells(bresenhamLine(lineStart.gx, lineStart.gy, gx, gy));
       lineStart = null; linePreview = null;
     }
-    _isDrawing = false;
-    _isPanning = false;
+    _isDrawing = false; _isPanning = false;
     if (mapData) renderMap();
   });
   canvas.addEventListener('mouseleave', () => {
-    if (drawMode && drawTool === 'line' && lineStart && _isDrawing) {
+    if (drawMode && lineMode && lineStart && _isDrawing) {
       lineStart = null; linePreview = null; if (mapData) renderMap();
     }
     _isDrawing = false; _isPanning = false;
