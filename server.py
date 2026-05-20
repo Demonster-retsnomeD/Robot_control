@@ -656,6 +656,11 @@ def api_map():
     cfg = load_config()
     if cfg.get("simulation_mode", True):
         return jsonify(_sim_map())
+    # Live mode: if user is actively drawing (mode=1), return local SIM_GRID
+    with sim_lock:
+        drawing = sim.get("_mode", 2) == 1
+    if drawing:
+        return jsonify(_sim_map())
     data, err = rget(cfg, "/reeman/map")
     return jsonify(data or {"error": err})
 
@@ -795,9 +800,6 @@ def api_set_pose():
 def api_map_new():
     """Reset to a blank editable map (all free space, fully visible, no fog)."""
     global SIM_GRID
-    cfg = load_config()
-    if not cfg.get("simulation_mode", True):
-        return jsonify({"ok": False, "error": "仅支持仿真模式新建地图"}), 400
     with sim_lock:
         SIM_GRID = [0] * (SIM_W * SIM_H)          # all free space
         sim["_mode"] = 1

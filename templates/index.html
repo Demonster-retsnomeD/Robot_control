@@ -1351,7 +1351,7 @@ function renderMap() {
   }
 
   // Draw robot
-  if (mapPose) {
+  if (mapPose && mapPose.x != null) {
     const [rx, ry, rs] = worldToCanvas(mapPose.x, mapPose.y, mapData, cw, ch);
     const rr = Math.max(6, rs * 2);
     // Body
