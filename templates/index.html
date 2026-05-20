@@ -338,6 +338,7 @@ body.user-mode #page-user{display:flex!important;align-items:stretch}
           <button class="btn-sm dt-btn" id="dt-wall"  onclick="setDrawTool('wall')"  style="font-size:.63rem">⬛墙</button>
           <button class="btn-sm dt-btn" id="dt-free"  onclick="setDrawTool('free')"  style="font-size:.63rem">⬜空地</button>
           <button class="btn-sm dt-btn" id="dt-erase" onclick="setDrawTool('erase')" style="font-size:.63rem">🔲擦除</button>
+          <button class="btn-sm dt-btn" id="dt-line"  onclick="setDrawTool('line')"  style="font-size:.63rem">📐直线</button>
           <input type="range" id="brush-sz" min="1" max="10" value="3" title="笔刷大小" style="width:48px;vertical-align:middle">
           <button class="btn-sm" onclick="clearDrawLayer()" style="font-size:.63rem;color:var(--red)">🗑清除</button>
           <button class="btn-sm" onclick="applyDrawLayer()" style="font-size:.63rem;background:rgba(34,197,94,.15);border-color:var(--green);color:var(--green)">✅应用到地图</button>
@@ -360,6 +361,11 @@ body.user-mode #page-user{display:flex!important;align-items:stretch}
         </label>
         <span style="font-size:.62rem;color:var(--accent);font-family:monospace" id="map-pos">x:— y:—</span>
         <button class="btn-sm" id="live-map-btn" onclick="returnToLiveMap()" style="display:none;font-size:.65rem;background:rgba(245,158,11,.15);border-color:var(--yellow);color:var(--yellow)">📡 实时地图</button>
+        <span style="display:flex;align-items:center;gap:2px">
+          <button class="btn-sm" onclick="zoomMap(1/1.4)" style="font-size:.65rem;padding:2px 5px" title="缩小">－</button>
+          <span id="zoom-level" style="font-size:.62rem;color:var(--text2);min-width:28px;text-align:center;cursor:pointer" onclick="resetZoom()" title="点击重置">1×</span>
+          <button class="btn-sm" onclick="zoomMap(1.4)" style="font-size:.65rem;padding:2px 5px" title="放大">＋</button>
+        </span>
         <button class="btn-sm" onclick="fetchMap(true)" style="font-size:.65rem">刷新</button>
       </div>
     </div>
@@ -1254,9 +1260,14 @@ function renderMap() {
   const { width: W, height: H, data } = mapData;
   const cellW = cw / W, cellH = ch / H;
 
-  // Canvas background (= unexplored / outer space)
+  // Canvas background (full canvas, no transform)
   ctx.fillStyle = '#0f172a';
   ctx.fillRect(0, 0, cw, ch);
+
+  // Apply zoom + pan transform for all map content
+  ctx.save();
+  ctx.scale(mapZoom, mapZoom);
+  ctx.translate(-mapPanX / mapZoom, -mapPanY / mapZoom);
 
   // Draw grid cells
   const isFog = mapData.fog === true;
@@ -1264,11 +1275,11 @@ function renderMap() {
     for (let x = 0; x < W; x++) {
       const v = data[y * W + x];
       let fill;
-      if (v === 100)    fill = '#64748b';   // wall: medium slate
-      else if (v === 0) fill = '#f1f5f9';   // free space: near-white
-      else if (isFog)   fill = '#1e293b';   // fog / unexplored: very dark
-      else              fill = '#1e293b';   // SLAM unknown: very dark
-      if (fill !== '#0f172a') {  // skip if same as bg
+      if (v === 100)    fill = '#64748b';
+      else if (v === 0) fill = '#f1f5f9';
+      else if (isFog)   fill = '#1e293b';
+      else              fill = '#1e293b';
+      if (fill !== '#0f172a') {
         ctx.fillStyle = fill;
         ctx.fillRect(x * cellW, y * cellH, Math.ceil(cellW), Math.ceil(cellH));
       }
@@ -1277,7 +1288,7 @@ function renderMap() {
 
   // Faint grid lines (every 10 cells)
   ctx.strokeStyle = 'rgba(100,116,139,0.2)';
-  ctx.lineWidth = 0.5;
+  ctx.lineWidth = 0.5 / mapZoom;
   ctx.beginPath();
   for (let x = 0; x <= W; x += 10) { const px = x * cellW; ctx.moveTo(px, 0); ctx.lineTo(px, ch); }
   for (let y = 0; y <= H; y += 10) { const py = y * cellH; ctx.moveTo(0, py); ctx.lineTo(cw, py); }
@@ -1333,6 +1344,22 @@ function renderMap() {
     }
   }
 
+  // Line tool preview
+  if (drawMode && drawTool === 'line') {
+    if (linePreview) {
+      ctx.fillStyle = 'rgba(14,165,233,0.7)';
+      linePreview.forEach(([lx, ly]) => {
+        if (lx >= 0 && lx < W && ly >= 0 && ly < H)
+          ctx.fillRect(lx*cellW, ly*cellH, Math.ceil(cellW), Math.ceil(cellH));
+      });
+    }
+    if (lineStart) {
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(lineStart.gx*cellW - 1/mapZoom, lineStart.gy*cellH - 1/mapZoom,
+        Math.ceil(cellW) + 2/mapZoom, Math.ceil(cellH) + 2/mapZoom);
+    }
+  }
+
   // Draw waypoints
   for (const wp of mapWaypoints) {
     if (!wp.pose) continue;
@@ -1369,9 +1396,13 @@ function renderMap() {
       `x:${mapPose.x.toFixed(2)} y:${mapPose.y.toFixed(2)} θ:${(mapPose.theta * 180/Math.PI).toFixed(0)}°`;
   }
 
-  // ── Scale bar (bottom-right) ──────────────────────────────────────────────
+  ctx.restore(); // end zoom+pan transform
+
+  // ── Scale bar (bottom-right, no transform) ────────────────────────────────
+  const zl = document.getElementById('zoom-level');
+  if (zl) zl.textContent = mapZoom === 1 ? '1×' : mapZoom.toFixed(1) + '×';
   const res = customResolution || mapData.resolution;
-  const pxPerM = (cw / W) / res;
+  const pxPerM = (cw / W * mapZoom) / res;
   const niceLengths = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50];
   const barM = niceLengths.reduce((best, m) => {
     const px = m * pxPerM;
@@ -1414,6 +1445,9 @@ function updateMapFromStatus(d) {
 let clickWorldX = 0, clickWorldY = 0;
 let mapScanMode = false;
 let customResolution = null;
+let mapZoom = 1, mapPanX = 0, mapPanY = 0;
+let _isPanning = false, _panStartX = 0, _panStartY = 0, _panStartPX = 0, _panStartPY = 0, _didPan = false;
+let lineStart = null, linePreview = null;
 
 function setCustomResolution(v) {
   const n = parseFloat(v);
@@ -1449,11 +1483,48 @@ async function newBlankMap() {
 }
 
 function canvasToWorld(cx, cy, map, cw, ch) {
+  const bx = (cx + mapPanX) / mapZoom;
+  const by = (cy + mapPanY) / mapZoom;
   const cellW = cw / map.width, cellH = ch / map.height;
-  const gx = cx / cellW, gy = cy / cellH;
+  const gx = bx / cellW, gy = by / cellH;
   const wx = gx * map.resolution + map.origin.x;
   const wy = (map.height - gy) * map.resolution + map.origin.y;
   return [wx, wy];
+}
+
+function _canvasToGrid(cx, cy) {
+  if (!mapData) return [0, 0];
+  const canvas = document.getElementById('map-canvas');
+  const cellW = canvas.width / mapData.width, cellH = canvas.height / mapData.height;
+  return [Math.floor((cx + mapPanX) / mapZoom / cellW),
+          Math.floor((cy + mapPanY) / mapZoom / cellH)];
+}
+
+function _clampPan() {
+  const canvas = document.getElementById('map-canvas');
+  const cw = canvas ? canvas.width : 400, ch = canvas ? canvas.height : 300;
+  mapPanX = Math.max(0, Math.min(mapPanX, cw * (mapZoom - 1)));
+  mapPanY = Math.max(0, Math.min(mapPanY, ch * (mapZoom - 1)));
+}
+
+function zoomMap(delta, mx, my) {
+  const canvas = document.getElementById('map-canvas');
+  const cw = canvas ? canvas.width : 400, ch = canvas ? canvas.height : 300;
+  if (mx == null) mx = cw / 2;
+  if (my == null) my = ch / 2;
+  const oldZoom = mapZoom;
+  mapZoom = Math.max(1, Math.min(10, mapZoom * delta));
+  const ratio = mapZoom / oldZoom;
+  mapPanX = mx * (ratio - 1) + mapPanX * ratio;
+  mapPanY = my * (ratio - 1) + mapPanY * ratio;
+  _clampPan();
+  if (mapData) renderMap();
+}
+
+function resetZoom() {
+  mapZoom = 1; mapPanX = 0; mapPanY = 0;
+  if (mapData) renderMap();
+  toast('已重置缩放');
 }
 
 function initMapClick() {
@@ -1929,10 +2000,9 @@ function toggleDrawMode() {
 
 function setDrawTool(t) {
   drawTool = t;
+  lineStart = null; linePreview = null;
   document.querySelectorAll('.dt-btn').forEach(b => {
-    b.style.background   = '';
-    b.style.borderColor  = '';
-    b.style.color        = '';
+    b.style.background = ''; b.style.borderColor = ''; b.style.color = '';
   });
   const el = document.getElementById('dt-' + t);
   if (el) {
@@ -1940,25 +2010,48 @@ function setDrawTool(t) {
     el.style.borderColor = 'var(--accent)';
     el.style.color       = 'var(--accent)';
   }
+  const canvas = document.getElementById('map-canvas');
+  if (canvas) canvas.style.cursor = t === 'line' ? 'crosshair' : 'cell';
+  if (t === 'line') toast('📐 直线模式：点击设起点，再点设终点');
+}
+
+function bresenhamLine(x0, y0, x1, y1) {
+  const cells = [];
+  let dx = Math.abs(x1-x0), sx = x0 < x1 ? 1 : -1;
+  let dy = -Math.abs(y1-y0), sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy;
+  while (true) {
+    cells.push([x0, y0]);
+    if (x0 === x1 && y0 === y1) break;
+    const e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x0 += sx; }
+    if (e2 <= dx) { err += dx; y0 += sy; }
+  }
+  return cells;
+}
+
+function _paintCells(cells) {
+  if (!mapData || !drawLayer) return;
+  const W = mapData.width, H = mapData.height;
+  const val = drawTool === 'wall' ? 100 : drawTool === 'free' ? 0 : -1;
+  const r = parseInt(document.getElementById('brush-sz').value) || 1;
+  cells.forEach(([gx, gy]) => {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (r > 1 && dx*dx + dy*dy > r*r) continue;
+        const nx = gx+dx, ny = gy+dy;
+        if (nx >= 0 && nx < W && ny >= 0 && ny < H)
+          drawLayer[ny * W + nx] = val;
+      }
+    }
+  });
 }
 
 function _drawAt(canvasX, canvasY) {
   if (!mapData || !drawLayer) return;
-  const canvas = document.getElementById('map-canvas');
-  const W = mapData.width, H = mapData.height;
-  const cellW = canvas.width / W, cellH = canvas.height / H;
-  const gx  = Math.floor(canvasX / cellW);
-  const gy  = Math.floor(canvasY / cellH);
-  const val = drawTool === 'wall' ? 100 : drawTool === 'free' ? 0 : -1;
-  const r   = parseInt(document.getElementById('brush-sz').value) || 3;
-  for (let dy = -r; dy <= r; dy++) {
-    for (let dx = -r; dx <= r; dx++) {
-      if (dx*dx + dy*dy > r*r) continue;
-      const nx = gx+dx, ny = gy+dy;
-      if (nx >= 0 && nx < W && ny >= 0 && ny < H)
-        drawLayer[ny * W + nx] = val;
-    }
-  }
+  if (drawTool === 'line') return; // line tool handled separately
+  const [gx, gy] = _canvasToGrid(canvasX, canvasY);
+  _paintCells([[gx, gy]]);
   renderMap();
 }
 
@@ -1972,29 +2065,100 @@ function _getCanvasXY(e, canvas) {
 (function initDrawEvents() {
   const canvas = document.getElementById('map-canvas');
   if (!canvas) return;
+
+  // ── Mouse wheel zoom ──────────────────────────────────────────────────────
+  canvas.addEventListener('wheel', e => {
+    if (!mapData) return;
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    zoomMap(e.deltaY < 0 ? 1.15 : 1/1.15,
+      (e.clientX - rect.left) * canvas.width / rect.width,
+      (e.clientY - rect.top)  * canvas.height / rect.height);
+  }, {passive: false});
+
+  // ── Mouse events ──────────────────────────────────────────────────────────
   canvas.addEventListener('mousedown', e => {
-    if (!drawMode) return;
-    _isDrawing = true;
-    _drawAt(..._getCanvasXY(e, canvas));
-    e.stopPropagation();
+    const [cx, cy] = _getCanvasXY(e, canvas);
+    if (drawMode) {
+      if (drawTool === 'line') {
+        const [gx, gy] = _canvasToGrid(cx, cy);
+        if (lineStart === null) {
+          lineStart = {gx, gy}; linePreview = null;
+        } else {
+          _paintCells(bresenhamLine(lineStart.gx, lineStart.gy, gx, gy));
+          lineStart = null; linePreview = null;
+        }
+        renderMap(); e.stopPropagation(); return;
+      }
+      _isDrawing = true;
+      _drawAt(cx, cy);
+      e.stopPropagation();
+    } else {
+      _isPanning = true; _didPan = false;
+      _panStartX = cx; _panStartY = cy;
+      _panStartPX = mapPanX; _panStartPY = mapPanY;
+    }
   });
+
   canvas.addEventListener('mousemove', e => {
-    if (!drawMode || !_isDrawing) return;
-    _drawAt(..._getCanvasXY(e, canvas));
+    const [cx, cy] = _getCanvasXY(e, canvas);
+    if (drawMode && _isDrawing) {
+      _drawAt(cx, cy);
+    } else if (drawMode && drawTool === 'line' && lineStart) {
+      const [gx, gy] = _canvasToGrid(cx, cy);
+      linePreview = bresenhamLine(lineStart.gx, lineStart.gy, gx, gy);
+      renderMap();
+    } else if (_isPanning) {
+      const dx = cx - _panStartX, dy = cy - _panStartY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) _didPan = true;
+      mapPanX = _panStartPX - dx;
+      mapPanY = _panStartPY - dy;
+      _clampPan();
+      if (mapData) renderMap();
+    }
   });
-  canvas.addEventListener('mouseup',    () => _isDrawing = false);
-  canvas.addEventListener('mouseleave', () => _isDrawing = false);
+
+  canvas.addEventListener('mouseup', e => {
+    _isDrawing = false;
+    if (_isPanning && !_didPan && !drawMode) {
+      // treat as click — re-fire synthetic click if no movement
+    }
+    _isPanning = false;
+  });
+  canvas.addEventListener('mouseleave', () => { _isDrawing = false; _isPanning = false; });
+
+  // ── Touch events ──────────────────────────────────────────────────────────
+  let _lastTouchDist = null;
   canvas.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      _lastTouchDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY);
+      _isDrawing = false; return;
+    }
     if (!drawMode) return;
     e.preventDefault(); _isDrawing = true;
     _drawAt(..._getCanvasXY(e, canvas));
   }, {passive: false});
+
   canvas.addEventListener('touchmove', e => {
+    if (e.touches.length === 2 && _lastTouchDist) {
+      e.preventDefault();
+      const d = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY);
+      const rect = canvas.getBoundingClientRect();
+      const mx = ((e.touches[0].clientX + e.touches[1].clientX)/2 - rect.left) * canvas.width / rect.width;
+      const my = ((e.touches[0].clientY + e.touches[1].clientY)/2 - rect.top)  * canvas.height / rect.height;
+      zoomMap(d / _lastTouchDist, mx, my);
+      _lastTouchDist = d; return;
+    }
     if (!drawMode || !_isDrawing) return;
     e.preventDefault();
     _drawAt(..._getCanvasXY(e, canvas));
   }, {passive: false});
-  canvas.addEventListener('touchend', () => _isDrawing = false);
+
+  canvas.addEventListener('touchend', () => { _isDrawing = false; _lastTouchDist = null; });
 })();
 
 function clearDrawLayer() {
