@@ -1,0 +1,1646 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reeman Moon Knight 2.0 控制台</title>
+<style>
+:root{--bg:#f0f4f8;--panel:#ffffff;--panel2:#f1f5f9;--border:#dde3ed;--accent:#0ea5e9;--accent2:#7c3aed;--green:#16a34a;--red:#dc2626;--yellow:#d97706;--text:#0f172a;--text2:#64748b}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden;user-select:none}
+header{background:linear-gradient(135deg,#1e3a5f,#2d1b5e);border-bottom:1px solid #c7d2e0;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px}
+.logo h1{font-size:1rem;font-weight:700;color:var(--accent)}
+.logo p{font-size:.65rem;color:var(--text2)}
+.header-right{display:flex;align-items:center;gap:10px}
+.conn-badge{display:flex;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:.75rem}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--red);animation:pulse 2s infinite}
+.dot.on{background:var(--green)}.dot.sim{background:var(--yellow)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.tabs{display:flex;gap:4px}
+.tab{padding:6px 14px;border-radius:6px;font-size:.78rem;cursor:pointer;border:1px solid transparent;color:var(--text2);transition:all .2s}
+.tab.active{background:var(--accent);color:var(--bg);font-weight:700}
+.tab:hover:not(.active){border-color:var(--border);color:var(--text)}
+
+.main{display:flex;flex:1;overflow:hidden}
+.sidebar{width:270px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0;box-shadow:2px 0 8px rgba(0,0,0,.06)}
+.content{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+.sec{padding:12px 14px;border-bottom:1px solid var(--border)}
+.sec-title{font-size:.65rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+
+/* Status cards */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+.stat-card{background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:8px;text-align:center}
+.stat-val{font-size:1.15rem;font-weight:700;color:var(--accent)}
+.stat-label{font-size:.6rem;color:var(--text2);margin-top:1px}
+.battery-bar{background:var(--panel2);border-radius:5px;height:6px;overflow:hidden;margin-bottom:4px}
+.battery-fill{height:100%;background:linear-gradient(90deg,var(--red),var(--yellow),var(--green));transition:width .5s;border-radius:5px}
+.charge-icon{font-size:.7rem;color:var(--yellow);margin-left:4px}
+
+/* Nav status banner */
+.nav-banner{padding:8px 12px;border-radius:8px;margin-bottom:8px;font-size:.78rem;display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);background:var(--panel2)}
+.nav-banner.moving{border-color:var(--accent);background:rgba(0,212,255,.08)}
+.nav-banner.paused{border-color:var(--yellow);background:rgba(245,158,11,.08)}
+.nav-banner.done{border-color:var(--green);background:rgba(34,197,94,.08)}
+.nav-banner.error{border-color:var(--red);background:rgba(239,68,68,.08)}
+.progress-bar{background:var(--panel2);border-radius:4px;height:4px;overflow:hidden;margin-top:5px}
+.progress-fill{height:100%;background:var(--accent);border-radius:4px;transition:width .5s}
+
+/* Point buttons */
+.point-grid{display:flex;flex-direction:column;gap:5px}
+.point-btn{display:flex;align-items:center;justify-content:space-between;background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:9px 12px;cursor:pointer;transition:all .15s;font-size:.82rem;color:var(--text)}
+.point-btn:hover{border-color:var(--accent);color:var(--accent)}
+.point-btn.active-point{border-color:var(--accent);background:rgba(0,212,255,.12);color:var(--accent)}
+.point-btn .go{font-size:.68rem;color:var(--text2);background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:2px 7px}
+.point-btn:hover .go{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.no-points{color:var(--text2);font-size:.75rem;text-align:center;padding:12px;background:var(--panel2);border-radius:7px}
+
+/* Nav control buttons */
+.nav-ctrl{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px}
+.btn{padding:8px;border-radius:7px;font-size:.75rem;cursor:pointer;border:1px solid var(--border);background:var(--panel2);color:var(--text);transition:all .15s;text-align:center}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn-go{background:rgba(34,197,94,.15);border-color:var(--green);color:var(--green)}
+.btn-go:hover{background:var(--green);color:var(--bg)}
+.btn-pause{background:rgba(245,158,11,.1);border-color:var(--yellow);color:var(--yellow)}
+.btn-stop{background:rgba(239,68,68,.15);border-color:var(--red);color:var(--red)}
+.btn-stop:hover{background:var(--red);color:white}
+.btn-primary{width:100%;padding:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:7px;color:white;font-size:.78rem;font-weight:700;cursor:pointer;margin-top:6px}
+.btn-primary:hover{opacity:.9}
+.btn-sm{padding:5px 10px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.7rem;cursor:pointer;transition:all .15s}
+.btn-sm:hover{border-color:var(--accent);color:var(--accent)}
+
+/* Manual control (right panel) */
+.manual-panel{background:var(--panel);border-left:1px solid var(--border);width:280px;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.joystick-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;padding:14px}
+.joystick-area{position:relative;width:160px;height:160px;background:var(--panel2);border:2px solid var(--border);border-radius:50%;cursor:crosshair;box-shadow:inset 0 2px 8px rgba(0,0,0,.08)}
+.jcross-v{position:absolute;width:1px;height:100%;left:50%;top:0;transform:translateX(-50%);background:var(--border)}
+.jcross-h{position:absolute;height:1px;width:100%;top:50%;left:0;transform:translateY(-50%);background:var(--border)}
+#jthumb{position:absolute;width:44px;height:44px;background:radial-gradient(circle,var(--accent),var(--accent2));border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;box-shadow:0 0 16px rgba(0,212,255,.4)}
+#jthumb.active{box-shadow:0 0 32px rgba(0,212,255,.7)}
+.arrow-grid{display:grid;grid-template-areas:'..up.' 'left.right' '..dn.';grid-template-columns:1fr 1fr 1fr;gap:5px;width:130px}
+.abtn{background:var(--panel2);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:.95rem;padding:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .1s}
+.abtn:hover,.abtn.active{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+[data-d=up]{grid-area:up}[data-d=left]{grid-area:left}[data-d=right]{grid-area:right}[data-d=dn]{grid-area:dn}
+.speed-row{display:flex;align-items:center;gap:7px;margin-bottom:5px;width:100%}
+.speed-row label{font-size:.68rem;color:var(--text2);width:30px;flex-shrink:0}
+input[type=range]{flex:1;-webkit-appearance:none;height:3px;background:var(--border);border-radius:3px;outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;background:var(--accent);border-radius:50%;cursor:pointer}
+.speed-val{font-size:.75rem;color:var(--accent);font-weight:700;min-width:30px;text-align:right}
+.estop{width:100%;padding:11px;background:linear-gradient(135deg,#7f1d1d,#991b1b);border:2px solid var(--red);border-radius:8px;color:white;font-size:.82rem;font-weight:700;cursor:pointer;letter-spacing:1px}
+.estop:hover,.estop:active{background:var(--red);box-shadow:0 0 24px rgba(239,68,68,.6)}
+.vel-display{display:flex;justify-content:space-around;background:var(--panel2);border-radius:7px;padding:8px;font-size:.72rem;margin-bottom:8px}
+.vel-item{text-align:center}
+.vel-val{font-size:.95rem;font-weight:700;color:var(--accent)}
+.vel-label{color:var(--text2);font-size:.6rem}
+
+/* Config panel */
+.config-page{padding:16px;overflow-y:auto;display:grid;grid-template-columns:1fr 1fr;gap:14px;align-content:start}
+.config-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px}
+.config-card h3{font-size:.7rem;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.form-group{margin-bottom:8px}
+.form-group label{display:block;font-size:.65rem;color:var(--text2);margin-bottom:3px}
+.form-group input,.form-group select{width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:6px 8px;font-size:.78rem;outline:none}
+.form-group input:focus,.form-group select:focus{border-color:var(--accent)}
+.form-group select option{background:var(--panel)}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.toggle-label{font-size:.75rem;color:var(--text2)}
+.toggle{width:38px;height:20px;background:var(--border);border-radius:10px;position:relative;cursor:pointer;transition:background .2s;flex-shrink:0}
+.toggle.on{background:var(--accent)}
+.toggle::after{content:'';position:absolute;width:14px;height:14px;background:white;border-radius:50%;top:3px;left:3px;transition:transform .2s}
+.toggle.on::after{transform:translateX(18px)}
+
+/* Log */
+.log-list{font-size:.67rem;font-family:monospace}
+.log-item{padding:4px 0;border-bottom:1px solid rgba(180,200,220,.5);display:flex;gap:6px}
+.log-t{color:var(--text2);white-space:nowrap}
+.log-ok{color:var(--green)}.log-fail{color:var(--red)}
+
+/* Kbd */
+.kbd-hints{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.kbd{background:var(--panel2);border:1px solid var(--border);border-bottom:2px solid var(--border);border-radius:4px;padding:2px 6px;font-size:.62rem;color:var(--text2);font-family:monospace}
+.kbd.pressed{border-color:var(--accent);color:var(--accent)}
+
+/* Page routing */
+.page{display:none;flex:1;overflow:hidden}
+.page.active{display:flex}
+
+/* Toast */
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 18px;font-size:.82rem;opacity:0;transition:all .3s;z-index:999;pointer-events:none;white-space:nowrap}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Map library modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal-box{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;width:520px;max-width:92vw;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.modal-header h3{font-size:.9rem;font-weight:700;color:var(--accent)}
+.modal-close{background:none;border:none;color:var(--text2);font-size:1.1rem;cursor:pointer;padding:2px 6px}
+.modal-close:hover{color:var(--text)}
+.modal-body{overflow-y:auto;flex:1}
+.map-item{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.map-item-info{flex:1;min-width:0}
+.map-item-name{font-size:.82rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.map-item-meta{font-size:.65rem;color:var(--text2);margin-top:2px}
+.map-item-actions{display:flex;gap:5px;flex-shrink:0}
+.no-maps{text-align:center;color:var(--text2);font-size:.78rem;padding:20px}
+
+/* User mode */
+body.user-mode .dev-only{display:none!important}
+body.user-mode #page-user{display:flex!important;align-items:stretch}
+#page-user{display:none;flex:1;overflow:hidden;background:var(--bg);align-items:stretch}
+#page-user.active-user,.modal-overlay.open~#page-user,body.user-mode #page-user{display:flex!important;align-items:stretch}
+.user-layout{display:grid;grid-template-columns:1fr 340px;width:100%;height:100%;gap:0}
+.user-map-wrap{position:relative;overflow:hidden;background:#f0f4f8}
+.user-map-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%;image-rendering:pixelated}
+.user-panel{background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;padding:28px 24px;gap:20px;overflow-y:auto;box-shadow:-2px 0 8px rgba(0,0,0,.06)}
+.user-status{background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.user-stat{text-align:center}
+.user-stat-val{font-size:1.6rem;font-weight:800;color:var(--accent)}
+.user-stat-label{font-size:.72rem;color:var(--text2);margin-top:2px}
+.user-nav-banner{border-radius:10px;padding:12px 16px;font-size:.85rem;font-weight:600;border:1px solid var(--border);background:var(--panel2);text-align:center;min-height:48px;display:flex;align-items:center;justify-content:center}
+.user-nav-banner.moving{border-color:var(--accent);background:rgba(0,212,255,.08);color:var(--accent)}
+.user-nav-banner.done{border-color:var(--green);background:rgba(34,197,94,.08);color:var(--green)}
+.user-nav-banner.error{border-color:var(--red);background:rgba(239,68,68,.08);color:var(--red)}
+.user-btns{display:flex;flex-direction:column;gap:12px}
+.ubtn{width:100%;padding:18px;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;border:none;display:flex;align-items:center;justify-content:center;gap:10px;transition:all .15s;letter-spacing:.3px}
+.ubtn:active{transform:scale(.97)}
+.ubtn-call{background:linear-gradient(135deg,var(--accent),#0099bb);color:#0a0e1a}
+.ubtn-call:hover{opacity:.9}
+.ubtn-stop{background:linear-gradient(135deg,#7f1d1d,#991b1b);border:2px solid var(--red);color:white}
+.ubtn-stop:hover{background:var(--red)}
+.ubtn-charge{background:linear-gradient(135deg,#1c4a1c,#166534);border:2px solid var(--green);color:white}
+.ubtn-charge:hover{background:var(--green);color:#0a0e1a}
+.user-office-hint{font-size:.7rem;color:var(--text2);text-align:center;padding:4px 0}
+.mode-switch-btn{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:6px 14px;color:var(--text2);font-size:.75rem;cursor:pointer;transition:all .2s}
+.mode-switch-btn:hover{border-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🤖</div>
+    <div><h1>REEMAN Moon Knight 2.0</h1><p>Robot API :80 · Ctrl Server :5000 · SLAM WEB API 3.0</p></div>
+  </div>
+  <div class="header-right">
+    <div class="tabs dev-only">
+      <div class="tab active" onclick="setTab('nav')" data-i18n="tab.nav">🗺 导航</div>
+      <div class="tab" onclick="setTab('manual')" data-i18n="tab.manual">🕹 手动</div>
+      <div class="tab" onclick="setTab('config')" data-i18n="tab.config">⚙️ 配置</div>
+    </div>
+    <div class="conn-badge">
+      <div class="dot sim" id="conn-dot"></div>
+      <span id="conn-text">模拟模式</span>
+      <button class="btn-sm dev-only" onclick="pingRobot()" data-i18n="btn.check">检测</button>
+    </div>
+    <button class="mode-switch-btn" id="mode-switch-btn" onclick="toggleUIMode()" data-i18n="mode.dev">🔧 开发者模式</button>
+    <button class="btn-sm" id="lang-btn" onclick="toggleLang()" style="font-size:.75rem;min-width:52px">EN</button>
+    <div class="conn-badge" style="gap:8px">
+      <span style="font-size:.7rem;color:var(--text2)">👤 <strong style="color:var(--accent)" id="hdr-user">--</strong></span>
+      <button class="btn-sm" onclick="doLogout()" data-i18n="btn.logout" style="color:var(--red);border-color:rgba(239,68,68,.5)">登出</button>
+    </div>
+  </div>
+</header>
+
+<div class="main">
+
+<!-- ── USER PAGE ───────────────────────────────────────────────── -->
+<div id="page-user">
+  <div class="user-layout">
+    <!-- Left: Live map (read-only) -->
+    <div class="user-map-wrap" id="user-map-wrap">
+      <canvas id="user-map-canvas"></canvas>
+      <div id="user-map-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:.85rem">⏳ 加载地图...</div>
+      <!-- Robot position overlay -->
+      <div id="user-pos-badge" style="position:absolute;bottom:12px;left:12px;background:rgba(10,14,26,.85);border:1px solid var(--accent);border-radius:8px;padding:6px 12px;font-size:.75rem;font-family:monospace;color:var(--accent)">x:— y:— θ:—</div>
+      <div style="position:absolute;top:12px;left:12px;background:rgba(10,14,26,.75);border-radius:6px;padding:4px 10px;font-size:.65rem;color:var(--text2)">🗺 实时地图（只读）</div>
+    </div>
+    <!-- Right: User controls -->
+    <div class="user-panel">
+      <div>
+        <div style="font-size:1.1rem;font-weight:800;color:var(--accent);margin-bottom:4px">🤖 机器人控制</div>
+        <div style="font-size:.72rem;color:var(--text2)">REEMAN Moon Knight 2.0</div>
+      </div>
+
+      <!-- Status cards -->
+      <div class="user-status">
+        <div class="user-stat">
+          <div class="user-stat-val" id="u-battery">--%</div>
+          <div class="user-stat-label" data-i18n="u.battery">🔋 电池</div>
+        </div>
+        <div class="user-stat">
+          <div class="user-stat-val" id="u-mileage" style="font-size:1.2rem">0m</div>
+          <div class="user-stat-label" data-i18n="u.mileage">📏 里程</div>
+        </div>
+      </div>
+
+      <!-- Nav state -->
+      <div class="user-nav-banner" id="u-nav-banner">空闲 · 待命中</div>
+
+      <!-- Action buttons -->
+      <div class="user-btns">
+        <button class="ubtn ubtn-call" onclick="userCallRobot()" data-i18n="u.callbtn">
+          🤖 召唤机器人到办公室
+        </button>
+        <div class="user-office-hint" id="u-office-hint">目标点：<strong id="u-office-name">办公室</strong>
+          <span style="margin-left:8px;cursor:pointer;color:var(--accent)" onclick="userSetOffice()">✏️ 更改</span>
+        </div>
+        <button class="ubtn ubtn-stop" onclick="userStopRobot()" data-i18n="u.stopbtn">
+          ⛔ 停止运动
+        </button>
+        <button class="ubtn ubtn-charge" onclick="userChargeRobot()" data-i18n="u.chargebtn">
+          🔋 返回充电
+        </button>
+      </div>
+
+      <div style="margin-top:auto;padding-top:12px;border-top:1px solid var(--border)">
+        <div style="font-size:.65rem;color:var(--text2);text-align:center;margin-bottom:8px">需要更多控制？</div>
+        <button class="ubtn" style="background:var(--panel2);border:1px solid var(--border);color:var(--text2);padding:10px;font-size:.78rem" onclick="toggleUIMode()" data-i18n="u.morebtn">🔧 切换到开发者模式</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── NAV PAGE ────────────────────────────────────────────────── -->
+<div class="page active dev-only" id="page-nav">
+  <div class="sidebar">
+
+    <div class="sec">
+      <div class="sec-title" data-i18n="sec.status">📊 机器人状态</div>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-val" id="s-battery">--<span class="charge-icon" id="s-charge" style="display:none">⚡</span></div>
+          <div class="stat-label" data-i18n="label.battery">电池 %</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="s-mileage">0</div>
+          <div class="stat-label" data-i18n="label.mileage">里程 m</div>
+        </div>
+      </div>
+      <div class="battery-bar"><div class="battery-fill" id="bat-fill" style="width:0%"></div></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title" data-i18n="sec.navstate">🚦 导航状态</div>
+      <div class="nav-banner" id="nav-banner">
+        <span id="nav-banner-text" data-i18n="nav.idle">空闲</span>
+        <span id="nav-dist" style="color:var(--text2);font-size:.7rem"></span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="nav-progress" style="width:0%"></div></div>
+      <div style="font-size:.68rem;color:var(--text2);margin-top:4px">目标：<strong style="color:var(--accent)" id="nav-target">—</strong></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">
+        <span data-i18n="sec.navpts">🎯 导航目标点</span>
+        <button class="btn-sm" style="float:right;margin-top:-2px" onclick="refreshPoints()" data-i18n="btn.refresh">刷新</button>
+      </div>
+      <div class="point-grid" id="point-grid">
+        <div class="no-points">加载中...</div>
+      </div>
+      <div class="nav-ctrl">
+        <button class="btn btn-go" onclick="navGo()" data-i18n="btn.go">▶ 出发</button>
+        <button class="btn btn-pause" id="btn-pause" onclick="navPause()" data-i18n="btn.pause">⏸ 暂停</button>
+        <button class="btn btn-stop" onclick="navCancel()" data-i18n="btn.cancel">✕ 取消</button>
+      </div>
+    </div>
+
+    <div class="sec" style="flex:1">
+      <div class="sec-title" data-i18n="sec.log">📋 日志</div>
+      <div class="log-list" id="nav-log"></div>
+    </div>
+  </div>
+
+  <!-- Center: SLAM Map -->
+  <div class="content" style="background:var(--bg);display:flex;flex-direction:column;overflow:hidden;flex:1;min-width:0">
+    <div style="padding:8px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;border-bottom:1px solid var(--border);gap:8px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:.7rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px" data-i18n="map.title">🗺 SLAM 地图</span>
+        <button class="btn-sm" id="map-mode-btn" onclick="toggleMapMode()" style="font-size:.65rem" data-i18n="map.mapping">🔴 建图模式</button>
+        <span style="font-size:.62rem;padding:2px 7px;border-radius:10px;background:rgba(245,158,11,.15);color:var(--yellow);display:none" id="map-scan-badge">● 扫描中</span>
+        <span id="fog-badge" style="display:none;font-size:.62rem;padding:2px 7px;border-radius:10px;background:rgba(239,68,68,.12);color:var(--red)">🌫 雾效</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="display:flex;gap:4px;align-items:center">
+          <input id="map-save-name" type="text" placeholder="地图名称" style="background:var(--panel2);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:4px 8px;font-size:.7rem;outline:none;width:90px">
+          <button class="btn-sm" onclick="saveCurrentMap()" data-i18n="btn.savemap" style="font-size:.65rem;background:rgba(22,163,74,.12);border-color:var(--green);color:var(--green)">💾 保存地图</button>
+        </div>
+        <button class="btn-sm" onclick="openMapLibrary()" data-i18n="btn.maplibrary" style="font-size:.65rem">🗂️ 地图库</button>
+        <span style="font-size:.62rem;color:var(--text2)" id="map-scale">—</span>
+        <span style="font-size:.62rem;color:var(--accent);font-family:monospace" id="map-pos">x:— y:—</span>
+        <button class="btn-sm" onclick="fetchMap(true)" style="font-size:.65rem">刷新</button>
+      </div>
+    </div>
+    <div style="flex:1;position:relative;overflow:hidden;background:#f0f4f8" id="map-wrap">
+      <canvas id="map-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;image-rendering:pixelated;cursor:crosshair"></canvas>
+      <div id="map-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:.8rem">⏳ 加载地图...</div>
+      <!-- Click popup -->
+      <div id="map-popup" style="display:none;position:absolute;background:var(--panel);border:1px solid var(--accent);border-radius:10px;padding:12px;min-width:190px;z-index:10;box-shadow:0 4px 20px rgba(0,0,0,.2)">
+        <div style="font-size:.68rem;color:var(--text2);margin-bottom:8px">📍 <span id="popup-coord" style="color:var(--accent);font-family:monospace"></span></div>
+        <button class="btn-sm" style="width:100%;margin-bottom:6px;text-align:left" onclick="navToClick()">▶ 导航到这里</button>
+        <div style="display:flex;gap:5px;margin-bottom:6px">
+          <input id="popup-name" type="text" placeholder="点位名称" style="flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:5px 8px;font-size:.72rem;outline:none">
+          <button class="btn-sm" onclick="saveClickWaypoint()" style="background:rgba(34,197,94,.15);border-color:var(--green);color:var(--green)">保存</button>
+        </div>
+        <button class="btn-sm" style="width:100%;font-size:.65rem;color:var(--text2)" onclick="closeMapPopup()">关闭</button>
+      </div>
+    </div>
+    <!-- Legend + edit hint -->
+    <div style="padding:5px 14px;display:flex;gap:12px;flex-shrink:0;border-top:1px solid var(--border);font-size:.62rem;color:var(--text2);flex-wrap:wrap;align-items:center">
+      <span><span style="display:inline-block;width:8px;height:8px;background:#e8f4fd;border:1px solid #94a3b8;border-radius:2px;margin-right:3px;vertical-align:middle"></span><span data-i18n="legend.free">空地</span></span>
+      <span><span style="display:inline-block;width:8px;height:8px;background:#475569;border-radius:2px;margin-right:3px;vertical-align:middle"></span><span data-i18n="legend.wall">墙壁</span></span>
+      <span><span style="display:inline-block;width:8px;height:8px;background:#e2e8f0;border:1px solid #94a3b8;border-radius:2px;margin-right:3px;vertical-align:middle"></span><span data-i18n="legend.unknown">未探索</span></span>
+      <span><span style="display:inline-block;width:8px;height:8px;background:#0ea5e9;border-radius:50%;margin-right:3px;vertical-align:middle"></span><span data-i18n="legend.robot">机器人</span></span>
+      <span><span style="display:inline-block;width:8px;height:8px;background:#16a34a;border-radius:50%;margin-right:3px;vertical-align:middle"></span><span data-i18n="legend.waypoint">点位</span></span>
+      <span><span style="display:inline-block;width:8px;height:8px;background:#d97706;border-radius:50%;margin-right:3px;vertical-align:middle"></span><span data-i18n="legend.goal">目标</span></span>
+      <span style="margin-left:auto;color:#4b5563" data-i18n="legend.hint">单击地图 → 导航/保存点位</span>
+    </div>
+  </div>
+
+  <!-- Right: manual quick control -->
+  <div class="manual-panel">
+    <div class="sec">
+      <div class="sec-title" data-i18n="sec.manual">🕹 快速手动控制</div>
+      <div class="vel-display">
+        <div class="vel-item"><div class="vel-val" id="n-lin">0.00</div><div class="vel-label">线速度</div></div>
+        <div class="vel-item"><div class="vel-val" id="n-ang">0.00</div><div class="vel-label">角速度</div></div>
+        <div class="vel-item"><div class="vel-val" id="n-dir">停</div><div class="vel-label">方向</div></div>
+      </div>
+    </div>
+    <div class="joystick-wrap">
+      <div class="joystick-area" id="joystick">
+        <div class="jcross-v"></div><div class="jcross-h"></div>
+        <div id="jthumb"></div>
+      </div>
+      <div class="arrow-grid">
+        <button class="abtn" data-d="up" onclick="aBtn('up')">▲</button>
+        <button class="abtn" data-d="left" onclick="aBtn('left')">◀</button>
+        <button class="abtn" data-d="right" onclick="aBtn('right')">▶</button>
+        <button class="abtn" data-d="dn" onclick="aBtn('dn')">▼</button>
+      </div>
+      <div style="width:200px">
+        <div class="speed-row"><label>线速</label><input type="range" id="spd-l" min=".05" max="1" step=".05" value=".3" oninput="setLS(this.value)"><span class="speed-val" id="sl-v">0.30</span></div>
+        <div class="speed-row"><label>角速</label><input type="range" id="spd-a" min=".1" max="1.5" step=".05" value=".5" oninput="setAS(this.value)"><span class="speed-val" id="sa-v">0.50</span></div>
+      </div>
+      <button class="estop" onclick="eStop()" data-i18n="btn.estop">⛔ 紧急停止 [SPACE]</button>
+    </div>
+    <div class="sec">
+      <div class="sec-title" data-i18n="sec.kbd">⌨️ 键盘</div>
+      <div style="font-size:.7rem;color:var(--text2);line-height:2">W/↑前 S/↓后 A/←左 D/→右<br><strong style="color:var(--red)">空格 紧急停止</strong></div>
+      <div class="kbd-hints">
+        <span class="kbd" id="kW">W</span><span class="kbd" id="kA">A</span>
+        <span class="kbd" id="kS">S</span><span class="kbd" id="kD">D</span>
+        <span class="kbd" id="kSP">SPC</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MANUAL PAGE ─────────────────────────────────────────────── -->
+<div class="page dev-only" id="page-manual">
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:24px;background:var(--bg)">
+    <div class="joystick-wrap" style="padding:0;gap:16px">
+      <div class="joystick-area" id="joystick2" style="width:200px;height:200px">
+        <div class="jcross-v"></div><div class="jcross-h"></div>
+        <div id="jthumb2" style="width:54px;height:54px"></div>
+      </div>
+      <div style="display:flex;gap:20px;font-size:.85rem">
+        <span>线速 <strong style="color:var(--accent)" id="m-lin">0.00</strong></span>
+        <span>角速 <strong style="color:var(--accent)" id="m-ang">0.00</strong></span>
+        <span>方向 <strong style="color:var(--accent)" id="m-dir">停止</strong></span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="arrow-grid" style="width:160px">
+        <button class="abtn" data-d="up" onclick="aBtn('up')">▲</button>
+        <button class="abtn" data-d="left" onclick="aBtn('left')">◀</button>
+        <button class="abtn" data-d="right" onclick="aBtn('right')">▶</button>
+        <button class="abtn" data-d="dn" onclick="aBtn('dn')">▼</button>
+      </div>
+      <div style="width:200px">
+        <div class="speed-row"><label>线速</label><input type="range" min=".05" max="1" step=".05" value=".3" oninput="setLS(this.value)"><span class="speed-val">0.30</span></div>
+        <div class="speed-row"><label>角速</label><input type="range" min=".1" max="1.5" step=".05" value=".5" oninput="setAS(this.value)"><span class="speed-val">0.50</span></div>
+      </div>
+      <button class="estop" onclick="eStop()" data-i18n="btn.estop">⛔ 紧急停止 [SPACE]</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button class="btn" onclick="preset(0,.7)">↺ 左转</button>
+        <button class="btn" onclick="preset(0,-.7)">↻ 右转</button>
+        <button class="btn" onclick="preset(.2,0)">🐢 慢进</button>
+        <button class="btn" onclick="preset(.8,0)">🐇 快进</button>
+      </div>
+    </div>
+  </div>
+  <div class="sidebar" style="border-left:1px solid var(--border);border-right:none">
+    <div class="sec">
+      <div class="sec-title">状态</div>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-val" id="m-bat">--</div><div class="stat-label">电池%</div></div>
+        <div class="stat-card"><div class="stat-val" id="m-sts">--</div><div class="stat-label">导航状态</div></div>
+      </div>
+    </div>
+    <div class="sec" style="flex:1">
+      <div class="sec-title">日志</div>
+      <div class="log-list" id="m-log"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── CONFIG PAGE ─────────────────────────────────────────────── -->
+<div class="page dev-only" id="page-config">
+  <div class="config-page" style="flex:1">
+    <div class="config-card">
+      <h3>📡 机器人连接</h3>
+      <div class="form-group"><label>机器人 IP</label><input type="text" id="cfg-ip" value="172.29.19.11"></div>
+      <div class="form-group"><label>Robot API 端口（默认 80，SLAM WEB API）</label><input type="number" id="cfg-apiport" value="80"></div>
+      <div class="form-group"><label>超时（秒）</label><input type="number" id="cfg-timeout" value="5"></div>
+      <div class="toggle-row">
+        <span class="toggle-label">🟡 模拟模式</span>
+        <div class="toggle on" id="sim-toggle" onclick="toggleSim()"></div>
+      </div>
+      <button class="btn-primary" onclick="saveConfig()">💾 保存配置</button>
+      <button class="btn-sm" style="width:100%;margin-top:6px" id="ping-btn" onclick="pingRobot()">📡 测试连接</button>
+      <button class="btn-sm" style="width:100%;margin-top:6px" id="scan-btn" onclick="scanRobots()">🔍 扫描局域网找机器人</button>
+      <div id="ping-result" style="display:none;margin-top:10px;border-radius:8px;padding:10px 12px;font-size:.78rem;line-height:1.8"></div>
+      <div id="scan-result" style="display:none;margin-top:8px;border-radius:8px;padding:10px 12px;font-size:.75rem;line-height:1.9;background:rgba(0,212,255,.05);border:1px solid var(--border)"></div>
+    </div>
+
+    <div class="config-card">
+      <h3>🚦 连接流程</h3>
+      <div style="font-size:.75rem;color:var(--text2);line-height:2">
+        <strong style="color:var(--accent)">手机热点方案（推荐）：</strong><br>
+        1. 手机开热点<br>
+        2. 机器人连该热点<br>
+        3. 电脑也连该热点<br>
+        4. 查看热点设备列表找机器人IP<br>
+        5. IP填入左侧，关模拟模式<br>
+        6. 点「测试连接」确认<br><br>
+        <strong style="color:var(--accent)">测试连接顺序：</strong><br>
+        → ping HTTP :80 /reeman/hostname<br>
+        → 所有API均在端口 80<br><br>
+        <strong style="color:var(--yellow)">机器人IP一般固定在热点下</strong><br>
+        同一热点重连IP通常不变
+      </div>
+    </div>
+
+    <div class="config-card">
+      <h3>⚡ 速度默认值</h3>
+      <div class="form-group"><label>默认线速度 (m/s)</label><input type="number" id="cfg-ls" value="0.3" step="0.05" min="0.05" max="1"></div>
+      <div class="form-group"><label>默认角速度 (rad/s)</label><input type="number" id="cfg-as" value="0.5" step="0.05" min="0.1" max="1.5"></div>
+      <button class="btn-primary" onclick="saveConfig()">💾 保存</button>
+    </div>
+
+    <div class="config-card">
+      <h3>ℹ️ 系统信息</h3>
+      <div style="font-size:.75rem;color:var(--text2);line-height:2">
+        控制服务器：<span style="color:var(--accent)">localhost:5000</span><br>
+        API来源：REEMAN SLAM WEB API 3.0-2025_EN.pdf<br>
+        Robot端口：<span style="color:var(--accent)">:80</span>（非8090/9090）<br><br>
+        <strong style="color:var(--accent)">快捷键：</strong><br>
+        Ctrl+1 / Ctrl+2 / Ctrl+3 切换标签<br>
+        空格 紧急停止（任意页面）<br>
+        W A S D 方向控制<br>
+        Q/E 减速/加速
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+<div id="toast"></div>
+
+<!-- ── Map Library Modal ──────────────────────────────────────────────── -->
+<div class="modal-overlay" id="map-library-modal" onclick="closeMapLibrary(event)">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>🗂️ 地图库</h3>
+      <button class="modal-close" onclick="document.getElementById('map-library-modal').classList.remove('open')">✕</button>
+    </div>
+    <div class="modal-body" id="map-library-body">
+      <div class="no-maps">加载中...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── i18n ──────────────────────────────────────────────────────────────────
+let currentLang = localStorage.getItem('lang') || 'zh';
+const TRANSLATIONS = {
+  zh: {
+    'tab.nav':'🗺 导航','tab.manual':'🕹 手动','tab.config':'⚙️ 配置',
+    'btn.check':'检测','btn.logout':'登出','btn.refresh':'刷新',
+    'mode.dev':'🔧 开发者模式','mode.user':'👤 用户模式',
+    'sec.status':'📊 机器人状态','label.battery':'电池 %','label.mileage':'里程 m',
+    'sec.navstate':'🚦 导航状态','nav.idle':'空闲',
+    'sec.navpts':'🎯 导航目标点',
+    'btn.go':'▶ 出发','btn.pause':'⏸ 暂停','btn.cancel':'✕ 取消',
+    'sec.log':'📋 日志','map.title':'🗺 SLAM 地图',
+    'map.mapping':'🔴 建图模式','map.nav':'🟢 导航模式',
+    'btn.savemap':'💾 保存地图','btn.maplibrary':'🗂️ 地图库',
+    'sec.manual':'🕹 快速手动控制','btn.estop':'⛔ 紧急停止 [SPACE]',
+    'sec.kbd':'⌨️ 键盘',
+    'legend.free':'空地','legend.wall':'墙壁','legend.unknown':'未探索',
+    'legend.robot':'机器人','legend.waypoint':'点位','legend.goal':'目标',
+    'legend.hint':'单击地图 → 导航/保存点位',
+    'u.callbtn':'🤖 召唤机器人到办公室','u.stopbtn':'⛔ 停止运动',
+    'u.chargebtn':'🔋 返回充电','u.morebtn':'🔧 切换到开发者模式',
+    'u.battery':'🔋 电池','u.mileage':'📏 里程',
+    'dir.stop':'停','dir.fwd':'前','dir.back':'后',
+    'dir.left':'左转','dir.right':'右转',
+    'dir.fwdleft':'左前','dir.fwdright':'右前','dir.back2':'后退'
+  },
+  en: {
+    'tab.nav':'🗺 Nav','tab.manual':'🕹 Manual','tab.config':'⚙️ Config',
+    'btn.check':'Check','btn.logout':'Logout','btn.refresh':'Refresh',
+    'mode.dev':'🔧 Dev Mode','mode.user':'👤 User Mode',
+    'sec.status':'📊 Robot Status','label.battery':'Battery %','label.mileage':'Mileage m',
+    'sec.navstate':'🚦 Nav Status','nav.idle':'Idle',
+    'sec.navpts':'🎯 Nav Targets',
+    'btn.go':'▶ Go','btn.pause':'⏸ Pause','btn.cancel':'✕ Cancel',
+    'sec.log':'📋 Log','map.title':'🗺 SLAM Map',
+    'map.mapping':'🔴 Mapping','map.nav':'🟢 Nav Mode',
+    'btn.savemap':'💾 Save Map','btn.maplibrary':'🗂️ Map Library',
+    'sec.manual':'🕹 Manual Control','btn.estop':'⛔ EMERGENCY STOP [SPACE]',
+    'sec.kbd':'⌨️ Keyboard',
+    'legend.free':'Free','legend.wall':'Wall','legend.unknown':'Unexplored',
+    'legend.robot':'Robot','legend.waypoint':'Waypoint','legend.goal':'Target',
+    'legend.hint':'Click map → Navigate / Save',
+    'u.callbtn':'🤖 Call Robot to Office','u.stopbtn':'⛔ Stop',
+    'u.chargebtn':'🔋 Return to Charge','u.morebtn':'🔧 Switch to Dev Mode',
+    'u.battery':'🔋 Battery','u.mileage':'📏 Mileage',
+    'dir.stop':'Stop','dir.fwd':'Fwd','dir.back':'Back',
+    'dir.left':'L-Turn','dir.right':'R-Turn',
+    'dir.fwdleft':'L-Fwd','dir.fwdright':'R-Fwd','dir.back2':'Reverse'
+  }
+};
+function t(key) { return (TRANSLATIONS[currentLang]||TRANSLATIONS.zh)[key] || key; }
+function applyLang() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const v = t(el.getAttribute('data-i18n'));
+    if (v) el.textContent = v;
+  });
+  document.getElementById('lang-btn').textContent = currentLang === 'zh' ? 'EN' : '中文';
+  // update html lang attr
+  document.documentElement.lang = currentLang === 'zh' ? 'zh-CN' : 'en';
+}
+function toggleLang() {
+  currentLang = currentLang === 'zh' ? 'en' : 'zh';
+  localStorage.setItem('lang', currentLang);
+  applyLang();
+}
+
+// ── State ─────────────────────────────────────────────────────────────────
+let linSpd = 0.3, angSpd = 0.5;
+let simMode = true;
+let selectedPoint = null;
+let isPaused = false;
+let jActive = false, j2Active = false;
+let keyState = {};
+let sendQ = null, sendBusy = false;
+let presetTimer = null;
+let navStatusCache = {res:0};
+let uiUserMode = (localStorage.getItem('uiMode') === 'user'); // true=user, false=dev
+let officeWaypoint = localStorage.getItem('officeWaypoint') || '办公室';
+
+// ── Init ──────────────────────────────────────────────────────────────────
+(async function init() {
+  try {
+    const cfg = await (await fetch('/api/config')).json();
+    document.getElementById('cfg-ip').value = cfg.robot_ip || '172.29.19.11';
+    document.getElementById('cfg-apiport').value = cfg.robot_port || 80;
+    document.getElementById('cfg-timeout').value = cfg.timeout || 5;
+    document.getElementById('cfg-ls').value = cfg.linear_speed || 0.3;
+    document.getElementById('cfg-as').value = cfg.angular_speed || 0.5;
+    simMode = cfg.simulation_mode !== false;
+    linSpd = cfg.linear_speed || 0.3;
+    angSpd = cfg.angular_speed || 0.5;
+    updateSimUI();
+  } catch(e) {}
+  await loadMe();
+  applyLang();
+  await refreshPoints();
+  pollStatus();
+  pollLog();
+  applyUIMode();
+  initUserMap();
+})();
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+function setTab(t) {
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+  const ti = {nav:0, manual:1, config:2};
+  document.querySelectorAll('.tab')[ti[t]].classList.add('active');
+  document.getElementById('page-' + (t === 'manual' ? 'manual' : t === 'config' ? 'config' : 'nav')).classList.add('active');
+}
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === '1') { e.preventDefault(); setTab('nav'); }
+  if (e.ctrlKey && e.key === '2') { e.preventDefault(); setTab('manual'); }
+  if (e.ctrlKey && e.key === '3') { e.preventDefault(); setTab('config'); }
+});
+
+// ── Navigation points ─────────────────────────────────────────────────────
+async function refreshPoints() {
+  try {
+    const res = await (await fetch('/api/waypoints')).json();
+    const grid = document.getElementById('point-grid');
+    const pts = (res.waypoints || res || []);
+    if (!pts.length) {
+      grid.innerHTML = '<div class="no-points">无导航点<br>机器人需先完成建图并保存点位</div>';
+      return;
+    }
+    grid.innerHTML = pts.map(p => {
+      const name = p.name || p;
+      const icon = p.type === 'charge' ? '🔋' : '📍';
+      const coord = p.pose ? ` (${p.pose.x.toFixed(1)},${p.pose.y.toFixed(1)})` : '';
+      return `<div class="point-btn ${selectedPoint===name?'active-point':''}" onclick="selectPoint('${name}')">
+        <span>${icon} ${name}<span style="font-size:.6rem;color:var(--text2)">${coord}</span></span>
+        <span class="go" onclick="event.stopPropagation();selectPoint('${name}');navGo()">出发</span>
+      </div>`;
+    }).join('');
+  } catch(e) { toast('加载点位失败','red'); }
+}
+
+function selectPoint(p) {
+  selectedPoint = p;
+  refreshPoints();
+  toast(`选择: ${p}`);
+}
+
+async function navGo() {
+  if (!selectedPoint) { toast('先选择目标点','yellow'); return; }
+  try {
+    const r = await fetch('/api/nav_name', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({point: selectedPoint})
+    });
+    const d = await r.json();
+    if (d.status === 'success' || d.ok) {
+      isPaused = false;
+      document.getElementById('btn-pause').textContent = '⏸ 暂停';
+      toast(`🚀 导航中 → ${selectedPoint}`);
+    } else {
+      toast('导航失败: ' + (d.error || JSON.stringify(d)), 'red');
+    }
+  } catch(e) { toast('发送失败','red'); }
+}
+
+async function navCancel() {
+  try {
+    await fetch('/api/cancel', {method:'POST'});
+    isPaused = false;
+    document.getElementById('btn-pause').textContent = '⏸ 暂停';
+    toast('✕ 已取消导航');
+  } catch(e) {}
+}
+
+async function navPause() {
+  // Reeman SLAM WEB API 3.0 has no pause/resume — cancel instead
+  if (!isPaused) {
+    await navCancel();
+    isPaused = true;
+    document.getElementById('btn-pause').textContent = '▶ 重新出发';
+    toast('⏸ 已停止（重选点位重新出发）');
+  } else {
+    isPaused = false;
+    document.getElementById('btn-pause').textContent = '⏸ 暂停';
+    await navGo();
+  }
+}
+
+// ── Velocity ──────────────────────────────────────────────────────────────
+// Reeman requires /cmd/speed to be resent every 300ms for continuous motion
+let _lastVx = 0, _lastVth = 0, _velTimer = null;
+
+async function _sendSpeed(vx, vth) {
+  try {
+    await fetch('/api/speed', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({vx, vth})});
+  } catch(e) {}
+}
+
+function queueVel(lin, ang) {
+  _lastVx = lin; _lastVth = ang;
+  _sendSpeed(lin, ang);
+  // continuous resend at 300ms while moving
+  if (!_velTimer) {
+    _velTimer = setInterval(() => {
+      if (Math.abs(_lastVx) < 0.01 && Math.abs(_lastVth) < 0.01) {
+        clearInterval(_velTimer); _velTimer = null; return;
+      }
+      _sendSpeed(_lastVx, _lastVth);
+    }, 300);
+  }
+}
+
+async function eStop() {
+  _lastVx = 0; _lastVth = 0;
+  clearInterval(_velTimer); _velTimer = null;
+  setVecDisplay(0, 0);
+  resetThumbs();
+  await _sendSpeed(0, 0);
+  toast('⛔ 紧急停止','red');
+}
+
+function preset(lin, ang) {
+  queueVel(lin, ang); setVecDisplay(lin, ang);
+  clearTimeout(presetTimer);
+  presetTimer = setTimeout(() => { queueVel(0,0); setVecDisplay(0,0); }, 2000);
+}
+
+// ── Joystick (shared logic) ───────────────────────────────────────────────
+function makeJoystick(jId, thumbId, flagKey) {
+  const jo = document.getElementById(jId);
+  const th = document.getElementById(thumbId);
+  if (!jo || !th) return;
+
+  function getC() {
+    const r = jo.getBoundingClientRect();
+    return {x: r.left+r.width/2, y: r.top+r.height/2, rad: r.width/2};
+  }
+  function move(px, py) {
+    const {x,y,rad} = getC();
+    let dx = px-x, dy = py-y;
+    const d = Math.sqrt(dx*dx+dy*dy);
+    if (d > rad*.85) { dx=dx/d*rad*.85; dy=dy/d*rad*.85; }
+    th.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+    const lin = parseFloat(((-dy/(rad*.85))*linSpd).toFixed(3));
+    const ang = parseFloat(((-dx/(rad*.85))*angSpd).toFixed(3));
+    setVecDisplay(lin, ang);
+    queueVel(lin, ang);
+  }
+  function reset() {
+    th.style.transform = 'translate(-50%,-50%)';
+    setVecDisplay(0,0); queueVel(0,0);
+  }
+  jo.addEventListener('mousedown', e => { window[flagKey]=true; th.classList.add('active'); move(e.clientX,e.clientY); });
+  window.addEventListener('mousemove', e => { if (window[flagKey]) move(e.clientX,e.clientY); });
+  window.addEventListener('mouseup', () => { if (window[flagKey]) { window[flagKey]=false; th.classList.remove('active'); reset(); } });
+  jo.addEventListener('touchstart', e => { e.preventDefault(); window[flagKey]=true; th.classList.add('active'); });
+  jo.addEventListener('touchmove', e => { e.preventDefault(); if (!window[flagKey]) return; const t=e.touches[0]; move(t.clientX,t.clientY); });
+  jo.addEventListener('touchend', () => { window[flagKey]=false; th.classList.remove('active'); reset(); });
+}
+makeJoystick('joystick', 'jthumb', '_j1');
+// joystick2 thumb style needs matching
+(function() {
+  const t = document.getElementById('jthumb2');
+  if (t) { t.style.cssText = document.getElementById('jthumb').style.cssText; t.className = 'active'; t.style.width='54px'; t.style.height='54px'; }
+})();
+makeJoystick('joystick2', 'jthumb2', '_j2');
+
+// Arrow buttons
+const dirMap = {up:[1,0],dn:[-1,0],left:[0,1],right:[0,-1]};
+function aBtn(d) {
+  const [l,a] = dirMap[d];
+  queueVel(l*linSpd, a*angSpd);
+  setVecDisplay(l*linSpd, a*angSpd);
+  clearTimeout(presetTimer);
+  presetTimer = setTimeout(() => { queueVel(0,0); setVecDisplay(0,0); }, 400);
+}
+
+// Keyboard
+const kDir = {w:[1,0],arrowup:[1,0],s:[-1,0],arrowdown:[-1,0],a:[0,1],arrowleft:[0,1],d:[0,-1],arrowright:[0,-1]};
+document.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (e.code === 'Space') { e.preventDefault(); eStop(); return; }
+  if (k === 'q') { linSpd = Math.max(.05, linSpd-.05); updSpdUI(); return; }
+  if (k === 'e') { linSpd = Math.min(1.0, linSpd+.05); updSpdUI(); return; }
+  if (keyState[k]) return;
+  keyState[k] = true; hKbd(k,true);
+  const bm={w:'up',s:'dn',a:'left',d:'right',arrowup:'up',arrowdown:'dn',arrowleft:'left',arrowright:'right'};
+  if (bm[k]) document.querySelectorAll(`[data-d="${bm[k]}"]`).forEach(b=>b.classList.add('active'));
+  applyKeyboard();
+});
+document.addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  delete keyState[k]; hKbd(k,false);
+  const bm={w:'up',s:'dn',a:'left',d:'right',arrowup:'up',arrowdown:'dn',arrowleft:'left',arrowright:'right'};
+  if (bm[k]) document.querySelectorAll(`[data-d="${bm[k]}"]`).forEach(b=>b.classList.remove('active'));
+  applyKeyboard();
+});
+function applyKeyboard() {
+  if (window._j1 || window._j2) return;
+  let l=0, a=0;
+  for (const [k,[kl,ka]] of Object.entries(kDir)) { if (keyState[k]) { l+=kl; a+=ka; } }
+  l = Math.max(-1,Math.min(1,l))*linSpd;
+  a = Math.max(-1,Math.min(1,a))*angSpd;
+  setVecDisplay(l,a); queueVel(l,a);
+}
+function hKbd(k, on) {
+  const m={w:'kW',a:'kA',s:'kS',d:'kD',' ':'kSP'};
+  document.getElementById(m[k])?.classList.toggle('pressed',on);
+}
+
+function resetThumbs() {
+  ['jthumb','jthumb2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.transform = 'translate(-50%,-50%)';
+  });
+}
+
+// ── Display helpers ───────────────────────────────────────────────────────
+function setVecDisplay(l, a) {
+  let dir = t('dir.stop');
+  if (Math.abs(l)<.03 && Math.abs(a)<.03) dir=t('dir.stop');
+  else if (l>.03 && Math.abs(a)<.1) dir=t('dir.fwd');
+  else if (l<-.03 && Math.abs(a)<.1) dir=t('dir.back');
+  else if (Math.abs(l)<.03 && a>.03) dir=t('dir.left');
+  else if (Math.abs(l)<.03 && a<-.03) dir=t('dir.right');
+  else if (l>.03 && a>.03) dir=t('dir.fwdleft');
+  else if (l>.03 && a<-.03) dir=t('dir.fwdright');
+  else if (l<-.03) dir=t('dir.back2');
+  ['n-lin','m-lin'].forEach(id => { const el=document.getElementById(id); if(el) el.textContent=l.toFixed(2); });
+  ['n-ang','m-ang'].forEach(id => { const el=document.getElementById(id); if(el) el.textContent=a.toFixed(2); });
+  ['n-dir','m-dir'].forEach(id => { const el=document.getElementById(id); if(el) el.textContent=dir; });
+}
+
+function setLS(v) { linSpd=parseFloat(v); document.getElementById('sl-v').textContent=linSpd.toFixed(2); }
+function setAS(v) { angSpd=parseFloat(v); document.getElementById('sa-v').textContent=angSpd.toFixed(2); }
+function updSpdUI() {
+  document.getElementById('spd-l').value = linSpd;
+  document.getElementById('sl-v').textContent = linSpd.toFixed(2);
+}
+
+// ── Status poll ───────────────────────────────────────────────────────────
+async function pollStatus() {
+  try {
+    const d = await (await fetch('/api/status')).json();
+    const bat = d.battery ?? '--';
+    const charger = d.chargeFlag;
+    const nav = d.nav || {};
+
+    // Battery
+    document.getElementById('s-battery').childNodes[0].textContent = bat !== '--' ? bat + '%' : '--';
+    const chargeEl = document.getElementById('s-charge');
+    if (chargeEl) chargeEl.style.display = charger ? 'inline' : 'none';
+    document.getElementById('bat-fill').style.width = bat !== '--' ? bat + '%' : '0%';
+    document.getElementById('s-mileage').textContent = (nav.mileage ?? 0).toFixed(1);
+    document.getElementById('m-bat').textContent = bat !== '--' ? bat + '%' : '--';
+
+    // Nav status
+    navStatusCache = nav;
+    const res = nav.res ?? 0;
+    const reason = nav.reason ?? 0;
+    const banner = document.getElementById('nav-banner');
+    const bannerText = document.getElementById('nav-banner-text');
+    const dist = document.getElementById('nav-dist');
+    const target = document.getElementById('nav-target');
+    const progress = document.getElementById('nav-progress');
+
+    banner.className = 'nav-banner';
+    if (res === 1) {
+      banner.classList.add('moving');
+      bannerText.textContent = `🚗 移动中 → ${nav.goal || ''}`;
+      dist.textContent = `距目标 ${(nav.dist || 0).toFixed(1)}m`;
+      target.textContent = nav.goal || '—';
+      progress.style.width = '60%';
+      document.getElementById('m-sts').textContent = '移动中';
+    } else if (res === 2) {
+      banner.classList.add('paused');
+      bannerText.textContent = `⏸ 已暂停`;
+      dist.textContent = `${(nav.dist || 0).toFixed(1)}m`;
+      document.getElementById('m-sts').textContent = '已暂停';
+    } else if (res === 3) {
+      if (reason === 0) {
+        banner.classList.add('done');
+        bannerText.textContent = `✅ 到达 ${nav.goal || ''}`;
+        progress.style.width = '100%';
+      } else if (reason === 1) {
+        bannerText.textContent = `✕ 已取消`;
+        progress.style.width = '0%';
+      } else {
+        banner.classList.add('error');
+        bannerText.textContent = `❌ 导航出错`;
+      }
+      dist.textContent = '';
+      target.textContent = nav.goal || '—';
+      document.getElementById('m-sts').textContent = reason === 0 ? '已到达' : '已停止';
+    } else {
+      bannerText.textContent = '空闲';
+      dist.textContent = '';
+      target.textContent = '—';
+      progress.style.width = '0%';
+      document.getElementById('m-sts').textContent = '空闲';
+    }
+    updateMapFromStatus(d);
+    updateUserStatus(d);
+  } catch(e) {}
+  setTimeout(pollStatus, 500);
+}
+
+async function pollLog() {
+  try {
+    const d = await (await fetch('/api/log')).json();
+    if (!d.log || !d.log.length) { setTimeout(pollLog, 2000); return; }
+    const html = d.log.slice(0,10).map(e => `
+      <div class="log-item">
+        <span class="log-t">${e.time}</span>
+        <span class="${e.ok?'log-ok':'log-fail'}">${e.ok?'✓':'✗'}</span>
+        <span>${e.action||''}</span>
+      </div>`).join('');
+    ['nav-log','m-log'].forEach(id => { const el=document.getElementById(id); if(el) el.innerHTML=html; });
+  } catch(e) {}
+  setTimeout(pollLog, 2000);
+}
+
+// ── Config ────────────────────────────────────────────────────────────────
+async function saveConfig() {
+  const cfg = {
+    robot_ip: document.getElementById('cfg-ip').value.trim(),
+    robot_port: parseInt(document.getElementById('cfg-apiport').value),
+    timeout: parseInt(document.getElementById('cfg-timeout').value),
+    linear_speed: parseFloat(document.getElementById('cfg-ls').value),
+    angular_speed: parseFloat(document.getElementById('cfg-as').value),
+    simulation_mode: simMode,
+  };
+  try {
+    await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(cfg)});
+    linSpd = cfg.linear_speed; angSpd = cfg.angular_speed;
+    toast('✅ 已保存');
+  } catch(e) { toast('保存失败','red'); }
+}
+
+function toggleSim() { simMode=!simMode; updateSimUI(); saveConfig(); }
+function updateSimUI() {
+  const t=document.getElementById('sim-toggle');
+  const dot=document.getElementById('conn-dot');
+  const txt=document.getElementById('conn-text');
+  if (simMode) { t.classList.add('on'); dot.className='dot sim'; txt.textContent='模拟模式'; }
+  else { t.classList.remove('on'); dot.className='dot'; txt.textContent='连接中...'; pingRobot(); }
+}
+
+async function pingRobot() {
+  const dot = document.getElementById('conn-dot');
+  const txt = document.getElementById('conn-text');
+  const btn = document.getElementById('ping-btn');
+  const res = document.getElementById('ping-result');
+
+  // Loading state
+  if (btn) { btn.textContent = '⏳ 检测中...'; btn.disabled = true; }
+  dot.className = 'dot';
+  txt.textContent = '检测中...';
+  if (res) { res.style.display = 'none'; }
+
+  try {
+    const t0 = Date.now();
+    const d = await (await fetch('/api/ping')).json();
+    const ms = Date.now() - t0;
+
+    if (d.mode === 'simulation') {
+      dot.className = 'dot sim';
+      txt.textContent = '模拟模式';
+      if (res) {
+        res.style.display = 'block';
+        res.style.background = 'rgba(245,158,11,.1)';
+        res.style.border = '1px solid var(--yellow)';
+        res.innerHTML = `<strong style="color:var(--yellow)">🟡 模拟模式运行中</strong><br>
+          <span style="color:var(--text2)">未连接真实机器人<br>
+          关闭「模拟模式」并点击「测试连接」以连接机器人<br>
+          机器人IP: <strong style="color:var(--text)">172.29.19.11</strong> · 端口 80</span>`;
+      }
+    } else if (d.ok) {
+      dot.className = 'dot on';
+      txt.textContent = `在线 ${d.latency_ms}ms`;
+      if (res) {
+        res.style.display = 'block';
+        res.style.background = 'rgba(34,197,94,.1)';
+        res.style.border = '1px solid var(--green)';
+        res.innerHTML = `<strong style="color:var(--green)">✅ 已找到机器人！</strong><br>
+          <span style="color:var(--text2)">IP: <strong style="color:var(--text)">${document.getElementById('cfg-ip').value}</strong><br>
+          延迟: <strong style="color:var(--accent)">${d.latency_ms}ms</strong><br>
+          响应时间: ${ms}ms · 连接正常</span>`;
+      }
+      toast('✅ 机器人在线！', 'green');
+      refreshPoints(); // reload real waypoints
+    } else {
+      dot.className = 'dot';
+      txt.textContent = '未找到设备';
+      const ip = document.getElementById('cfg-ip')?.value || '?';
+      if (res) {
+        res.style.display = 'block';
+        res.style.background = 'rgba(239,68,68,.1)';
+        res.style.border = '1px solid var(--red)';
+        res.innerHTML = `<strong style="color:var(--red)">❌ 找不到机器人</strong><br>
+          <span style="color:var(--text2)">无法连接 <strong style="color:var(--text)">${ip}:80</strong><br>
+          错误: ${d.error || '连接超时'}<br><br>
+          请检查：<br>
+          · 机器人已开机<br>
+          · 手机热点已开启<br>
+          · 电脑和机器人在同一热点下<br>
+          · IP地址填写正确</span>`;
+      }
+      toast('❌ 找不到机器人', 'red');
+    }
+  } catch(e) {
+    dot.className = 'dot';
+    txt.textContent = '服务器错误';
+    if (res) {
+      res.style.display = 'block';
+      res.style.background = 'rgba(239,68,68,.1)';
+      res.style.border = '1px solid var(--red)';
+      res.innerHTML = `<strong style="color:var(--red)">❌ 无法连接控制服务器</strong><br>
+        <span style="color:var(--text2)">${e.message}</span>`;
+    }
+  } finally {
+    if (btn) { btn.textContent = '📡 测试连接'; btn.disabled = false; }
+  }
+}
+
+// ── SLAM Map ──────────────────────────────────────────────────────────────
+let mapData = null;       // {width,height,resolution,origin,data}
+let mapWaypoints = [];    // [{name,pose:{x,y,theta}}]
+let mapPose = null;       // {x,y,theta}
+let mapGoal = null;       // {x,y} current nav goal
+let mapFetchTimer = null;
+
+async function fetchMap(force) {
+  try {
+    const r = await fetch('/api/map');
+    const d = await r.json();
+    if (d.width) {
+      mapData = d;
+      document.getElementById('map-loading').style.display = 'none';
+      document.getElementById('map-scale').textContent =
+        `${d.width}×${d.height} · ${d.resolution*100}cm/格 · ${(d.width*d.resolution).toFixed(1)}×${(d.height*d.resolution).toFixed(1)}m`;
+      document.getElementById('fog-badge').style.display = d.fog ? 'inline' : 'none';
+      renderMap();
+      if (uiUserMode) renderUserMap();
+    }
+  } catch(e) {}
+  if (force) clearTimeout(mapFetchTimer);
+  mapFetchTimer = setTimeout(fetchMap, 3000);
+}
+
+function worldToCanvas(wx, wy, map, cw, ch) {
+  const scaleX = cw / map.width;
+  const scaleY = ch / map.height;
+  const px = (wx - map.origin.x) / map.resolution;
+  const py = map.height - (wy - map.origin.y) / map.resolution;
+  return [px * scaleX, py * scaleY, Math.min(scaleX, scaleY)];
+}
+
+function renderMap() {
+  const canvas = document.getElementById('map-canvas');
+  const wrap   = document.getElementById('map-wrap');
+  if (!mapData || !canvas) return;
+  const cw = wrap.clientWidth  || 400;
+  const ch = wrap.clientHeight || 300;
+  canvas.width  = cw;
+  canvas.height = ch;
+  const ctx = canvas.getContext('2d');
+  const { width: W, height: H, data } = mapData;
+  const cellW = cw / W, cellH = ch / H;
+
+  // Draw grid cells
+  const isFog = mapData.fog === true;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const v = data[y * W + x];
+      if (v === 100)         ctx.fillStyle = '#475569';   // wall
+      else if (v === 0)      ctx.fillStyle = '#e8f4fd';   // free space
+      else if (isFog)        ctx.fillStyle = '#e2e8f0';   // fog / unexplored
+      else                   ctx.fillStyle = '#cbd5e1';   // SLAM unknown
+      ctx.fillRect(x * cellW, y * cellH, Math.ceil(cellW), Math.ceil(cellH));
+    }
+  }
+
+  // Draw waypoints
+  for (const wp of mapWaypoints) {
+    if (!wp.pose) continue;
+    const [cx, cy, cs] = worldToCanvas(wp.pose.x, wp.pose.y, mapData, cw, ch);
+    const r = Math.max(4, cs * 1.2);
+    const isGoal = navStatusCache && navStatusCache.goal === wp.name && navStatusCache.res === 1;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
+    ctx.fillStyle = isGoal ? '#f59e0b' : (wp.type === 'charge' ? '#4ade80' : '#22c55e');
+    ctx.fill();
+    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1; ctx.stroke();
+    // Label
+    ctx.font = `bold ${Math.max(9, cs * 1.5)}px sans-serif`;
+    ctx.fillStyle = '#1e293b';
+    ctx.textAlign = 'center';
+    ctx.fillText(wp.name, cx, cy - r - 2);
+  }
+
+  // Draw robot
+  if (mapPose) {
+    const [rx, ry, rs] = worldToCanvas(mapPose.x, mapPose.y, mapData, cw, ch);
+    const rr = Math.max(6, rs * 2);
+    // Body
+    ctx.beginPath(); ctx.arc(rx, ry, rr, 0, Math.PI*2);
+    ctx.fillStyle = '#0ea5e9'; ctx.fill();
+    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1.5; ctx.stroke();
+    // Direction arrow
+    const angle = -mapPose.theta; // canvas Y flipped
+    ctx.beginPath();
+    ctx.moveTo(rx, ry);
+    ctx.lineTo(rx + Math.cos(angle) * rr * 1.8, ry + Math.sin(angle) * rr * 1.8);
+    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2; ctx.stroke();
+    // Pos label
+    document.getElementById('map-pos').textContent =
+      `x:${mapPose.x.toFixed(2)} y:${mapPose.y.toFixed(2)} θ:${(mapPose.theta * 180/Math.PI).toFixed(0)}°`;
+  }
+}
+
+// Hook into pollStatus to update map pose
+const _origPollStatus = pollStatus;
+
+// Update pose + re-render map from status data
+function updateMapFromStatus(d) {
+  if (d.pose) mapPose = d.pose;
+  if (navStatusCache && navStatusCache.goal) mapGoal = navStatusCache.goal;
+  if (mapData) renderMap();
+}
+
+// ── Map click → navigate / save waypoint ─────────────────────────────────
+let clickWorldX = 0, clickWorldY = 0;
+let mapScanMode = false;
+
+function canvasToWorld(cx, cy, map, cw, ch) {
+  const cellW = cw / map.width, cellH = ch / map.height;
+  const gx = cx / cellW, gy = cy / cellH;
+  const wx = gx * map.resolution + map.origin.x;
+  const wy = (map.height - gy) * map.resolution + map.origin.y;
+  return [wx, wy];
+}
+
+function initMapClick() {
+  const canvas = document.getElementById('map-canvas');
+  if (!canvas) return;
+  canvas.addEventListener('click', (e) => {
+    if (!mapData) return;
+    const rect = canvas.getBoundingClientRect();
+    const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const cy = (e.clientY - rect.top)  * (canvas.height / rect.height);
+    const [wx, wy] = canvasToWorld(cx, cy, mapData, canvas.width, canvas.height);
+    clickWorldX = wx; clickWorldY = wy;
+    // Show popup near click
+    const popup = document.getElementById('map-popup');
+    document.getElementById('popup-coord').textContent = `x:${wx.toFixed(2)} y:${wy.toFixed(2)}`;
+    document.getElementById('popup-name').value = '';
+    // Position popup (keep inside bounds)
+    const pw = 200, ph = 130;
+    let px = e.clientX - rect.left + 10;
+    let py = e.clientY - rect.top  + 10;
+    if (px + pw > rect.width)  px = e.clientX - rect.left - pw - 10;
+    if (py + ph > rect.height) py = e.clientY - rect.top  - ph - 10;
+    popup.style.left = px + 'px';
+    popup.style.top  = py + 'px';
+    popup.style.display = 'block';
+    setTimeout(() => document.getElementById('popup-name').focus(), 50);
+  });
+  // Close popup on outside click
+  document.addEventListener('click', (e) => {
+    const popup = document.getElementById('map-popup');
+    if (popup && !popup.contains(e.target) && e.target !== canvas) {
+      popup.style.display = 'none';
+    }
+  });
+}
+
+function closeMapPopup() {
+  document.getElementById('map-popup').style.display = 'none';
+}
+
+async function navToClick() {
+  closeMapPopup();
+  try {
+    const r = await fetch('/api/nav', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({x: clickWorldX, y: clickWorldY, theta: 0})});
+    const d = await r.json();
+    if (d.status === 'success') toast(`🚀 导航→(${clickWorldX.toFixed(1)},${clickWorldY.toFixed(1)})`);
+    else toast('导航失败: '+(d.error||''), 'red');
+  } catch(e) { toast('发送失败','red'); }
+}
+
+async function saveClickWaypoint() {
+  const name = document.getElementById('popup-name').value.trim();
+  if (!name) { toast('请输入点位名称','yellow'); return; }
+  closeMapPopup();
+  try {
+    const r = await fetch('/api/waypoints/save', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name, x: clickWorldX, y: clickWorldY, theta: 0, type: 'custom'})});
+    const d = await r.json();
+    if (d.ok) {
+      toast(`✅ 已保存「${name}」`);
+      // add to local list immediately
+      mapWaypoints.push({name, type:'custom', pose:{x:clickWorldX,y:clickWorldY,theta:0}});
+      renderMap();
+      refreshPoints();
+    } else { toast(d.error||'保存失败','red'); }
+  } catch(e) { toast('保存失败','red'); }
+}
+
+// ── Mapping mode (faster poll + mode switch) ──────────────────────────────
+async function toggleMapMode() {
+  mapScanMode = !mapScanMode;
+  const btn = document.getElementById('map-mode-btn');
+  const badge = document.getElementById('map-scan-badge');
+  if (mapScanMode) {
+    btn.textContent = t('map.nav');
+    btn.style.background = 'rgba(34,197,94,.15)';
+    btn.style.borderColor = 'var(--green)';
+    btn.style.color = 'var(--green)';
+    badge.style.display = 'inline';
+    // Switch robot to mapping mode
+    try { await fetch('/api/set_mode', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body:'{"mode":1}'}); } catch(e){}
+    toast('🔴 建图模式 — 手动操控机器人扫描环境');
+    clearTimeout(mapFetchTimer);
+    mapFetchTimer = setTimeout(fetchMap, 800); // faster during scan
+  } else {
+    btn.textContent = t('map.mapping');
+    btn.style.background = '';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+    badge.style.display = 'none';
+    try { await fetch('/api/set_mode', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body:'{"mode":2}'}); } catch(e){}
+    toast('✅ 已切换导航模式');
+  }
+}
+
+// Override fetchMap interval based on mode
+const _baseFetchMap = fetchMap;
+
+// Resize observer
+(function() {
+  const wrap = document.getElementById('map-wrap');
+  if (!wrap) return;
+  new ResizeObserver(() => { if (mapData) renderMap(); }).observe(wrap);
+  initMapClick();
+})();
+
+// Initial map fetch + waypoints sync
+(async function initMap() {
+  // fetch waypoints for map overlay
+  try {
+    const r = await fetch('/api/waypoints');
+    const d = await r.json();
+    mapWaypoints = d.waypoints || [];
+  } catch(e) {}
+  fetchMap();
+})();
+
+// ── UI Mode (user / developer) ────────────────────────────────────────────
+function applyUIMode() {
+  const btn = document.getElementById('mode-switch-btn');
+  if (uiUserMode) {
+    document.body.classList.add('user-mode');
+    btn.textContent = t('mode.dev');
+    btn.style.borderColor = 'rgba(0,212,255,.4)';
+    btn.style.color = 'var(--accent)';
+    document.getElementById('u-office-name').textContent = officeWaypoint;
+    setTimeout(() => renderUserMap(), 60);
+  } else {
+    document.body.classList.remove('user-mode');
+    btn.textContent = t('mode.user');
+    btn.style.borderColor = '';
+    btn.style.color = '';
+  }
+}
+
+function toggleUIMode() {
+  uiUserMode = !uiUserMode;
+  localStorage.setItem('uiMode', uiUserMode ? 'user' : 'dev');
+  applyUIMode();
+}
+
+function updateUserStatus(d) {
+  if (!uiUserMode) return;
+  const bat = d.battery ?? '--';
+  const nav = d.nav || {};
+  const el = document.getElementById('u-battery');
+  if (el) el.textContent = bat !== '--' ? bat + '%' : '--%';
+  const mil = document.getElementById('u-mileage');
+  if (mil) mil.textContent = (nav.mileage ?? 0).toFixed(1) + 'm';
+
+  const banner = document.getElementById('u-nav-banner');
+  if (!banner) return;
+  banner.className = 'user-nav-banner';
+  const res = nav.res ?? 0;
+  if (res === 1) {
+    banner.classList.add('moving');
+    banner.textContent = `🚗 移动中 → ${nav.goal || ''} (${(nav.dist||0).toFixed(1)}m)`;
+  } else if (res === 3 && nav.reason === 0) {
+    banner.classList.add('done');
+    banner.textContent = `✅ 已到达 ${nav.goal || ''}`;
+  } else if (res === 3 && nav.reason !== 0) {
+    banner.textContent = `✕ 已停止`;
+  } else if (res === 4) {
+    banner.textContent = `✕ 已取消`;
+  } else {
+    banner.textContent = `💤 空闲 · 待命中`;
+  }
+}
+
+// User mode map — same SLAM canvas but separate element, read-only
+let userMapInit = false;
+function initUserMap() {
+  const wrap = document.getElementById('user-map-wrap');
+  if (!wrap) return;
+  new ResizeObserver(() => { if (mapData) renderUserMap(); }).observe(wrap);
+}
+
+function renderUserMap() {
+  const canvas = document.getElementById('user-map-canvas');
+  const wrap   = document.getElementById('user-map-wrap');
+  if (!mapData || !canvas || !wrap) return;
+  const cw = wrap.clientWidth  || 600;
+  const ch = wrap.clientHeight || 600;
+  canvas.width = cw; canvas.height = ch;
+  canvas.style.width = '100%'; canvas.style.height = '100%';
+  const ctx = canvas.getContext('2d');
+  const { width: W, height: H, data } = mapData;
+  const cellW = cw / W, cellH = ch / H;
+  const isFog = mapData.fog === true;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const v = data[y * W + x];
+      if (v === 100)       ctx.fillStyle = '#475569';
+      else if (v === 0)    ctx.fillStyle = '#e8f4fd';
+      else if (isFog)      ctx.fillStyle = '#e2e8f0';
+      else                 ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(x * cellW, y * cellH, Math.ceil(cellW), Math.ceil(cellH));
+    }
+  }
+  // Robot
+  if (mapPose) {
+    const [rx, ry, rs] = worldToCanvas(mapPose.x, mapPose.y, mapData, cw, ch);
+    const rr = Math.max(8, rs * 2.5);
+    // Glow ring
+    ctx.beginPath(); ctx.arc(rx, ry, rr + 4, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(14,165,233,.15)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(rx, ry, rr, 0, Math.PI*2);
+    ctx.fillStyle = '#0ea5e9'; ctx.fill();
+    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2; ctx.stroke();
+    const angle = -mapPose.theta;
+    ctx.beginPath();
+    ctx.moveTo(rx, ry);
+    ctx.lineTo(rx + Math.cos(angle) * rr * 2, ry + Math.sin(angle) * rr * 2);
+    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2.5; ctx.stroke();
+    const badge = document.getElementById('user-pos-badge');
+    if (badge) badge.textContent = `x:${mapPose.x.toFixed(2)}  y:${mapPose.y.toFixed(2)}  θ:${(mapPose.theta*180/Math.PI).toFixed(0)}°`;
+    document.getElementById('user-map-loading').style.display = 'none';
+  }
+  // Waypoints (small, label on hover is enough)
+  for (const wp of mapWaypoints) {
+    if (!wp.pose) continue;
+    const [cx2, cy2, cs] = worldToCanvas(wp.pose.x, wp.pose.y, mapData, cw, ch);
+    const r = Math.max(5, cs * 1.4);
+    ctx.beginPath(); ctx.arc(cx2, cy2, r, 0, Math.PI*2);
+    ctx.fillStyle = wp.name === officeWaypoint ? '#f59e0b' : (wp.type === 'charge' ? '#4ade80' : '#22c55e');
+    ctx.fill();
+    ctx.font = `bold ${Math.max(10, cs * 1.8)}px sans-serif`;
+    ctx.fillStyle = '#e2e8f0'; ctx.textAlign = 'center';
+    ctx.fillText(wp.name, cx2, cy2 - r - 3);
+  }
+}
+
+// Hook renderUserMap into updateMapFromStatus
+const _origUpdateMap = updateMapFromStatus;
+// (already called via pollStatus → updateMapFromStatus which calls renderMap;
+//  we add user map render inside updateMapFromStatus override)
+const __updateMapFromStatus = updateMapFromStatus;
+window.updateMapFromStatus = function(d) {
+  __updateMapFromStatus(d);
+  if (uiUserMode) renderUserMap();
+};
+
+// User action buttons
+async function userCallRobot() {
+  try {
+    const r = await fetch('/api/nav_name', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({point: officeWaypoint})});
+    const d = await r.json();
+    if (d.status === 'success' || d.ok) {
+      toast(`🤖 机器人正在前往「${officeWaypoint}」`);
+      const banner = document.getElementById('u-nav-banner');
+      if (banner) { banner.className='user-nav-banner moving'; banner.textContent=`🚗 前往 ${officeWaypoint}...`; }
+    } else {
+      toast(`⚠️ 未找到点位「${officeWaypoint}」，请先在开发者模式设置`, 'yellow');
+    }
+  } catch(e) { toast('发送失败','red'); }
+}
+
+async function userStopRobot() {
+  try {
+    await fetch('/api/cancel', {method:'POST'});
+    await fetch('/api/speed', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({vx:0, vth:0})});
+    toast('⛔ 已停止');
+    const banner = document.getElementById('u-nav-banner');
+    if (banner) { banner.className='user-nav-banner'; banner.textContent='✕ 已停止'; }
+  } catch(e) { toast('发送失败','red'); }
+}
+
+async function userChargeRobot() {
+  try {
+    const r = await fetch('/api/charge', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body:'{}'});
+    toast('🔋 机器人返回充电中');
+    const banner = document.getElementById('u-nav-banner');
+    if (banner) { banner.className='user-nav-banner moving'; banner.textContent='🔋 返回充电中...'; }
+  } catch(e) { toast('发送失败','red'); }
+}
+
+function userSetOffice() {
+  const name = prompt(`输入召唤目标点位名称（当前：${officeWaypoint}）：`, officeWaypoint);
+  if (name && name.trim()) {
+    officeWaypoint = name.trim();
+    localStorage.setItem('officeWaypoint', officeWaypoint);
+    document.getElementById('u-office-name').textContent = officeWaypoint;
+    renderUserMap();
+    toast(`✅ 目标点已设为「${officeWaypoint}」`);
+  }
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────
+async function doLogout() {
+  try {
+    await fetch('/api/auth/logout', {method: 'POST'});
+  } catch(e) {}
+  window.location.href = '/login';
+}
+
+async function loadMe() {
+  try {
+    const d = await (await fetch('/api/auth/me')).json();
+    if (d.ok) document.getElementById('hdr-user').textContent = d.username;
+  } catch(e) {}
+}
+
+// ── Network scan ───────────────────────────────────────────────────────────
+async function scanRobots() {
+  const btn = document.getElementById('scan-btn');
+  const res = document.getElementById('scan-result');
+  btn.disabled = true; btn.textContent = '⏳ 扫描中（约5秒）...';
+  res.style.display = 'none';
+  try {
+    const r = await fetch('/api/scan', {method: 'POST'});
+    const d = await r.json();
+    if (d.robots && d.robots.length > 0) {
+      res.style.display = 'block';
+      res.innerHTML = `<strong style="color:var(--green)">✅ 找到 ${d.robots.length} 台机器人</strong><br>` +
+        d.robots.map(rb => `
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;
+            background:var(--panel2);border-radius:6px;padding:6px 9px">
+            <span>🤖 <strong>${rb.hostname}</strong>
+              <span style="color:var(--text2);font-size:.68rem"> ${rb.ip}:${rb.port}</span></span>
+            <button class="btn-sm" onclick="useRobot('${rb.ip}',${rb.port})" style="font-size:.65rem;padding:3px 8px">使用此机器人</button>
+          </div>`).join('');
+    } else {
+      res.style.display = 'block';
+      res.innerHTML = `<span style="color:var(--yellow)">⚠️ 未找到机器人<br>
+        <span style="color:var(--text2)">已扫描 ${d.scanned||254} 个IP · 检查热点连接</span></span>`;
+    }
+  } catch(e) { toast('扫描失败', 'red'); }
+  btn.disabled = false; btn.textContent = '🔍 扫描局域网找机器人';
+}
+
+async function useRobot(ip, port) {
+  const cfg = {robot_ip: ip, robot_port: port, simulation_mode: false};
+  await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(cfg)});
+  document.getElementById('cfg-ip').value = ip;
+  document.getElementById('cfg-apiport').value = port;
+  simMode = false;
+  updateSimUI();
+  toast(`✅ 已切换到 ${ip}`, 'green');
+  pingRobot();
+}
+
+// ── Map save / library / export ───────────────────────────────────────────
+async function saveCurrentMap() {
+  const name = document.getElementById('map-save-name').value.trim();
+  if (!name) { toast('请输入地图名称','yellow'); document.getElementById('map-save-name').focus(); return; }
+  try {
+    const r = await fetch('/api/map/save', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify({name})});
+    const d = await r.json();
+    if (d.ok) {
+      toast(`✅ 地图「${name}」已保存`,'green');
+      document.getElementById('map-save-name').value = '';
+    } else { toast(d.error||'保存失败','red'); }
+  } catch(e) { toast('保存失败','red'); }
+}
+
+async function openMapLibrary() {
+  document.getElementById('map-library-modal').classList.add('open');
+  await loadMapLibrary();
+}
+
+function closeMapLibrary(e) {
+  if (e.target === document.getElementById('map-library-modal'))
+    document.getElementById('map-library-modal').classList.remove('open');
+}
+
+async function loadMapLibrary() {
+  const body = document.getElementById('map-library-body');
+  body.innerHTML = '<div class="no-maps">加载中...</div>';
+  try {
+    const d = await (await fetch('/api/maps')).json();
+    const maps = d.maps || [];
+    if (!maps.length) {
+      body.innerHTML = '<div class="no-maps">暂无保存的地图<br><span style="font-size:.68rem;color:#4b5563">建图后点「💾 保存地图」保存</span></div>';
+      return;
+    }
+    body.innerHTML = maps.map(m => `
+      <div class="map-item" id="map-item-${m.id}">
+        <div class="map-item-info">
+          <div class="map-item-name">🗺 ${m.name}</div>
+          <div class="map-item-meta">${m.width}×${m.height} · ${(m.resolution*100).toFixed(0)}cm/格 · ${m.created_by} · ${m.created_at}</div>
+        </div>
+        <div class="map-item-actions">
+          <button class="btn-sm" onclick="loadSavedMap(${m.id},'${m.name.replace(/'/g,"\'")}')" style="font-size:.65rem">📂 加载</button>
+          <button class="btn-sm" onclick="exportMapPNG(${m.id},'${m.name.replace(/'/g,"\'")}')" style="font-size:.65rem">🖼 PNG</button>
+          <button class="btn-sm" onclick="exportMapJSON(${m.id},'${m.name.replace(/'/g,"\'")}')" style="font-size:.65rem">📄 JSON</button>
+          <button class="btn-sm" onclick="deleteSavedMap(${m.id})" style="font-size:.65rem;color:var(--red);border-color:rgba(239,68,68,.4)">🗑</button>
+        </div>
+      </div>`).join('');
+  } catch(e) { body.innerHTML = '<div class="no-maps" style="color:var(--red)">加载失败</div>'; }
+}
+
+async function loadSavedMap(id, name) {
+  try {
+    const d = await (await fetch(`/api/maps/${id}`)).json();
+    if (d.width) {
+      mapData = d;
+      mapData.fog = false;  // loaded maps show full data
+      document.getElementById('map-loading').style.display = 'none';
+      document.getElementById('map-scale').textContent =
+        `${d.width}×${d.height} · ${d.resolution*100}cm/格 · 已加载「${name}」`;
+      document.getElementById('fog-badge').style.display = 'none';
+      renderMap();
+      document.getElementById('map-library-modal').classList.remove('open');
+      toast(`📂 已加载地图「${name}」`);
+    }
+  } catch(e) { toast('加载失败','red'); }
+}
+
+async function deleteSavedMap(id) {
+  if (!confirm('确认删除该地图？')) return;
+  try {
+    await fetch(`/api/maps/${id}`, {method:'DELETE'});
+    document.getElementById(`map-item-${id}`)?.remove();
+    toast('🗑 已删除','red');
+    // If library is now empty, reload
+    if (!document.querySelector('.map-item')) loadMapLibrary();
+  } catch(e) { toast('删除失败','red'); }
+}
+
+async function exportMapJSON(id, name) {
+  try {
+    const d = await (await fetch(`/api/maps/${id}`)).json();
+    const blob = new Blob([JSON.stringify(d, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `map_${name}_${id}.json`; a.click();
+    URL.revokeObjectURL(url);
+    toast('📄 JSON已导出');
+  } catch(e) { toast('导出失败','red'); }
+}
+
+async function exportMapPNG(id, name) {
+  try {
+    // Load map then render to an offscreen canvas
+    const m = id === 'current' ? mapData : await (await fetch(`/api/maps/${id}`)).json();
+    if (!m || !m.width) { toast('无地图数据','red'); return; }
+    const W = m.width, H = m.height, data = m.data;
+    const SCALE = 4; // 4px per cell for a decent-res PNG
+    const offscreen = document.createElement('canvas');
+    offscreen.width = W * SCALE; offscreen.height = H * SCALE;
+    const ctx = offscreen.getContext('2d');
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const v = data[y * W + x];
+        if (v === 100)      ctx.fillStyle = '#475569';
+        else if (v === 0)   ctx.fillStyle = '#e8f4fd';
+        else                ctx.fillStyle = '#e2e8f0';
+        ctx.fillRect(x * SCALE, y * SCALE, SCALE, SCALE);
+      }
+    }
+    offscreen.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `map_${name}_${id}.png`; a.click();
+      URL.revokeObjectURL(url);
+      toast('🖼 PNG已导出');
+    });
+  } catch(e) { toast('导出失败','red'); }
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────
+let toastT;
+function toast(msg, type) {
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.style.borderColor = type==='red'?'var(--red)':type==='yellow'?'var(--yellow)':'var(--accent)';
+  el.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(()=>el.classList.remove('show'), 2500);
+}
+</script>
+</body>
+</html>

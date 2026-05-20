@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>注册 — Reeman 控制台</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#f0f4f8;color:#0f172a;font-family:'Segoe UI',system-ui,sans-serif;
+  min-height:100vh;display:flex;align-items:center;justify-content:center}
+.card{background:#ffffff;border:1px solid #dde3ed;border-radius:16px;padding:36px 32px;
+  width:100%;max-width:380px;box-shadow:0 8px 40px rgba(0,0,0,.1)}
+.logo{display:flex;align-items:center;gap:12px;margin-bottom:28px}
+.logo-icon{width:44px;height:44px;background:linear-gradient(135deg,#00d4ff,#7c3aed);
+  border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px}
+.logo h1{font-size:1rem;font-weight:700;color:#0ea5e9;line-height:1.2}
+.logo p{font-size:.68rem;color:#64748b}
+h2{font-size:1.1rem;font-weight:700;margin-bottom:20px;color:#0f172a}
+.form-group{margin-bottom:14px}
+label{display:block;font-size:.72rem;color:#64748b;margin-bottom:5px}
+input{width:100%;background:#f1f5f9;border:1px solid #dde3ed;border-radius:8px;
+  color:#0f172a;padding:10px 12px;font-size:.85rem;outline:none;transition:border .2s}
+input:focus{border-color:#0ea5e9}
+.hint{font-size:.65rem;color:#94a3b8;margin-top:3px}
+.btn-primary{width:100%;padding:11px;background:linear-gradient(135deg,#00d4ff,#7c3aed);
+  border:none;border-radius:8px;color:white;font-size:.88rem;font-weight:700;cursor:pointer;
+  transition:opacity .2s;margin-bottom:14px;margin-top:4px}
+.btn-primary:hover{opacity:.88}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.divider{text-align:center;font-size:.72rem;color:#94a3b8;margin-bottom:14px}
+.link-row{text-align:center;font-size:.75rem;color:#64748b}
+.link-row a{color:#0ea5e9;text-decoration:none}
+.link-row a:hover{text-decoration:underline}
+.error-box{background:rgba(220,38,38,.08);border:1px solid #dc2626;border-radius:7px;
+  padding:9px 12px;font-size:.75rem;color:#dc2626;margin-bottom:14px;display:none}
+.success-box{background:rgba(22,163,74,.08);border:1px solid #16a34a;border-radius:7px;
+  padding:9px 12px;font-size:.75rem;color:#16a34a;margin-bottom:14px;display:none}
+.strength{height:3px;border-radius:3px;margin-top:5px;background:#dde3ed;overflow:hidden}
+.strength-fill{height:100%;border-radius:3px;transition:all .3s}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="logo-icon">🤖</div>
+    <div>
+      <h1>REEMAN Moon Knight 2.0</h1>
+      <p>机器人控制台</p>
+    </div>
+  </div>
+
+  <h2>注册账号</h2>
+  <div class="error-box" id="err"></div>
+  <div class="success-box" id="ok-box"></div>
+
+  <div class="form-group">
+    <label>用户名</label>
+    <input type="text" id="username" placeholder="2~20位，字母数字" autocomplete="username" oninput="clearErr()">
+    <div class="hint">用于登录，不可重复</div>
+  </div>
+  <div class="form-group">
+    <label>邮箱</label>
+    <input type="email" id="email" placeholder="your@email.com" autocomplete="email" oninput="clearErr()">
+  </div>
+  <div class="form-group">
+    <label>密码</label>
+    <input type="password" id="password" placeholder="至少6位" autocomplete="new-password" oninput="checkStrength()">
+    <div class="strength"><div class="strength-fill" id="strength-fill"></div></div>
+    <div class="hint" id="strength-hint"></div>
+  </div>
+  <div class="form-group">
+    <label>确认密码</label>
+    <input type="password" id="password2" placeholder="再次输入密码" autocomplete="new-password" oninput="clearErr()">
+  </div>
+
+  <button class="btn-primary" id="reg-btn" onclick="doRegister()">注册</button>
+  <div class="divider">— 或 —</div>
+  <div class="link-row">已有账号？<a href="/login">返回登录</a></div>
+</div>
+
+<script>
+document.addEventListener('keydown', e => { if (e.key === 'Enter') doRegister(); });
+
+function clearErr() { document.getElementById('err').style.display = 'none'; }
+
+function checkStrength() {
+  const pw = document.getElementById('password').value;
+  const fill = document.getElementById('strength-fill');
+  const hint = document.getElementById('strength-hint');
+  let score = 0;
+  if (pw.length >= 6) score++;
+  if (pw.length >= 10) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^a-zA-Z0-9]/.test(pw)) score++;
+  const colors = ['#ef4444','#f59e0b','#f59e0b','#22c55e','#22c55e'];
+  const labels = ['太短','弱','一般','强','很强'];
+  fill.style.width = (score*20)+'%';
+  fill.style.background = colors[Math.max(0,score-1)];
+  hint.textContent = pw ? labels[Math.max(0,score-1)] : '';
+}
+
+async function doRegister() {
+  const btn = document.getElementById('reg-btn');
+  const err = document.getElementById('err');
+  const okBox = document.getElementById('ok-box');
+  const username = document.getElementById('username').value.trim();
+  const email    = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const password2= document.getElementById('password2').value;
+
+  if (!username || !email || !password) { showErr('请填写所有字段'); return; }
+  if (password !== password2) { showErr('两次密码不一致'); return; }
+  if (password.length < 6) { showErr('密码至少6位'); return; }
+
+  btn.disabled = true; btn.textContent = '注册中...';
+  err.style.display = 'none';
+  try {
+    const r = await fetch('/api/auth/register', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username, email, password})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      okBox.textContent = `✅ 注册成功！欢迎 ${d.username}，正在跳转...`;
+      okBox.style.display = 'block';
+      setTimeout(() => window.location.href = '/', 1200);
+    } else {
+      showErr(d.error || '注册失败');
+    }
+  } catch(e) { showErr('无法连接服务器'); }
+  btn.disabled = false; btn.textContent = '注册';
+}
+
+function showErr(msg) {
+  const el = document.getElementById('err');
+  el.textContent = '❌ ' + msg;
+  el.style.display = 'block';
+}
+</script>
+</body>
+</html>
