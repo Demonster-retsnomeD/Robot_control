@@ -33,9 +33,19 @@ DB_FILE     = os.path.join(BASE_DIR, "users.db")
 
 # ── App setup ─────────────────────────────────────────────────────────────────
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+_key_file = os.path.join(BASE_DIR, ".secret_key")
+if os.path.exists(_key_file):
+    with open(_key_file) as f: app.secret_key = f.read().strip()
+else:
+    app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+    with open(_key_file, "w") as f: f.write(app.secret_key)
 app.config['TEMPLATES_AUTO_RELOAD'] = True   # always reload templates from disk
-CORS(app, supports_credentials=True)
+# Restrict CORS to localhost and LAN origins only
+CORS(app, supports_credentials=True,
+     origins=["http://localhost:5000", "http://127.0.0.1:5000",
+               r"http://192\.168\.\d+\.\d+:5000",
+               r"http://172\.\d+\.\d+\.\d+:5000",
+               r"http://10\.\d+\.\d+\.\d+:5000"])
 
 login_manager = LoginManager(app)
 login_manager.login_view = "login_page"
@@ -137,7 +147,7 @@ def register_page():
 
 @app.route("/api/auth/login", methods=["POST"])
 def api_login():
-    d = request.get_json(force=True)
+    d = request.get_json(force=True) or {}
     username = d.get("username", "").strip()
     password = d.get("password", "")
     row = get_user_by_username(username)
@@ -149,7 +159,7 @@ def api_login():
 
 @app.route("/api/auth/register", methods=["POST"])
 def api_register():
-    d = request.get_json(force=True)
+    d = request.get_json(force=True) or {}
     username = d.get("username", "").strip()
     email    = d.get("email", "").strip().lower()
     password = d.get("password", "")
@@ -244,6 +254,10 @@ def save_config(cfg):
         json.dump(cfg, f, indent=2, ensure_ascii=False)
 
 def base_url(cfg):
+    with _active_lock:
+        if _active_robot["ip"]:
+            ip, port = _active_robot["ip"], _active_robot["port"]
+            return f"http://{ip}" if port == 80 else f"http://{ip}:{port}"
     ip, port = cfg["robot_ip"], cfg.get("robot_port", 80)
     return f"http://{ip}" if port == 80 else f"http://{ip}:{port}"
 
@@ -309,6 +323,10 @@ SIM_WAYPOINTS = [
 ]
 sim_lock    = threading.Lock()
 command_log = []
+
+# ── Active robot (multi-robot switching) ─────────────────────────────────────
+_active_robot = {"id": None, "ip": None, "port": 80, "name": "未选择"}
+_active_lock  = threading.Lock()
 
 def _reveal_sim(rv, cx, cy):
     """Mark cells within LiDAR radius as revealed (call inside sim_lock)."""
@@ -378,7 +396,17 @@ def api_get_config(): return jsonify(load_config())
 @app.route("/api/config", methods=["POST"])
 @login_required
 def api_set_config():
-    cfg = load_config(); cfg.update(request.get_json(force=True)); save_config(cfg)
+    if current_user.role not in ("admin", "operator"):
+        return jsonify({"ok": False, "error": "权限不足"}), 403
+    new_cfg = request.get_json(force=True) or {}
+    # Whitelist allowed keys to prevent arbitrary config injection
+    allowed = {"robot_ip","robot_port","linear_speed","angular_speed",
+               "simulation_mode","timeout","cmd_interval_ms"}
+    cfg = load_config()
+    for k in allowed:
+        if k in new_cfg:
+            cfg[k] = new_cfg[k]
+    save_config(cfg)
     return jsonify({"ok": True})
 
 # ── Velocity ──────────────────────────────────────────────────────────────────
@@ -405,8 +433,13 @@ def api_speed():
 @login_required
 def api_nav():
     cfg = load_config()
-    d = request.get_json(force=True)
-    x, y, theta = float(d["x"]), float(d["y"]), float(d.get("theta", 0))
+    d = request.get_json(force=True) or {}
+    if "x" not in d or "y" not in d:
+        return jsonify({"error": "missing required fields: x, y"}), 400
+    try:
+        x, y, theta = float(d["x"]), float(d["y"]), float(d.get("theta", 0))
+    except (TypeError, ValueError):
+        return jsonify({"error": "x, y, theta must be numbers"}), 400
     if cfg.get("simulation_mode", True):
         with sim_lock:
             sim["_nav_goal_x"] = x; sim["_nav_goal_y"] = y
@@ -455,7 +488,7 @@ def api_cancel():
 @login_required
 def api_charge():
     cfg = load_config()
-    d = request.get_json(force=True)
+    d = request.get_json(force=True) or {}
     if cfg.get("simulation_mode", True):
         wp = next((w for w in SIM_WAYPOINTS if w["type"] == "charge"), None)
         if wp:
@@ -471,7 +504,7 @@ def api_charge():
 @login_required
 def api_max_speed():
     cfg = load_config()
-    d = request.get_json(force=True)
+    d = request.get_json(force=True) or {}
     speed = float(d.get("speed", 0.5))
     if cfg.get("simulation_mode", True):
         return jsonify({"status": "success"})
@@ -537,7 +570,7 @@ def api_waypoints():
 @login_required
 def api_waypoints_save():
     """Save a custom waypoint from map click to local DB (and optionally push to robot)."""
-    d = request.get_json(force=True)
+    d = request.get_json(force=True) or {}
     name  = d.get("name", "").strip()
     x     = float(d.get("x", 0))
     y     = float(d.get("y", 0))
@@ -597,7 +630,7 @@ def api_mode():
 @login_required
 def api_set_mode():
     """Switch robot between mapping mode (1) and navigation mode (2)."""
-    d = request.get_json(force=True)
+    d = request.get_json(force=True) or {}
     mode = int(d.get("mode", 2))
     if mode not in (1, 2):
         return jsonify({"ok": False, "error": "mode must be 1 or 2"}), 400
@@ -712,7 +745,7 @@ def _sim_map():
 @login_required
 def api_map_save():
     """Save current map snapshot to DB with a name."""
-    d = request.get_json(force=True)
+    d = request.get_json(force=True) or {}
     name = d.get("name", "").strip()
     if not name:
         return jsonify({"ok": False, "error": "地图名称不能为空"}), 400
@@ -788,6 +821,76 @@ def api_map_delete(map_id):
         conn.commit()
     _log(f"MAP_DELETE id={map_id}", True, "")
     return jsonify({"ok": True})
+
+
+# ── Robot management ──────────────────────────────────────────────────────────
+@app.route("/api/robots", methods=["GET"])
+@login_required
+def api_robots_list():
+    with sqlite3.connect(DB_FILE) as conn:
+        rows = conn.execute(
+            "SELECT id,name,ip,port,last_seen FROM robots ORDER BY id"
+        ).fetchall()
+    robots = [{"id":r[0],"name":r[1],"ip":r[2],"port":r[3],"last_seen":r[4]} for r in rows]
+    with _active_lock:
+        active_id = _active_robot["id"]
+    return jsonify({"robots": robots, "active_id": active_id})
+
+@app.route("/api/robots", methods=["POST"])
+@login_required
+def api_robots_add():
+    d = request.get_json(force=True) or {}
+    name = d.get("name", "").strip()
+    ip   = d.get("ip", "").strip()
+    port = int(d.get("port", 80))
+    if not name or not ip:
+        return jsonify({"ok": False, "error": "name and ip required"}), 400
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with sqlite3.connect(DB_FILE) as conn:
+        cur = conn.execute(
+            "INSERT INTO robots (name,ip,port,last_seen) VALUES (?,?,?,?)",
+            (name, ip, port, ts)
+        )
+        robot_id = cur.lastrowid
+        conn.commit()
+    return jsonify({"ok": True, "id": robot_id, "name": name, "ip": ip, "port": port})
+
+@app.route("/api/robots/<int:robot_id>", methods=["DELETE"])
+@login_required
+def api_robots_delete(robot_id):
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.execute("DELETE FROM robots WHERE id=?", (robot_id,))
+        conn.commit()
+    with _active_lock:
+        if _active_robot["id"] == robot_id:
+            _active_robot.update({"id": None, "ip": None, "port": 80, "name": "未选择"})
+    return jsonify({"ok": True})
+
+@app.route("/api/robots/active", methods=["GET"])
+@login_required
+def api_robots_get_active():
+    with _active_lock:
+        return jsonify({"ok": True, **_active_robot})
+
+@app.route("/api/robots/active", methods=["POST"])
+@login_required
+def api_robots_set_active():
+    d = request.get_json(force=True) or {}
+    robot_id = d.get("id")
+    if robot_id is None:
+        with _active_lock:
+            _active_robot.update({"id": None, "ip": None, "port": 80, "name": "未选择"})
+        return jsonify({"ok": True, "name": "未选择"})
+    with sqlite3.connect(DB_FILE) as conn:
+        row = conn.execute(
+            "SELECT id,name,ip,port FROM robots WHERE id=?", (robot_id,)
+        ).fetchone()
+    if not row:
+        return jsonify({"ok": False, "error": "Robot not found"}), 404
+    with _active_lock:
+        _active_robot.update({"id": row[0], "name": row[1], "ip": row[2], "port": row[3]})
+    _log(f"SWITCH_ROBOT→{row[1]}({row[2]})", True, "")
+    return jsonify({"ok": True, "id": row[0], "name": row[1], "ip": row[2], "port": row[3]})
 
 
 if __name__ == "__main__":

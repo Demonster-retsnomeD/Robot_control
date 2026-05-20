@@ -1,6 +1,9 @@
 # Database (user data - never commit)
 users.db
 
+# Secret key (auto-generated, never commit)
+.secret_key
+
 # Python
 __pycache__/
 *.pyc

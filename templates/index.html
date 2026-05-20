@@ -190,6 +190,15 @@ body.user-mode #page-user{display:flex!important;align-items:stretch}
       <div class="tab" onclick="setTab('manual')" data-i18n="tab.manual">🕹 手动</div>
       <div class="tab" onclick="setTab('config')" data-i18n="tab.config">⚙️ 配置</div>
     </div>
+    <div class="robot-selector dev-only" style="display:flex;align-items:center;gap:6px">
+      <span style="font-size:.72rem;color:var(--text2)">🤖</span>
+      <select id="robot-select" onchange="switchRobot(this.value)"
+        style="background:var(--panel);border:1px solid var(--border);border-radius:6px;
+               color:var(--text);padding:4px 10px;font-size:.75rem;cursor:pointer;
+               max-width:140px;outline:none">
+        <option value="">模拟模式</option>
+      </select>
+    </div>
     <div class="conn-badge">
       <div class="dot sim" id="conn-dot"></div>
       <span id="conn-text">模拟模式</span>
@@ -492,6 +501,25 @@ body.user-mode #page-user{display:flex!important;align-items:stretch}
     </div>
 
     <div class="config-card">
+      <h3>🤖 机器人管理</h3>
+      <div id="robots-list" style="margin-bottom:10px;display:flex;flex-direction:column;gap:6px">
+        <div style="font-size:.75rem;color:var(--text2)">加载中...</div>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+        <input type="text" id="new-robot-name" placeholder="名称（如机器人1）"
+          style="flex:1;min-width:90px;background:var(--panel);border:1px solid var(--border);
+                 border-radius:6px;color:var(--text);padding:6px 8px;font-size:.78rem">
+        <input type="text" id="new-robot-ip" placeholder="IP地址"
+          style="flex:1;min-width:110px;background:var(--panel);border:1px solid var(--border);
+                 border-radius:6px;color:var(--text);padding:6px 8px;font-size:.78rem">
+        <input type="number" id="new-robot-port" value="80" min="1" max="65535"
+          style="width:60px;background:var(--panel);border:1px solid var(--border);
+                 border-radius:6px;color:var(--text);padding:6px 8px;font-size:.78rem">
+      </div>
+      <button class="btn-primary" onclick="addRobot()">➕ 添加机器人</button>
+    </div>
+
+    <div class="config-card">
       <h3>ℹ️ 系统信息</h3>
       <div style="font-size:.75rem;color:var(--text2);line-height:2">
         控制服务器：<span style="color:var(--accent)">localhost:5000</span><br>
@@ -620,6 +648,7 @@ let officeWaypoint = localStorage.getItem('officeWaypoint') || '办公室';
   await loadMe();
   applyLang();
   await refreshPoints();
+  await loadRobots();
   pollStatus();
   pollLog();
   applyUIMode();
@@ -654,9 +683,9 @@ async function refreshPoints() {
       const name = p.name || p;
       const icon = p.type === 'charge' ? '🔋' : '📍';
       const coord = p.pose ? ` (${p.pose.x.toFixed(1)},${p.pose.y.toFixed(1)})` : '';
-      return `<div class="point-btn ${selectedPoint===name?'active-point':''}" onclick="selectPoint('${name}')">
-        <span>${icon} ${name}<span style="font-size:.6rem;color:var(--text2)">${coord}</span></span>
-        <span class="go" onclick="event.stopPropagation();selectPoint('${name}');navGo()">出发</span>
+      return `<div class="point-btn ${selectedPoint===name?'active-point':''}" data-pt="${escAttr(name)}" onclick="selectPoint(this.dataset.pt)">
+        <span>${icon} ${escHtml(name)}<span style="font-size:.6rem;color:var(--text2)">${coord}</span></span>
+        <span class="go" onclick="event.stopPropagation();selectPoint(this.closest('[data-pt]').dataset.pt);navGo()">出发</span>
       </div>`;
     }).join('');
   } catch(e) { toast('加载点位失败','red'); }
@@ -935,13 +964,99 @@ async function pollLog() {
     if (!d.log || !d.log.length) { setTimeout(pollLog, 2000); return; }
     const html = d.log.slice(0,10).map(e => `
       <div class="log-item">
-        <span class="log-t">${e.time}</span>
+        <span class="log-t">${escHtml(e.time)}</span>
         <span class="${e.ok?'log-ok':'log-fail'}">${e.ok?'✓':'✗'}</span>
-        <span>${e.action||''}</span>
+        <span>${escHtml(e.action||'')}</span>
       </div>`).join('');
     ['nav-log','m-log'].forEach(id => { const el=document.getElementById(id); if(el) el.innerHTML=html; });
   } catch(e) {}
   setTimeout(pollLog, 2000);
+}
+
+// ── Robot management ─────────────────────────────────────────────────────────
+let _robotsCache = [];
+
+async function loadRobots() {
+  try {
+    const d = await (await fetch('/api/robots')).json();
+    _robotsCache = d.robots || [];
+    const activeId = d.active_id;
+    // Update header select
+    const sel = document.getElementById('robot-select');
+    sel.innerHTML = '<option value="">模拟模式</option>' +
+      _robotsCache.map(r =>
+        `<option value="${r.id}" ${r.id===activeId?'selected':''}>${escHtml(r.name)} (${escHtml(r.ip)})</option>`
+      ).join('');
+    // Update management list
+    const list = document.getElementById('robots-list');
+    if (!_robotsCache.length) {
+      list.innerHTML = '<div style="font-size:.75rem;color:var(--text2)">暂无机器人，在下方添加</div>';
+      return;
+    }
+    list.innerHTML = _robotsCache.map(r => `
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;
+                  background:${r.id===activeId?'rgba(0,212,255,.08)':'var(--bg)'};
+                  border:1px solid ${r.id===activeId?'var(--accent)':'var(--border)'};
+                  border-radius:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.8rem;font-weight:600;color:var(--text)">${escHtml(r.name)}</div>
+          <div style="font-size:.68rem;color:var(--text2)">${escHtml(r.ip)}:${r.port}</div>
+        </div>
+        ${r.id===activeId?'<span style="font-size:.65rem;color:var(--accent);font-weight:700">● 当前</span>':''}
+        <button class="btn-sm" onclick="switchRobot('${r.id}')"
+          style="font-size:.65rem${r.id===activeId?';color:var(--accent);border-color:var(--accent)':''}">
+          ${r.id===activeId?'已选':'切换'}
+        </button>
+        <button class="btn-sm" onclick="deleteRobot(${r.id})"
+          style="font-size:.65rem;color:var(--red);border-color:rgba(239,68,68,.4)">🗑</button>
+      </div>`).join('');
+  } catch(e) {
+    document.getElementById('robots-list').innerHTML =
+      '<div style="font-size:.75rem;color:var(--red)">加载失败</div>';
+  }
+}
+
+async function switchRobot(idStr) {
+  const id = idStr === '' ? null : parseInt(idStr);
+  try {
+    const r = await fetch('/api/robots/active', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({id})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(id ? `已切换到 ${d.name}` : '已切换到模拟模式', 'green');
+      await loadRobots();
+    } else { toast(d.error || '切换失败', 'red'); }
+  } catch(e) { toast('切换失败', 'red'); }
+}
+
+async function addRobot() {
+  const name = document.getElementById('new-robot-name').value.trim();
+  const ip   = document.getElementById('new-robot-ip').value.trim();
+  const port = parseInt(document.getElementById('new-robot-port').value) || 80;
+  if (!name || !ip) { toast('请填写名称和IP', 'yellow'); return; }
+  try {
+    const r = await fetch('/api/robots', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({name, ip, port})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(`已添加 ${name}`, 'green');
+      document.getElementById('new-robot-name').value = '';
+      document.getElementById('new-robot-ip').value = '';
+      await loadRobots();
+    } else { toast(d.error || '添加失败', 'red'); }
+  } catch(e) { toast('添加失败', 'red'); }
+}
+
+async function deleteRobot(id) {
+  try {
+    await fetch(`/api/robots/${id}`, {method:'DELETE'});
+    toast('已删除', 'green');
+    await loadRobots();
+  } catch(e) { toast('删除失败', 'red'); }
 }
 
 // ── Config ────────────────────────────────────────────────────────────────
@@ -1546,19 +1661,21 @@ async function loadMapLibrary() {
       body.innerHTML = '<div class="no-maps">暂无保存的地图<br><span style="font-size:.68rem;color:#4b5563">建图后点「💾 保存地图」保存</span></div>';
       return;
     }
-    body.innerHTML = maps.map(m => `
-      <div class="map-item" id="map-item-${m.id}">
+    body.innerHTML = maps.map(m => {
+      const safeId = parseInt(m.id);
+      return `<div class="map-item" id="map-item-${safeId}" data-map-id="${safeId}" data-map-name="${escAttr(m.name)}">
         <div class="map-item-info">
-          <div class="map-item-name">🗺 ${m.name}</div>
-          <div class="map-item-meta">${m.width}×${m.height} · ${(m.resolution*100).toFixed(0)}cm/格 · ${m.created_by} · ${m.created_at}</div>
+          <div class="map-item-name">🗺 ${escHtml(m.name)}</div>
+          <div class="map-item-meta">${escHtml(String(m.width))}×${escHtml(String(m.height))} · ${escHtml((m.resolution*100).toFixed(0))}cm/格 · ${escHtml(m.created_by)} · ${escHtml(m.created_at)}</div>
         </div>
         <div class="map-item-actions">
-          <button class="btn-sm" onclick="loadSavedMap(${m.id},'${m.name.replace(/'/g,"\'")}')" style="font-size:.65rem">📂 加载</button>
-          <button class="btn-sm" onclick="exportMapPNG(${m.id},'${m.name.replace(/'/g,"\'")}')" style="font-size:.65rem">🖼 PNG</button>
-          <button class="btn-sm" onclick="exportMapJSON(${m.id},'${m.name.replace(/'/g,"\'")}')" style="font-size:.65rem">📄 JSON</button>
-          <button class="btn-sm" onclick="deleteSavedMap(${m.id})" style="font-size:.65rem;color:var(--red);border-color:rgba(239,68,68,.4)">🗑</button>
+          <button class="btn-sm" onclick="loadSavedMap(this.closest('[data-map-id]').dataset.mapId,this.closest('[data-map-id]').dataset.mapName)" style="font-size:.65rem">📂 加载</button>
+          <button class="btn-sm" onclick="exportMapPNG(this.closest('[data-map-id]').dataset.mapId,this.closest('[data-map-id]').dataset.mapName)" style="font-size:.65rem">🖼 PNG</button>
+          <button class="btn-sm" onclick="exportMapJSON(this.closest('[data-map-id]').dataset.mapId,this.closest('[data-map-id]').dataset.mapName)" style="font-size:.65rem">📄 JSON</button>
+          <button class="btn-sm" onclick="deleteSavedMap(this.closest('[data-map-id]').dataset.mapId)" style="font-size:.65rem;color:var(--red);border-color:rgba(239,68,68,.4)">🗑</button>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   } catch(e) { body.innerHTML = '<div class="no-maps" style="color:var(--red)">加载失败</div>'; }
 }
 
@@ -1633,6 +1750,9 @@ async function exportMapPNG(id, name) {
 
 // ── Toast ─────────────────────────────────────────────────────────────────
 let toastT;
+function escHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function escAttr(s){ return escHtml(s); }
+
 function toast(msg, type) {
   const el=document.getElementById('toast');
   el.textContent=msg;
