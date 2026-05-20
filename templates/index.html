@@ -359,6 +359,7 @@ body.user-mode #page-user{display:flex!important;align-items:stretch}
             onchange="setCustomResolution(this.value)" title="每格实际距离(米)，改变比例尺">m/格
         </label>
         <span style="font-size:.62rem;color:var(--accent);font-family:monospace" id="map-pos">x:— y:—</span>
+        <button class="btn-sm" id="live-map-btn" onclick="returnToLiveMap()" style="display:none;font-size:.65rem;background:rgba(245,158,11,.15);border-color:var(--yellow);color:var(--yellow)">📡 实时地图</button>
         <button class="btn-sm" onclick="fetchMap(true)" style="font-size:.65rem">刷新</button>
       </div>
     </div>
@@ -1199,12 +1200,14 @@ let mapPose = null;       // {x,y,theta}
 let mapGoal = null;       // {x,y} current nav goal
 let mapFetchTimer = null;
 
+let viewingSavedMap = false;
+
 async function fetchMap(force) {
   try {
     const r = await fetch('/api/map');
     const d = await r.json();
     document.getElementById('map-loading').style.display = 'none';
-    if (d.width) {
+    if (d.width && !viewingSavedMap) {
       mapData = d;
       if (!drawLayer || drawLayer.length !== d.width * d.height)
         drawLayer = new Int8Array(d.width * d.height).fill(-1);
@@ -1222,6 +1225,13 @@ async function fetchMap(force) {
   }
   if (force) clearTimeout(mapFetchTimer);
   mapFetchTimer = setTimeout(fetchMap, 3000);
+}
+
+function returnToLiveMap() {
+  viewingSavedMap = false;
+  document.getElementById('live-map-btn').style.display = 'none';
+  fetchMap(true);
+  toast('📡 已切回实时地图');
 }
 
 function worldToCanvas(wx, wy, map, cw, ch) {
@@ -1244,18 +1254,34 @@ function renderMap() {
   const { width: W, height: H, data } = mapData;
   const cellW = cw / W, cellH = ch / H;
 
+  // Canvas background (= unexplored / outer space)
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(0, 0, cw, ch);
+
   // Draw grid cells
   const isFog = mapData.fog === true;
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const v = data[y * W + x];
-      if (v === 100)         ctx.fillStyle = '#475569';   // wall
-      else if (v === 0)      ctx.fillStyle = '#e8f4fd';   // free space
-      else if (isFog)        ctx.fillStyle = '#e2e8f0';   // fog / unexplored
-      else                   ctx.fillStyle = '#cbd5e1';   // SLAM unknown
-      ctx.fillRect(x * cellW, y * cellH, Math.ceil(cellW), Math.ceil(cellH));
+      let fill;
+      if (v === 100)    fill = '#64748b';   // wall: medium slate
+      else if (v === 0) fill = '#f1f5f9';   // free space: near-white
+      else if (isFog)   fill = '#1e293b';   // fog / unexplored: very dark
+      else              fill = '#1e293b';   // SLAM unknown: very dark
+      if (fill !== '#0f172a') {  // skip if same as bg
+        ctx.fillStyle = fill;
+        ctx.fillRect(x * cellW, y * cellH, Math.ceil(cellW), Math.ceil(cellH));
+      }
     }
   }
+
+  // Faint grid lines (every 10 cells)
+  ctx.strokeStyle = 'rgba(100,116,139,0.2)';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  for (let x = 0; x <= W; x += 10) { const px = x * cellW; ctx.moveTo(px, 0); ctx.lineTo(px, ch); }
+  for (let y = 0; y <= H; y += 10) { const py = y * cellH; ctx.moveTo(0, py); ctx.lineTo(cw, py); }
+  ctx.stroke();
 
   // Draw measurement overlay
   if (measurePtA) {
@@ -2001,6 +2027,12 @@ async function applyDrawLayer() {
 async function saveCurrentMap() {
   const name = document.getElementById('map-save-name').value.trim();
   if (!name) { toast('请输入地图名称','yellow'); document.getElementById('map-save-name').focus(); return; }
+  // Auto-apply pending draw layer before saving
+  if (drawLayer && drawLayer.some(v => v >= 0)) {
+    toast('⏳ 正在应用手绘内容...', 'yellow');
+    await applyDrawLayer();
+    await new Promise(r => setTimeout(r, 400)); // wait for fetchMap refresh
+  }
   try {
     const r = await fetch('/api/map/save', {method:'POST',
       headers:{'Content-Type':'application/json'}, body: JSON.stringify({name})});
@@ -2055,10 +2087,13 @@ async function loadSavedMap(id, name) {
     const d = await (await fetch(`/api/maps/${id}`)).json();
     if (d.width) {
       mapData = d;
-      mapData.fog = false;  // loaded maps show full data
+      mapData.fog = false;
+      viewingSavedMap = true;
       document.getElementById('map-loading').style.display = 'none';
+      document.getElementById('live-map-btn').style.display = 'inline';
+      const res = customResolution || d.resolution;
       document.getElementById('map-scale').textContent =
-        `${d.width}×${d.height} · ${d.resolution*100}cm/格 · 已加载「${name}」`;
+        `${d.width}×${d.height} · ${(res*100).toFixed(1)}cm/格 · 📂「${name}」`;
       document.getElementById('fog-badge').style.display = 'none';
       renderMap();
       document.getElementById('map-library-modal').classList.remove('open');
