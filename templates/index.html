@@ -1973,11 +1973,14 @@ async function _doSetPose(wx, wy, theta) {
     });
     const d = await r.json();
     if (d.ok) {
-      toast(`📍 定位已发送  θ:${(theta*180/Math.PI).toFixed(0)}°`, 'green');
+      // Immediately show robot at the set position (don't wait for next poll)
+      mapPose = {x: wx, y: wy, theta};
+      toast(`📍 定位成功  θ:${(theta*180/Math.PI).toFixed(0)}°`, 'green');
       _showLocalizingBadge();
       locateMode = false;
       const btn = document.getElementById('locate-mode-btn');
       btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = '';
+      renderMap();
     } else { toast('定位失败: ' + (d.error || ''), 'red'); }
   } catch(e) { toast('发送失败', 'red'); }
 }
