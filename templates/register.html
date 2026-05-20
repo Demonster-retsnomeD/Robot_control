@@ -138,5 +138,6 @@ function showErr(msg) {
   el.style.display = 'block';
 }
 </script>
+<script>(function(){let _v=null;setInterval(async()=>{try{const d=await(await fetch('/api/version',{cache:'no-store'})).json();if(_v===null){_v=d.v;return;}if(d.v!==_v)location.reload();}catch(e){}},2000);})();</script>
 </body>
 </html>

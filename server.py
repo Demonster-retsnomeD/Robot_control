@@ -19,20 +19,30 @@ ALL endpoints on port 80 (same as robot web UI):
   POST /cmd/move             → {"distance":100,"direction":1,"speed":0.8}
   POST /cmd/turn             → {"direction":1,"angle":90,"speed":0.6}
 """
-import json, os, time, math, threading, requests, sqlite3, secrets, concurrent.futures
+import sys, json, os, time, math, threading, requests, sqlite3, secrets, concurrent.futures
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, send_from_directory
 from flask_cors import CORS
 from flask_login import (LoginManager, UserMixin, login_user, logout_user,
                          login_required, current_user)
 from werkzeug.security import generate_password_hash, check_password_hash
 
-BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
+# PyInstaller frozen: data files (config/db) live next to .exe; templates/static in bundle
+_FROZEN = getattr(sys, 'frozen', False)
+if _FROZEN:
+    BASE_DIR    = os.path.dirname(sys.executable)
+    _BUNDLE_DIR = sys._MEIPASS
+else:
+    BASE_DIR    = os.path.dirname(os.path.abspath(__file__))
+    _BUNDLE_DIR = BASE_DIR
+
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 DB_FILE     = os.path.join(BASE_DIR, "users.db")
 
 # ── App setup ─────────────────────────────────────────────────────────────────
-app = Flask(__name__)
+app = Flask(__name__,
+            template_folder=os.path.join(_BUNDLE_DIR, 'templates'),
+            static_folder=os.path.join(_BUNDLE_DIR, 'static'))
 _key_file = os.path.join(BASE_DIR, ".secret_key")
 if os.path.exists(_key_file):
     with open(_key_file) as f: app.secret_key = f.read().strip()
@@ -388,6 +398,39 @@ threading.Thread(target=_sim_nav_loop, daemon=True).start()
 def index():
     return render_template("index.html", username=current_user.username, role=current_user.role)
 
+@app.route("/mobile")
+@login_required
+def mobile():
+    return render_template("mobile.html", username=current_user.username, role=current_user.role)
+
+@app.route("/api/version")
+def api_version():
+    """Returns a hash of template+static mtime. Client polls this to detect code changes."""
+    import hashlib
+    h = hashlib.md5()
+    for root in [os.path.join(_BUNDLE_DIR, 'templates'), os.path.join(_BUNDLE_DIR, 'static')]:
+        if not os.path.isdir(root):
+            continue
+        for fname in sorted(os.listdir(root)):
+            fp = os.path.join(root, fname)
+            if os.path.isfile(fp):
+                h.update(str(os.path.getmtime(fp)).encode())
+    src = os.path.join(_BUNDLE_DIR, 'server.py')
+    if os.path.isfile(src):
+        h.update(str(os.path.getmtime(src)).encode())
+    return jsonify({"v": h.hexdigest()[:12]})
+
+@app.route("/manifest.json")
+def pwa_manifest():
+    return send_from_directory(os.path.join(_BUNDLE_DIR, 'static'), 'manifest.json')
+
+@app.route("/sw.js")
+def pwa_sw():
+    resp = send_from_directory(os.path.join(_BUNDLE_DIR, 'static'), 'sw.js')
+    resp.headers['Service-Worker-Allowed'] = '/'
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp
+
 # ── Config API ────────────────────────────────────────────────────────────────
 @app.route("/api/config", methods=["GET"])
 @login_required
@@ -720,6 +763,50 @@ def api_log():
     return jsonify({"log": list(reversed(command_log[-30:]))})
 
 
+@app.route("/api/set_pose", methods=["POST"])
+@login_required
+def api_set_pose():
+    """Set robot initial pose for localization (relocalization on known map)."""
+    d = request.get_json(force=True) or {}
+    x     = float(d.get("x", 0))
+    y     = float(d.get("y", 0))
+    theta = float(d.get("theta", 0))
+    cfg = load_config()
+    if cfg.get("simulation_mode", True):
+        with sim_lock:
+            sim["x"], sim["y"], sim["theta"] = x, y, theta
+            sim["vx"], sim["vth"] = 0.0, 0.0
+            sim["res"] = 0
+            px_r = int((x - SIM_ORIGIN_X) / SIM_RESOLUTION)
+            py_r = int((y - SIM_ORIGIN_Y) / SIM_RESOLUTION)
+            _reveal_sim(sim["_revealed"], px_r, py_r)
+        _log(f"SET_POSE ({x:.2f},{y:.2f})", True, "SIM")
+        return jsonify({"ok": True, "source": "simulation"})
+    # Real robot: try Reeman relocalization endpoints
+    data, err = rpost(cfg, "/cmd/set_initial_pose", {"x": x, "y": y, "theta": theta})
+    if err:
+        data, err = rpost(cfg, "/cmd/relocalize", {"x": x, "y": y, "theta": theta})
+    ok = err is None
+    _log(f"SET_POSE ({x:.2f},{y:.2f})", ok, err or "")
+    return jsonify({"ok": ok, "error": err} if not ok else {"ok": True})
+
+@app.route("/api/map/apply_draw", methods=["POST"])
+@login_required
+def api_apply_draw():
+    """Merge user-drawn layer into the simulation grid."""
+    d = request.get_json(force=True) or {}
+    layer = d.get("layer", [])
+    if len(layer) != SIM_W * SIM_H:
+        return jsonify({"ok": False, "error": f"layer must be {SIM_W*SIM_H} cells, got {len(layer)}"}), 400
+    applied = 0
+    with sim_lock:
+        for i, v in enumerate(layer):
+            if v >= 0:          # -1 = no user data → skip
+                SIM_GRID[i] = int(v)
+                applied += 1
+    _log("DRAW_APPLY", True, f"{applied} cells")
+    return jsonify({"ok": True, "applied": applied})
+
 # ── Simulated map ─────────────────────────────────────────────────────────────
 def _sim_map():
     origin = {"x": SIM_ORIGIN_X, "y": SIM_ORIGIN_Y}
@@ -894,10 +981,13 @@ def api_robots_set_active():
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dev', action='store_true', help='Enable hot-reload dev mode')
+    args = parser.parse_args()
+    dev = args.dev or os.environ.get('ROBOT_DEV', '').lower() in ('1', 'true')
     print("="*55)
-    print("  Reeman Moon Knight 2.0 — SLAM WEB API Server")
-    print("  Robot API port: 80  (NOT 8090)")
-    print("  Auth: Flask-Login + SQLite (users.db)")
+    print(f"  Reeman Moon Knight 2.0 — {'DEV' if dev else 'PROD'}")
     print("  访问: http://localhost:5000")
     print("="*55)
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=5000, debug=dev, use_reloader=dev)

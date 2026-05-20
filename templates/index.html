@@ -330,12 +330,25 @@ body.user-mode #page-user{display:flex!important;align-items:stretch}
         <button class="btn-sm" id="map-mode-btn" onclick="toggleMapMode()" style="font-size:.65rem" data-i18n="map.mapping">🔴 建图模式</button>
         <span style="font-size:.62rem;padding:2px 7px;border-radius:10px;background:rgba(245,158,11,.15);color:var(--yellow);display:none" id="map-scan-badge">● 扫描中</span>
         <span id="fog-badge" style="display:none;font-size:.62rem;padding:2px 7px;border-radius:10px;background:rgba(239,68,68,.12);color:var(--red)">🌫 雾效</span>
+        <button class="btn-sm" id="locate-mode-btn" onclick="toggleLocateMode()" style="font-size:.65rem">📍 定位</button>
+        <span id="localizing-badge" style="display:none;font-size:.62rem;padding:2px 8px;border-radius:10px"></span>
+        <button class="btn-sm" id="draw-mode-btn" onclick="toggleDrawMode()" style="display:none;font-size:.65rem">✏️ 手绘</button>
+        <span id="draw-tools-bar" style="display:none;align-items:center;gap:4px;font-size:.65rem">
+          <button class="btn-sm dt-btn" id="dt-wall"  onclick="setDrawTool('wall')"  style="font-size:.63rem">⬛墙</button>
+          <button class="btn-sm dt-btn" id="dt-free"  onclick="setDrawTool('free')"  style="font-size:.63rem">⬜空地</button>
+          <button class="btn-sm dt-btn" id="dt-erase" onclick="setDrawTool('erase')" style="font-size:.63rem">🔲擦除</button>
+          <input type="range" id="brush-sz" min="1" max="10" value="3" title="笔刷大小" style="width:48px;vertical-align:middle">
+          <button class="btn-sm" onclick="clearDrawLayer()" style="font-size:.63rem;color:var(--red)">🗑清除</button>
+          <button class="btn-sm" onclick="applyDrawLayer()" style="font-size:.63rem;background:rgba(34,197,94,.15);border-color:var(--green);color:var(--green)">✅应用到地图</button>
+        </span>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <div style="display:flex;gap:4px;align-items:center">
           <input id="map-save-name" type="text" placeholder="地图名称" style="background:var(--panel2);border:1px solid var(--border);border-radius:5px;color:var(--text);padding:4px 8px;font-size:.7rem;outline:none;width:90px">
           <button class="btn-sm" onclick="saveCurrentMap()" data-i18n="btn.savemap" style="font-size:.65rem;background:rgba(22,163,74,.12);border-color:var(--green);color:var(--green)">💾 保存地图</button>
         </div>
+        <button class="btn-sm" id="measure-btn" onclick="toggleMeasureMode()" style="font-size:.65rem">📏 测距</button>
+        <span id="measure-result" style="display:none;font-size:.7rem;font-family:monospace;padding:2px 8px;border-radius:6px;background:rgba(245,158,11,.15);border:1px solid var(--yellow);color:var(--yellow)"></span>
         <button class="btn-sm" onclick="openMapLibrary()" data-i18n="btn.maplibrary" style="font-size:.65rem">🗂️ 地图库</button>
         <span style="font-size:.62rem;color:var(--text2)" id="map-scale">—</span>
         <span style="font-size:.62rem;color:var(--accent);font-family:monospace" id="map-pos">x:— y:—</span>
@@ -354,6 +367,16 @@ body.user-mode #page-user{display:flex!important;align-items:stretch}
           <button class="btn-sm" onclick="saveClickWaypoint()" style="background:rgba(34,197,94,.15);border-color:var(--green);color:var(--green)">保存</button>
         </div>
         <button class="btn-sm" style="width:100%;font-size:.65rem;color:var(--text2)" onclick="closeMapPopup()">关闭</button>
+        <!-- Localization section (shown only in locate mode) -->
+        <div id="locate-section" style="display:none;border-top:1px solid var(--border);margin-top:8px;padding-top:8px">
+          <div style="font-size:.68rem;color:var(--accent);font-weight:700;margin-bottom:6px">📍 设为机器人起始位置</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:7px">
+            <span style="font-size:.67rem;color:var(--text2);flex-shrink:0">朝向</span>
+            <input type="range" id="locate-theta" min="-180" max="180" value="0" style="flex:1" oninput="document.getElementById('locate-theta-val').textContent=this.value+'°'">
+            <span id="locate-theta-val" style="font-size:.72rem;color:var(--accent);min-width:34px;text-align:right">0°</span>
+          </div>
+          <button class="btn-sm" onclick="confirmSetPose()" style="width:100%;background:rgba(14,165,233,.15);border-color:var(--accent);color:var(--accent);font-weight:700">✅ 确认定位</button>
+        </div>
       </div>
     </div>
     <!-- Legend + edit hint -->
@@ -1175,6 +1198,8 @@ async function fetchMap(force) {
     const d = await r.json();
     if (d.width) {
       mapData = d;
+      if (!drawLayer || drawLayer.length !== d.width * d.height)
+        drawLayer = new Int8Array(d.width * d.height).fill(-1);
       document.getElementById('map-loading').style.display = 'none';
       document.getElementById('map-scale').textContent =
         `${d.width}×${d.height} · ${d.resolution*100}cm/格 · ${(d.width*d.resolution).toFixed(1)}×${(d.height*d.resolution).toFixed(1)}m`;
@@ -1217,6 +1242,56 @@ function renderMap() {
       else if (isFog)        ctx.fillStyle = '#e2e8f0';   // fog / unexplored
       else                   ctx.fillStyle = '#cbd5e1';   // SLAM unknown
       ctx.fillRect(x * cellW, y * cellH, Math.ceil(cellW), Math.ceil(cellH));
+    }
+  }
+
+  // Draw measurement overlay
+  if (measurePtA) {
+    const [ax, ay] = worldToCanvas(measurePtA.wx, measurePtA.wy, mapData, cw, ch);
+    ctx.beginPath(); ctx.arc(ax, ay, 6, 0, Math.PI*2);
+    ctx.fillStyle = '#f59e0b'; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.font = 'bold 11px sans-serif'; ctx.fillStyle = '#f59e0b'; ctx.textAlign = 'center';
+    ctx.fillText('A', ax, ay - 9);
+    if (measurePtB) {
+      const [bx, by] = worldToCanvas(measurePtB.wx, measurePtB.wy, mapData, cw, ch);
+      // Line
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
+      ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]); ctx.stroke(); ctx.setLineDash([]);
+      // Point B
+      ctx.beginPath(); ctx.arc(bx, by, 6, 0, Math.PI*2);
+      ctx.fillStyle = '#f59e0b'; ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.font = 'bold 11px sans-serif'; ctx.fillStyle = '#f59e0b'; ctx.textAlign = 'center';
+      ctx.fillText('B', bx, by - 9);
+      // Distance label at midpoint
+      const mx = (ax + bx) / 2, my = (ay + by) / 2;
+      const dx = measurePtB.wx - measurePtA.wx, dy = measurePtB.wy - measurePtA.wy;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      const label = dist >= 1 ? dist.toFixed(2) + ' m' : (dist * 100).toFixed(1) + ' cm';
+      ctx.font = 'bold 12px sans-serif';
+      const tw = ctx.measureText(label).width;
+      ctx.fillStyle = 'rgba(15,23,42,0.85)';
+      ctx.fillRect(mx - tw/2 - 5, my - 10, tw + 10, 18);
+      ctx.fillStyle = '#f59e0b'; ctx.textAlign = 'center';
+      ctx.fillText(label, mx, my + 4);
+    }
+  }
+
+  // Draw user draw layer overlay
+  if (drawLayer && drawLayer.length === W * H) {
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const v = drawLayer[y * W + x];
+        if (v === 100) {
+          ctx.fillStyle = 'rgba(239,68,68,0.65)';
+          ctx.fillRect(x*cellW, y*cellH, Math.ceil(cellW), Math.ceil(cellH));
+        } else if (v === 0) {
+          ctx.fillStyle = 'rgba(34,197,94,0.45)';
+          ctx.fillRect(x*cellW, y*cellH, Math.ceil(cellW), Math.ceil(cellH));
+        }
+      }
     }
   }
 
@@ -1288,6 +1363,20 @@ function initMapClick() {
     const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
     const cy = (e.clientY - rect.top)  * (canvas.height / rect.height);
     const [wx, wy] = canvasToWorld(cx, cy, mapData, canvas.width, canvas.height);
+
+    // Measure mode: intercept clicks for A→B distance
+    if (measureMode) {
+      if (!measurePtA || measurePtB) {
+        measurePtA = {wx, wy}; measurePtB = null;
+        toast('📍 A点已设，再点B点');
+      } else {
+        measurePtB = {wx, wy};
+        _updateMeasureResult();
+        // Next click starts over
+      }
+      renderMap(); return;
+    }
+
     clickWorldX = wx; clickWorldY = wy;
     // Show popup near click
     const popup = document.getElementById('map-popup');
@@ -1302,7 +1391,14 @@ function initMapClick() {
     popup.style.left = px + 'px';
     popup.style.top  = py + 'px';
     popup.style.display = 'block';
-    setTimeout(() => document.getElementById('popup-name').focus(), 50);
+    // Show/hide sections based on mode
+    document.getElementById('locate-section').style.display = locateMode ? 'block' : 'none';
+    if (locateMode) {
+      document.getElementById('locate-theta').value = '0';
+      document.getElementById('locate-theta-val').textContent = '0°';
+    } else {
+      setTimeout(() => document.getElementById('popup-name').focus(), 50);
+    }
   });
   // Close popup on outside click
   document.addEventListener('click', (e) => {
@@ -1358,10 +1454,11 @@ async function toggleMapMode() {
     btn.style.borderColor = 'var(--green)';
     btn.style.color = 'var(--green)';
     badge.style.display = 'inline';
+    document.getElementById('draw-mode-btn').style.display = 'inline';
     // Switch robot to mapping mode
     try { await fetch('/api/set_mode', {method:'POST',
       headers:{'Content-Type':'application/json'}, body:'{"mode":1}'}); } catch(e){}
-    toast('🔴 建图模式 — 手动操控机器人扫描环境');
+    toast('🔴 建图模式 — 手动操控机器人扫描环境，可点✏️手绘框架');
     clearTimeout(mapFetchTimer);
     mapFetchTimer = setTimeout(fetchMap, 800); // faster during scan
   } else {
@@ -1370,6 +1467,9 @@ async function toggleMapMode() {
     btn.style.borderColor = '';
     btn.style.color = '';
     badge.style.display = 'none';
+    document.getElementById('draw-mode-btn').style.display = 'none';
+    document.getElementById('draw-tools-bar').style.display = 'none';
+    if (drawMode) { drawMode = false; document.getElementById('map-canvas').style.cursor = 'crosshair'; }
     try { await fetch('/api/set_mode', {method:'POST',
       headers:{'Content-Type':'application/json'}, body:'{"mode":2}'}); } catch(e){}
     toast('✅ 已切换导航模式');
@@ -1626,6 +1726,201 @@ async function useRobot(ip, port) {
   pingRobot();
 }
 
+// ── Measurement tool ──────────────────────────────────────────────────────
+let measureMode = false, measurePtA = null, measurePtB = null;
+
+function toggleMeasureMode() {
+  measureMode = !measureMode;
+  measurePtA = null; measurePtB = null;
+  const btn = document.getElementById('measure-btn');
+  const res = document.getElementById('measure-result');
+  btn.style.background  = measureMode ? 'rgba(245,158,11,.2)' : '';
+  btn.style.borderColor = measureMode ? 'var(--yellow)' : '';
+  btn.style.color       = measureMode ? 'var(--yellow)' : '';
+  res.style.display = 'none';
+  if (measureMode) toast('📏 测距：点击A点，再点B点');
+  renderMap();
+}
+
+function _updateMeasureResult() {
+  const res = document.getElementById('measure-result');
+  if (!measurePtA || !measurePtB) { res.style.display='none'; return; }
+  const dx = measurePtB.wx - measurePtA.wx, dy = measurePtB.wy - measurePtA.wy;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  const angleDeg = (Math.atan2(dy, dx) * 180 / Math.PI).toFixed(1);
+  const distStr = dist >= 1 ? dist.toFixed(2)+'m' : (dist*100).toFixed(1)+'cm';
+  res.style.display = 'inline';
+  res.textContent = `📏 ${distStr}  ∠${angleDeg}°`;
+}
+
+// ── Localization ──────────────────────────────────────────────────────────
+let locateMode = false;
+
+function toggleLocateMode() {
+  locateMode = !locateMode;
+  const btn = document.getElementById('locate-mode-btn');
+  btn.style.background  = locateMode ? 'rgba(14,165,233,.2)' : '';
+  btn.style.borderColor = locateMode ? 'var(--accent)' : '';
+  btn.style.color       = locateMode ? 'var(--accent)' : '';
+  document.getElementById('locate-section').style.display = locateMode ? 'block' : 'none';
+  toast(locateMode ? '📍 定位模式：点击地图设置机器人初始位置' : '已退出定位模式');
+}
+
+async function confirmSetPose() {
+  const thetaDeg = parseFloat(document.getElementById('locate-theta').value) || 0;
+  const theta = thetaDeg * Math.PI / 180;
+  closeMapPopup();
+  try {
+    const r = await fetch('/api/set_pose', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({x: clickWorldX, y: clickWorldY, theta})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('📍 初始位置已设置，机器人正在扫描定位...', 'green');
+      _showLocalizingBadge();
+      locateMode = false;
+      const btn = document.getElementById('locate-mode-btn');
+      btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = '';
+      document.getElementById('locate-section').style.display = 'none';
+    } else { toast('定位失败: ' + (d.error || '未知错误'), 'red'); }
+  } catch(e) { toast('发送失败', 'red'); }
+}
+
+function _showLocalizingBadge() {
+  const b = document.getElementById('localizing-badge');
+  if (!b) return;
+  b.style.display = 'inline';
+  b.textContent = '📍 定位中...';
+  b.style.background = 'rgba(14,165,233,.15)';
+  b.style.color = 'var(--accent)';
+  b.style.border = '1px solid var(--accent)';
+  setTimeout(() => {
+    b.textContent = '✅ 已定位';
+    b.style.background = 'rgba(34,197,94,.15)';
+    b.style.color = 'var(--green)';
+    b.style.border = '1px solid var(--green)';
+    setTimeout(() => { b.style.display = 'none'; }, 3000);
+  }, 4000);
+}
+
+// ── Map drawing layer ─────────────────────────────────────────────────────
+let drawLayer = null;
+let drawMode  = false;
+let drawTool  = 'wall';
+let _isDrawing = false;
+
+function toggleDrawMode() {
+  drawMode = !drawMode;
+  const btn   = document.getElementById('draw-mode-btn');
+  const tools = document.getElementById('draw-tools-bar');
+  btn.style.background   = drawMode ? 'rgba(14,165,233,.2)' : '';
+  btn.style.borderColor  = drawMode ? 'var(--accent)' : '';
+  btn.style.color        = drawMode ? 'var(--accent)' : '';
+  tools.style.display    = drawMode ? 'flex' : 'none';
+  document.getElementById('map-canvas').style.cursor = drawMode ? 'cell' : 'crosshair';
+  if (drawMode && mapData && (!drawLayer || drawLayer.length !== mapData.width * mapData.height))
+    drawLayer = new Int8Array(mapData.width * mapData.height).fill(-1);
+  if (drawMode) setDrawTool('wall');
+}
+
+function setDrawTool(t) {
+  drawTool = t;
+  document.querySelectorAll('.dt-btn').forEach(b => {
+    b.style.background   = '';
+    b.style.borderColor  = '';
+    b.style.color        = '';
+  });
+  const el = document.getElementById('dt-' + t);
+  if (el) {
+    el.style.background  = 'rgba(14,165,233,.2)';
+    el.style.borderColor = 'var(--accent)';
+    el.style.color       = 'var(--accent)';
+  }
+}
+
+function _drawAt(canvasX, canvasY) {
+  if (!mapData || !drawLayer) return;
+  const canvas = document.getElementById('map-canvas');
+  const W = mapData.width, H = mapData.height;
+  const cellW = canvas.width / W, cellH = canvas.height / H;
+  const gx  = Math.floor(canvasX / cellW);
+  const gy  = Math.floor(canvasY / cellH);
+  const val = drawTool === 'wall' ? 100 : drawTool === 'free' ? 0 : -1;
+  const r   = parseInt(document.getElementById('brush-sz').value) || 3;
+  for (let dy = -r; dy <= r; dy++) {
+    for (let dx = -r; dx <= r; dx++) {
+      if (dx*dx + dy*dy > r*r) continue;
+      const nx = gx+dx, ny = gy+dy;
+      if (nx >= 0 && nx < W && ny >= 0 && ny < H)
+        drawLayer[ny * W + nx] = val;
+    }
+  }
+  renderMap();
+}
+
+function _getCanvasXY(e, canvas) {
+  const rect  = canvas.getBoundingClientRect();
+  const touch = e.touches ? e.touches[0] : e;
+  return [(touch.clientX - rect.left) * canvas.width  / rect.width,
+          (touch.clientY - rect.top)  * canvas.height / rect.height];
+}
+
+(function initDrawEvents() {
+  const canvas = document.getElementById('map-canvas');
+  if (!canvas) return;
+  canvas.addEventListener('mousedown', e => {
+    if (!drawMode) return;
+    _isDrawing = true;
+    _drawAt(..._getCanvasXY(e, canvas));
+    e.stopPropagation();
+  });
+  canvas.addEventListener('mousemove', e => {
+    if (!drawMode || !_isDrawing) return;
+    _drawAt(..._getCanvasXY(e, canvas));
+  });
+  canvas.addEventListener('mouseup',    () => _isDrawing = false);
+  canvas.addEventListener('mouseleave', () => _isDrawing = false);
+  canvas.addEventListener('touchstart', e => {
+    if (!drawMode) return;
+    e.preventDefault(); _isDrawing = true;
+    _drawAt(..._getCanvasXY(e, canvas));
+  }, {passive: false});
+  canvas.addEventListener('touchmove', e => {
+    if (!drawMode || !_isDrawing) return;
+    e.preventDefault();
+    _drawAt(..._getCanvasXY(e, canvas));
+  }, {passive: false});
+  canvas.addEventListener('touchend', () => _isDrawing = false);
+})();
+
+function clearDrawLayer() {
+  if (!drawLayer) return;
+  drawLayer.fill(-1);
+  renderMap();
+  toast('已清除手绘图层');
+}
+
+async function applyDrawLayer() {
+  if (!drawLayer || !drawLayer.some(v => v >= 0)) {
+    toast('没有手绘内容可应用', 'yellow'); return;
+  }
+  try {
+    const r = await fetch('/api/map/apply_draw', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({layer: Array.from(drawLayer)})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast(`✅ 已写入 ${d.applied} 个格子到地图`, 'green');
+      clearDrawLayer();
+      fetchMap(true);
+    } else { toast(d.error || '应用失败', 'red'); }
+  } catch(e) { toast('应用失败', 'red'); }
+}
+
 // ── Map save / library / export ───────────────────────────────────────────
 async function saveCurrentMap() {
   const name = document.getElementById('map-save-name').value.trim();
@@ -1761,6 +2056,18 @@ function toast(msg, type) {
   clearTimeout(toastT);
   toastT = setTimeout(()=>el.classList.remove('show'), 2500);
 }
+</script>
+<script>
+/* Hot-reload: poll /api/version every 2s, reload page when server code changes */
+(function(){
+  let _v=null;
+  setInterval(async()=>{
+    try{const d=await(await fetch('/api/version',{cache:'no-store'})).json();
+      if(_v===null){_v=d.v;return;}
+      if(d.v!==_v){location.reload();}
+    }catch(e){}
+  },2000);
+})();
 </script>
 </body>
 </html>

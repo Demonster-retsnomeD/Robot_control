@@ -107,9 +107,9 @@ function showErr(msg) {
 async function scanRobot() {
   const el = document.getElementById('scan-result');
   el.textContent = '⏳ 扫描中（约5秒）...';
-  // Note: scan requires login — just show tip here
   el.textContent = '💡 登录后可在配置页扫描机器人';
 }
 </script>
+<script>(function(){let _v=null;setInterval(async()=>{try{const d=await(await fetch('/api/version',{cache:'no-store'})).json();if(_v===null){_v=d.v;return;}if(d.v!==_v)location.reload();}catch(e){}},2000);})();</script>
 </body>
 </html>

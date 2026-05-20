@@ -4,3 +4,4 @@ flask-login>=0.6.0
 requests>=2.31.0
 werkzeug>=2.3.0
 websocket-client>=1.6.0
+pywebview>=4.0.0
