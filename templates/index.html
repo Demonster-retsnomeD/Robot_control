@@ -1531,7 +1531,7 @@ function initMapClick() {
   const canvas = document.getElementById('map-canvas');
   if (!canvas) return;
   canvas.addEventListener('click', (e) => {
-    if (!mapData) return;
+    if (!mapData || drawMode || _didPan) return;
     const rect = canvas.getBoundingClientRect();
     const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
     const cy = (e.clientY - rect.top)  * (canvas.height / rect.height);
@@ -2082,12 +2082,8 @@ function _getCanvasXY(e, canvas) {
     if (drawMode) {
       if (drawTool === 'line') {
         const [gx, gy] = _canvasToGrid(cx, cy);
-        if (lineStart === null) {
-          lineStart = {gx, gy}; linePreview = null;
-        } else {
-          _paintCells(bresenhamLine(lineStart.gx, lineStart.gy, gx, gy));
-          lineStart = null; linePreview = null;
-        }
+        lineStart = {gx, gy}; linePreview = null;
+        _isDrawing = true;
         renderMap(); e.stopPropagation(); return;
       }
       _isDrawing = true;
@@ -2103,11 +2099,13 @@ function _getCanvasXY(e, canvas) {
   canvas.addEventListener('mousemove', e => {
     const [cx, cy] = _getCanvasXY(e, canvas);
     if (drawMode && _isDrawing) {
-      _drawAt(cx, cy);
-    } else if (drawMode && drawTool === 'line' && lineStart) {
-      const [gx, gy] = _canvasToGrid(cx, cy);
-      linePreview = bresenhamLine(lineStart.gx, lineStart.gy, gx, gy);
-      renderMap();
+      if (drawTool === 'line' && lineStart) {
+        const [gx, gy] = _canvasToGrid(cx, cy);
+        linePreview = bresenhamLine(lineStart.gx, lineStart.gy, gx, gy);
+        renderMap();
+      } else {
+        _drawAt(cx, cy);
+      }
     } else if (_isPanning) {
       const dx = cx - _panStartX, dy = cy - _panStartY;
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) _didPan = true;
@@ -2119,13 +2117,22 @@ function _getCanvasXY(e, canvas) {
   });
 
   canvas.addEventListener('mouseup', e => {
-    _isDrawing = false;
-    if (_isPanning && !_didPan && !drawMode) {
-      // treat as click — re-fire synthetic click if no movement
+    if (drawMode && drawTool === 'line' && lineStart && _isDrawing) {
+      const [cx, cy] = _getCanvasXY(e, canvas);
+      const [gx, gy] = _canvasToGrid(cx, cy);
+      _paintCells(bresenhamLine(lineStart.gx, lineStart.gy, gx, gy));
+      lineStart = null; linePreview = null;
     }
+    _isDrawing = false;
     _isPanning = false;
+    if (mapData) renderMap();
   });
-  canvas.addEventListener('mouseleave', () => { _isDrawing = false; _isPanning = false; });
+  canvas.addEventListener('mouseleave', () => {
+    if (drawMode && drawTool === 'line' && lineStart && _isDrawing) {
+      lineStart = null; linePreview = null; if (mapData) renderMap();
+    }
+    _isDrawing = false; _isPanning = false;
+  });
 
   // ── Touch events ──────────────────────────────────────────────────────────
   let _lastTouchDist = null;
