@@ -1272,6 +1272,7 @@ async function fetchMap(force) {
 function returnToLiveMap() {
   viewingSavedMap = false;
   currentMapId = null; currentMapName = null;
+  currentPath = []; if (routeRunning) _stopRoute(); _updatePathCount();
   document.getElementById('live-map-btn').style.display = 'none';
   fetchMap(true);
   toast('📡 已切回实时地图');
@@ -1571,6 +1572,7 @@ async function newBlankMap() {
       // Reset client state immediately — don't wait for fetchMap
       viewingSavedMap = false;
       currentMapId = null; currentMapName = null;
+      currentPath = []; if (routeRunning) _stopRoute(); _updatePathCount();
       document.getElementById('live-map-btn').style.display = 'none';
       const W = mapData ? mapData.width  : 100;
       const H = mapData ? mapData.height : 80;
@@ -2659,6 +2661,7 @@ async function loadSavedMap(id, name) {
       viewingSavedMap = true;
       currentMapId   = parseInt(id);
       currentMapName = name;
+      currentPath = []; if (routeRunning) _stopRoute(); _updatePathCount();
       // Restore saved resolution as custom scale
       customResolution = d.resolution;
       const resInput = document.getElementById('res-input');
