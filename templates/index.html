@@ -1599,14 +1599,24 @@ function renderMap() {
     // Numbered circles
     _drawPts.forEach((p, i) => {
       const [px, py] = worldToCanvas(p.wx, p.wy, mapData, cw, ch);
-      const r = Math.max(8, 10) / mapZoom;
+      const isTarget = !routeRunning && navSubMode === 'route' && i === _routeTargetIdx;
+      const r = (isTarget ? 13 : Math.max(8, 10)) / mapZoom;
       const isDone   = routeRunning && i < routeRunIdx;
       const isCur    = routeRunning && i === routeRunIdx;
       const isDrag   = pathMode && i === _dragPtIdx;
       ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2);
-      ctx.fillStyle  = isDrag ? '#f59e0b' : isDone ? 'rgba(100,116,139,0.7)' : isCur ? '#f59e0b' : 'rgba(14,165,233,0.85)';
+      ctx.fillStyle  = isTarget ? '#f59e0b'
+                     : isDrag   ? '#f59e0b'
+                     : isDone   ? 'rgba(100,116,139,0.7)'
+                     : isCur    ? '#f59e0b'
+                     : 'rgba(14,165,233,0.85)';
       ctx.fill();
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5 / mapZoom; ctx.stroke();
+      ctx.strokeStyle = isTarget ? '#fff' : '#fff'; ctx.lineWidth = (isTarget ? 2.5 : 1.5) / mapZoom; ctx.stroke();
+      // Outer ring for target point
+      if (isTarget) {
+        ctx.beginPath(); ctx.arc(px, py, r * 1.55, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(245,158,11,0.5)'; ctx.lineWidth = 1.5 / mapZoom; ctx.stroke();
+      }
       ctx.font = `bold ${Math.max(7, 9/mapZoom)}px sans-serif`;
       ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(i + 1, px, py);
@@ -1794,6 +1804,22 @@ function initMapClick() {
     const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
     const cy = (e.clientY - rect.top)  * (canvas.height / rect.height);
     const [wx, wy] = canvasToWorld(cx, cy, mapData, canvas.width, canvas.height);
+
+    // Route mode: click near a route point to select it as target
+    if (navSubMode === 'route' && !mapScanMode && !routeRunning && currentPath.length > 0 && !locateMode) {
+      const HIT = Math.max(14, 16 / mapZoom);
+      for (let i = 0; i < currentPath.length; i++) {
+        const [ppx, ppy] = worldToCanvas(currentPath[i].wx, currentPath[i].wy, mapData, canvas.width, canvas.height);
+        if (Math.hypot(cx - ppx, cy - ppy) < HIT) {
+          _routeTargetIdx = (_routeTargetIdx === i) ? -1 : i; // toggle off if same
+          _updateRouteRunBtn();
+          if (mapData) renderMap();
+          return;
+        }
+      }
+      // Click on empty area: deselect target
+      if (_routeTargetIdx >= 0) { _routeTargetIdx = -1; _updateRouteRunBtn(); if (mapData) renderMap(); return; }
+    }
 
     // Realtime control mode: click → immediate single-point nav
     if (navSubMode === 'realtime' && !mapScanMode && !locateMode) {
@@ -2308,6 +2334,7 @@ let navSubMode         = 'route';     // 'route' | 'realtime'
 let realtimeTarget     = null;        // {wx,wy} confirmed target (solid marker)
 let realtimePreview    = null;        // {wx,wy} hover ghost (follows cursor)
 let _rtNavActive       = false;       // true after ▶移动到此 pressed, waiting for arrival
+let _routeTargetIdx    = -1;          // index of selected target point on current route (-1=none)
 
 function setNavSubMode(mode) {
   navSubMode = mode;
@@ -2516,8 +2543,8 @@ function _setRouteBtn(state) {
     if (eb) eb.style.display = 'none';
   } else if (state === 'ready') {
     if (rb) {
-      rb.textContent    = '▶ 运行路线';
       rb.style.display  = 'inline';
+      _updateRouteRunBtn();
       rb.style.background  = 'rgba(34,197,94,.12)';
       rb.style.borderColor = 'var(--green)';
       rb.style.color       = 'var(--green)';
@@ -2542,9 +2569,43 @@ function _editSelectedRoute() {
   editRoute(_selectedRouteId, _selectedRouteName || '');
 }
 
+function _updateRouteRunBtn() {
+  const rb = document.getElementById('route-run-btn');
+  if (!rb || rb.style.display === 'none') return;
+  if (_routeTargetIdx >= 0 && currentPath.length > 0) {
+    const name = currentPath[_routeTargetIdx]?.name || `第${_routeTargetIdx + 1}点`;
+    rb.textContent = `▶ 前往 ${name}`;
+  } else {
+    rb.textContent = '▶ 运行路线';
+  }
+}
+
+function _getRouteToTarget(pts, targetIdx) {
+  // Find nearest route point (up to targetIdx) to robot's current pose
+  let startIdx = 0;
+  if (mapPose && mapPose.x != null) {
+    let minDist = Infinity;
+    for (let i = 0; i <= targetIdx; i++) {
+      const d = Math.hypot(pts[i].wx - mapPose.x, pts[i].wy - mapPose.y);
+      if (d < minDist) { minDist = d; startIdx = i; }
+    }
+    // Already very close to startIdx point → skip it, start from next
+    if (minDist < 0.4 && startIdx < targetIdx) startIdx++;
+  }
+  return pts.slice(startIdx, targetIdx + 1);
+}
+
 function _startSelectedRoute() {
   if (!_selectedRoutePts || !_selectedRoutePts.length) { toast('请先选择路线', 'yellow'); return; }
-  _execRoute(_selectedRoutePts);
+  if (_routeTargetIdx >= 0 && _routeTargetIdx < _selectedRoutePts.length) {
+    const seg = _getRouteToTarget(_selectedRoutePts, _routeTargetIdx);
+    if (!seg.length) { toast('目标点无效或已在目标处', 'yellow'); return; }
+    const name = currentPath[_routeTargetIdx]?.name || `第${_routeTargetIdx + 1}点`;
+    toast(`🗺 沿路线前往「${name}」(经过 ${seg.length} 个节点)`, 'green');
+    _execRoute(seg);
+  } else {
+    _execRoute(_selectedRoutePts);
+  }
 }
 
 function _execRoute(pts) {
@@ -2565,6 +2626,7 @@ function _stopRoute() {
   _selectedRoutePts  = null;
   _selectedRouteId   = null;
   _selectedRouteName = null;
+  _routeTargetIdx    = -1;
   currentPath        = [];
   _updatePathCount();
   _setRouteBtn('hidden');
@@ -2709,6 +2771,7 @@ async function selectRoute(id) {
     _selectedRoutePts  = route.points.map(p => ({wx: p.wx, wy: p.wy, theta: p.theta ?? 0}));
     _selectedRouteId   = route.id;
     _selectedRouteName = route.name || '';
+    _routeTargetIdx    = -1;   // reset target point on new route
     _updatePathCount();
     // Show ready-to-run + edit buttons
     _setRouteBtn('ready');
@@ -2958,6 +3021,15 @@ function _getCanvasXY(e, canvas) {
 
   canvas.addEventListener('mousemove', e => {
     const [cx, cy] = _getCanvasXY(e, canvas);
+    // Route mode: pointer cursor when near a selectable route point
+    if (navSubMode === 'route' && !mapScanMode && !routeRunning && currentPath.length > 0 && mapData) {
+      const HIT = Math.max(14, 16 / mapZoom);
+      const nearPt = currentPath.some(p => {
+        const [ppx, ppy] = worldToCanvas(p.wx, p.wy, mapData, canvas.width, canvas.height);
+        return Math.hypot(cx - ppx, cy - ppy) < HIT;
+      });
+      canvas.style.cursor = nearPt ? 'pointer' : 'crosshair';
+    }
     // Realtime mode: update hover preview
     if (navSubMode === 'realtime' && !mapScanMode && mapData && !_rtNavActive) {
       const [wx, wy] = canvasToWorld(cx, cy, mapData, canvas.width, canvas.height);
