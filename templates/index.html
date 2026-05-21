@@ -2471,11 +2471,7 @@ async function editRoute(id, name) {
     if (!route) { toast('路线不存在', 'red'); return; }
     // Must be in mapping mode to edit
     if (!mapScanMode) await toggleMapMode();
-    currentPath = route.points.map(p => ({wx: p.wx, wy: p.wy, name: p.name||''}));
-    editingRouteId   = id;
-    editingRouteName = name;
-    currentRouteName = name;
-    _updatePathCount();
+    // Activate path mode first (so _updatePathPanel shows the panel)
     if (!pathMode) {
       pathMode = true;
       const btn = document.getElementById('path-mode-btn');
@@ -2483,6 +2479,12 @@ async function editRoute(id, name) {
       if (btn) { btn.style.background = 'rgba(14,165,233,.2)'; btn.style.borderColor = 'var(--accent)'; btn.style.color = 'var(--accent)'; }
       if (bar) bar.style.display = 'flex';
     }
+    // Load route data
+    currentPath      = route.points.map(p => ({wx: p.wx, wy: p.wy, name: p.name||''}));
+    editingRouteId   = id;
+    editingRouteName = name;
+    currentRouteName = name;
+    _updatePathCount();   // now pathMode=true → _updatePathPanel renders point list
     toast(`✏️ 编辑路线「${name}」— 拖动点调整位置，点击空白添加点`);
     if (mapData) renderMap();
   } catch(e) { toast('加载路线失败', 'red'); }
