@@ -1271,6 +1271,7 @@ async function fetchMap(force) {
 
 function returnToLiveMap() {
   viewingSavedMap = false;
+  currentMapId = null; currentMapName = null;
   document.getElementById('live-map-btn').style.display = 'none';
   fetchMap(true);
   toast('📡 已切回实时地图');
@@ -1569,6 +1570,7 @@ async function newBlankMap() {
     if (d.ok) {
       // Reset client state immediately — don't wait for fetchMap
       viewingSavedMap = false;
+      currentMapId = null; currentMapName = null;
       document.getElementById('live-map-btn').style.display = 'none';
       const W = mapData ? mapData.width  : 100;
       const H = mapData ? mapData.height : 80;
@@ -2130,6 +2132,8 @@ function _showLocalizingBadge() {
 
 // ── Route planning ────────────────────────────────────────────────────────
 let pathMode      = false;
+let currentMapId  = null;        // DB id of currently loaded map (null = live/blank)
+let currentMapName = null;       // name for display
 let currentPath   = [];          // [{wx,wy}] user-placed points
 let routeRunning  = false;
 let routeRunIdx   = 0;
@@ -2190,7 +2194,7 @@ async function saveCurrentRoute() {
   try {
     const r = await fetch('/api/routes', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({name: name.trim(), points: pts})
+      body: JSON.stringify({name: name.trim(), points: pts, map_id: currentMapId})
     });
     const d = await r.json();
     if (d.ok) toast('✅ 路线已保存: ' + name.trim(), 'green');
@@ -2264,9 +2268,13 @@ function _onNavComplete(reason) {
 async function openRouteLibrary() {
   document.getElementById('route-library-modal').classList.add('open');
   const body = document.getElementById('route-library-body');
+  // Update modal title to show current map
+  const h3 = document.querySelector('#route-library-modal h3');
+  if (h3) h3.textContent = currentMapName ? `🛤 路线库 — 「${currentMapName}」` : '🛤 路线库 — 实时地图';
   body.innerHTML = '<div class="no-maps">加载中...</div>';
+  const mapParam = currentMapId != null ? currentMapId : 'null';
   try {
-    const d = await (await fetch('/api/routes')).json();
+    const d = await (await fetch(`/api/routes?map_id=${mapParam}`)).json();
     const routes = d.routes || [];
     if (!routes.length) {
       body.innerHTML = '<div class="no-maps">暂无保存的路线</div>'; return;
@@ -2649,6 +2657,8 @@ async function loadSavedMap(id, name) {
       mapData = d;
       mapData.fog = false;
       viewingSavedMap = true;
+      currentMapId   = parseInt(id);
+      currentMapName = name;
       // Restore saved resolution as custom scale
       customResolution = d.resolution;
       const resInput = document.getElementById('res-input');

@@ -118,10 +118,16 @@ def init_db():
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 name       TEXT NOT NULL,
                 points     TEXT NOT NULL,
+                map_id     INTEGER,
                 created_by TEXT NOT NULL,
                 created_at TEXT NOT NULL
             )
         """)
+        # Migration: add map_id if table existed without it
+        try:
+            conn.execute("ALTER TABLE routes ADD COLUMN map_id INTEGER")
+        except Exception:
+            pass
         conn.commit()
 
 init_db()
@@ -664,12 +670,26 @@ def api_waypoints_save():
 @app.route("/api/routes", methods=["GET"])
 @login_required
 def api_routes_list():
+    # map_id=0 or missing → live/blank map (map_id IS NULL)
+    raw = request.args.get("map_id", "")
     with sqlite3.connect(DB_FILE) as conn:
-        rows = conn.execute(
-            "SELECT id, name, points, created_at FROM routes ORDER BY id DESC"
-        ).fetchall()
+        if raw == "":
+            # return all (shouldn't happen in normal use, kept for debug)
+            rows = conn.execute(
+                "SELECT id, name, points, map_id, created_at FROM routes ORDER BY id DESC"
+            ).fetchall()
+        elif raw == "null":
+            rows = conn.execute(
+                "SELECT id, name, points, map_id, created_at FROM routes WHERE map_id IS NULL ORDER BY id DESC"
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, name, points, map_id, created_at FROM routes WHERE map_id=? ORDER BY id DESC",
+                (int(raw),)
+            ).fetchall()
     return jsonify({"routes": [
-        {"id": r[0], "name": r[1], "points": json.loads(r[2]), "created_at": r[3]}
+        {"id": r[0], "name": r[1], "points": json.loads(r[2]),
+         "map_id": r[3], "created_at": r[4]}
         for r in rows
     ]})
 
@@ -679,14 +699,15 @@ def api_routes_save():
     d = request.get_json(force=True) or {}
     name   = d.get("name", "").strip()
     points = d.get("points", [])
+    map_id = d.get("map_id")   # None = live/unlabelled map
     if not name:   return jsonify({"ok": False, "error": "名称不能为空"}), 400
     if not points: return jsonify({"ok": False, "error": "路线无点位"}), 400
     created = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
         with sqlite3.connect(DB_FILE) as conn:
             conn.execute(
-                "INSERT INTO routes (name, points, created_by, created_at) VALUES (?,?,?,?)",
-                (name, json.dumps(points), current_user.username, created)
+                "INSERT INTO routes (name, points, map_id, created_by, created_at) VALUES (?,?,?,?,?)",
+                (name, json.dumps(points), map_id, current_user.username, created)
             )
             conn.commit()
     except Exception as e:
