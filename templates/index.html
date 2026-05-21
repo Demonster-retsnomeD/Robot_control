@@ -387,6 +387,18 @@ body.user-mode #page-user{display:flex!important;align-items:stretch}
     <div style="flex:1;position:relative;overflow:hidden;background:#f0f4f8" id="map-wrap">
       <canvas id="map-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;image-rendering:pixelated;cursor:crosshair"></canvas>
       <div id="map-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:.8rem">⏳ 加载地图...</div>
+      <!-- Route edit panel -->
+      <div id="route-edit-panel" style="display:none;position:absolute;top:8px;right:8px;width:190px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px;z-index:20;box-shadow:0 4px 20px rgba(0,0,0,.15);max-height:calc(100% - 24px);overflow-y:auto;box-sizing:border-box">
+        <div style="font-size:.72rem;font-weight:700;color:#0f172a;margin-bottom:8px">🛤 路线</div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:.62rem;color:#64748b;margin-bottom:3px">路线名称</div>
+          <input id="route-name-input" type="text" placeholder="输入路线名称"
+            style="width:100%;box-sizing:border-box;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;color:#0f172a;padding:5px 8px;font-size:.7rem;outline:none">
+        </div>
+        <div style="font-size:.62rem;color:#64748b;margin-bottom:4px">路线点</div>
+        <div id="route-points-list" style="display:flex;flex-direction:column;gap:5px"></div>
+        <div style="margin-top:10px;font-size:.6rem;color:#94a3b8">点击地图添加点 · 拖动点调整位置</div>
+      </div>
       <!-- Click popup -->
       <div id="map-popup" style="display:none;position:absolute;background:var(--panel);border:1px solid var(--accent);border-radius:10px;padding:12px;min-width:190px;z-index:10;box-shadow:0 4px 20px rgba(0,0,0,.2)">
         <div style="font-size:.68rem;color:var(--text2);margin-bottom:8px">📍 <span id="popup-coord" style="color:var(--accent);font-family:monospace"></span></div>
@@ -1495,6 +1507,12 @@ function renderMap() {
       ctx.font = `bold ${Math.max(7, 9/mapZoom)}px sans-serif`;
       ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(i + 1, px, py);
+      // Point name label below circle
+      if (p.name) {
+        ctx.font = `${Math.max(6, 8/mapZoom)}px sans-serif`;
+        ctx.fillStyle = 'rgba(14,165,233,1)'; ctx.textBaseline = 'top';
+        ctx.fillText(p.name, px, py + r + 2/mapZoom);
+      }
     });
     ctx.textBaseline = 'alphabetic';
   }
@@ -2151,11 +2169,12 @@ function _showLocalizingBadge() {
 }
 
 // ── Route planning ────────────────────────────────────────────────────────
-let pathMode       = false;
-let currentMapId   = null;        // DB id of currently loaded map (null = live/blank)
-let currentMapName = null;        // name for display
-let currentPath    = [];          // [{wx,wy}] user-placed points
-let editingRouteId = null;        // DB id of route being edited (null = new)
+let pathMode         = false;
+let currentMapId     = null;      // DB id of currently loaded map (null = live/blank)
+let currentMapName   = null;      // name for display
+let currentPath      = [];        // [{wx,wy,name}] user-placed points
+let currentRouteName = '';        // editable route name
+let editingRouteId   = null;      // DB id of route being edited (null = new)
 let editingRouteName = null;
 let _dragPtIdx     = -1;          // index of path point being dragged (-1 = none)
 let routeRunning   = false;
@@ -2170,16 +2189,24 @@ function togglePathMode() {
   btn.style.borderColor = pathMode ? 'var(--accent)' : '';
   btn.style.color       = pathMode ? 'var(--accent)' : '';
   bar.style.display     = pathMode ? 'flex' : 'none';
+  // Bind route name input (once)
+  const rni = document.getElementById('route-name-input');
+  if (rni && !rni._bound) {
+    rni._bound = true;
+    rni.addEventListener('input', () => { currentRouteName = rni.value; });
+  }
   if (pathMode) {
     // cancel other modes
     if (locateMode) toggleLocateMode();
     if (drawMode)   toggleDrawMode();
+    if (!editingRouteId) currentRouteName = '';
     const hint = editingRouteId
       ? `✏️ 编辑路线「${editingRouteName}」— 拖动点调整位置，点击空白处添加点`
       : '🛤 路线规划：点击地图依次标点，完成后保存或运行';
     toast(hint);
   } else {
     editingRouteId = null; editingRouteName = null; _dragPtIdx = -1;
+    currentRouteName = '';
   }
   _updatePathCount();
   if (mapData) renderMap();
@@ -2188,10 +2215,44 @@ function togglePathMode() {
 function _updatePathCount() {
   const el = document.getElementById('path-count');
   if (el) el.textContent = currentPath.length + '点';
+  _updatePathPanel();
+}
+
+function _updatePathPanel() {
+  const panel = document.getElementById('route-edit-panel');
+  if (!panel) return;
+  panel.style.display = pathMode ? 'block' : 'none';
+  // Sync route name input
+  const nameInput = document.getElementById('route-name-input');
+  if (nameInput && document.activeElement !== nameInput) {
+    nameInput.value = currentRouteName;
+  }
+  // Render point list
+  const list = document.getElementById('route-points-list');
+  if (!list) return;
+  if (currentPath.length === 0) {
+    list.innerHTML = '<div style="font-size:.65rem;color:#94a3b8;text-align:center;padding:8px 0">暂无点</div>';
+    return;
+  }
+  list.innerHTML = currentPath.map((p, i) => `
+    <div style="display:flex;align-items:center;gap:4px;background:#f8fafc;border-radius:6px;padding:4px 6px">
+      <span style="font-size:.6rem;font-weight:700;color:#fff;background:#2563eb;border-radius:50%;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</span>
+      <input type="text" value="${(p.name||'').replace(/"/g,'&quot;')}" placeholder="点${i+1}"
+        style="flex:1;min-width:0;background:transparent;border:none;border-bottom:1px solid #e2e8f0;color:#0f172a;font-size:.68rem;outline:none;padding:1px 2px"
+        oninput="currentPath[${i}].name=this.value"
+        onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#e2e8f0'">
+      <button onclick="removePathPoint(${i})" style="background:none;border:none;cursor:pointer;color:#ef4444;font-size:.75rem;padding:0;flex-shrink:0" title="删除">✕</button>
+    </div>`).join('');
 }
 
 function undoPathPoint() {
   currentPath.pop();
+  _updatePathCount();
+  if (mapData) renderMap();
+}
+
+function removePathPoint(i) {
+  currentPath.splice(i, 1);
   _updatePathCount();
   if (mapData) renderMap();
 }
@@ -2216,29 +2277,30 @@ function _pathTheta(pts, i) {
 
 async function saveCurrentRoute() {
   if (currentPath.length < 2) { toast('至少需要2个点', 'yellow'); return; }
-  const pts = currentPath.map((p, i) => ({ wx: p.wx, wy: p.wy, theta: _pathTheta(currentPath, i) }));
+  const rname = (document.getElementById('route-name-input')?.value || currentRouteName || '').trim();
+  const pts = currentPath.map((p, i) => ({ wx: p.wx, wy: p.wy, name: p.name||'', theta: _pathTheta(currentPath, i) }));
   if (editingRouteId) {
-    // Update existing route
+    // Update existing route (name may change)
+    const saveName = rname || editingRouteName;
     try {
       const r = await fetch(`/api/routes/${editingRouteId}`, {
         method: 'PUT', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({points: pts})
+        body: JSON.stringify({name: saveName, points: pts})
       });
       const d = await r.json();
-      if (d.ok) toast(`✅ 路线「${editingRouteName}」已更新`, 'green');
+      if (d.ok) { editingRouteName = saveName; toast(`✅ 路线「${saveName}」已更新`, 'green'); }
       else toast(d.error || '保存失败', 'red');
     } catch(e) { toast('保存失败', 'red'); }
   } else {
     // Save new route
-    const name = prompt('路线名称：');
-    if (!name || !name.trim()) return;
+    if (!rname) { toast('请先填写路线名称', 'yellow'); document.getElementById('route-name-input')?.focus(); return; }
     try {
       const r = await fetch('/api/routes', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({name: name.trim(), points: pts, map_id: currentMapId})
+        body: JSON.stringify({name: rname, points: pts, map_id: currentMapId})
       });
       const d = await r.json();
-      if (d.ok) toast('✅ 路线已保存: ' + name.trim(), 'green');
+      if (d.ok) toast('✅ 路线已保存: ' + rname, 'green');
       else toast(d.error || '保存失败', 'red');
     } catch(e) { toast('保存失败', 'red'); }
   }
@@ -2349,9 +2411,10 @@ async function editRoute(id, name) {
     const d = await (await fetch(`/api/routes?map_id=${currentMapId != null ? currentMapId : 'null'}`)).json();
     const route = (d.routes||[]).find(r => r.id === id);
     if (!route) { toast('路线不存在', 'red'); return; }
-    currentPath = route.points.map(p => ({wx: p.wx, wy: p.wy}));
+    currentPath = route.points.map(p => ({wx: p.wx, wy: p.wy, name: p.name||''}));
     editingRouteId   = id;
     editingRouteName = name;
+    currentRouteName = name;
     _updatePathCount();
     if (!pathMode) {
       pathMode = true;
@@ -2374,7 +2437,8 @@ async function loadAndRunRoute(id) {
     if (!route) { toast('路线不存在', 'red'); return; }
     closeRouteLibrary();
     // Load points into currentPath for display
-    currentPath = route.points.map(p => ({wx: p.wx, wy: p.wy}));
+    currentPath = route.points.map(p => ({wx: p.wx, wy: p.wy, name: p.name||''}));
+    currentRouteName = route.name || '';
     _updatePathCount();
     // Switch to path mode if not already
     if (!pathMode) togglePathMode();
@@ -2589,7 +2653,7 @@ function _getCanvasXY(e, canvas) {
       }
       // No hit → add new point
       const [wx, wy] = canvasToWorld(cx, cy, mapData, canvas.width, canvas.height);
-      currentPath.push({wx, wy});
+      currentPath.push({wx, wy, name: ''});
       _updatePathCount();
       renderMap(); e.stopPropagation(); return;
     }
