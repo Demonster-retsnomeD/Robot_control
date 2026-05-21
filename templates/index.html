@@ -708,6 +708,19 @@ document.addEventListener('keydown', e => {
   if (e.ctrlKey && e.key === '1') { e.preventDefault(); setTab('nav'); }
   if (e.ctrlKey && e.key === '2') { e.preventDefault(); setTab('manual'); }
   if (e.ctrlKey && e.key === '3') { e.preventDefault(); setTab('config'); }
+  if (e.code === 'Space' && !e.repeat) {
+    const cv = document.getElementById('map-canvas');
+    if (cv && !_spaceDown) { _spaceDown = true; cv.style.cursor = 'grab'; e.preventDefault(); }
+  }
+});
+document.addEventListener('keyup', e => {
+  if (e.code === 'Space') {
+    _spaceDown = false;
+    if (!_isPanning) {
+      const cv = document.getElementById('map-canvas');
+      if (cv) cv.style.cursor = drawMode ? 'cell' : 'crosshair';
+    }
+  }
 });
 
 // ── Navigation points ─────────────────────────────────────────────────────
@@ -1474,6 +1487,7 @@ let mapScanMode = false;
 let customResolution = null;
 let mapZoom = 1, mapPanX = 0, mapPanY = 0;
 let _isPanning = false, _panStartX = 0, _panStartY = 0, _panStartPX = 0, _panStartPY = 0, _didPan = false;
+let _spaceDown = false; // space+LMB pan override
 let lineStart = null, linePreview = null;
 let lineMode = false;
 
@@ -2163,6 +2177,14 @@ function _getCanvasXY(e, canvas) {
   // ── Mouse events ──────────────────────────────────────────────────────────
   canvas.addEventListener('mousedown', e => {
     const [cx, cy] = _getCanvasXY(e, canvas);
+    // Space+LMB = pan (overrides all other modes)
+    if (_spaceDown && e.button === 0) {
+      _isPanning = true; _didPan = false;
+      _panStartX = cx; _panStartY = cy;
+      _panStartPX = mapPanX; _panStartPY = mapPanY;
+      canvas.style.cursor = 'grabbing';
+      e.preventDefault(); return;
+    }
     if (locateMode) {
       if (!mapData) return;
       const [wx, wy] = canvasToWorld(cx, cy, mapData, canvas.width, canvas.height);
@@ -2228,6 +2250,8 @@ function _getCanvasXY(e, canvas) {
       lineStart = null; linePreview = null;
     }
     _isDrawing = false; _isPanning = false;
+    // Restore cursor after pan release
+    canvas.style.cursor = _spaceDown ? 'grab' : (drawMode ? 'cell' : 'crosshair');
     if (mapData) renderMap();
   });
   canvas.addEventListener('mouseleave', () => {
