@@ -328,7 +328,7 @@ body.user-mode #page-user{display:flex!important;align-items:stretch}
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:.7rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px" data-i18n="map.title">🗺 SLAM 地图</span>
         <button class="btn-sm" id="map-mode-btn" onclick="toggleMapMode()" style="font-size:.65rem" data-i18n="map.mapping">🔴 建图模式</button>
-        <button class="btn-sm" onclick="newBlankMap()" style="font-size:.65rem;background:rgba(14,165,233,.12);border-color:var(--accent);color:var(--accent)" title="清空地图，从零手绘">🆕 新建地图</button>
+        <button class="btn-sm" id="new-map-btn" onclick="newBlankMap()" style="display:none;font-size:.65rem;background:rgba(14,165,233,.12);border-color:var(--accent);color:var(--accent)" title="清空地图，从零手绘">🆕 新建地图</button>
         <span style="font-size:.62rem;padding:2px 7px;border-radius:10px;background:rgba(245,158,11,.15);color:var(--yellow);display:none" id="map-scan-badge">● 扫描中</span>
         <span id="fog-badge" style="display:none;font-size:.62rem;padding:2px 7px;border-radius:10px;background:rgba(239,68,68,.12);color:var(--red)">🌫 雾效</span>
         <button class="btn-sm" id="locate-mode-btn" onclick="toggleLocateMode()" style="font-size:.65rem">📍 定位</button>
@@ -1515,7 +1515,8 @@ async function newBlankMap() {
       btn.style.borderColor = 'var(--green)';
       btn.style.color = 'var(--green)';
       document.getElementById('map-scan-badge').style.display = 'inline';
-      document.getElementById('draw-mode-btn').style.display = 'inline';
+      document.getElementById('draw-mode-btn').style.display  = 'inline';
+      document.getElementById('new-map-btn').style.display    = 'inline';
       document.getElementById('locate-mode-btn').style.display = 'none';
       renderMap();
       toast('🆕 新建空白地图 — 可用✏️手绘工具绘制地形', 'green');
@@ -1663,8 +1664,9 @@ async function toggleMapMode() {
     _navPending = true;
     locateMode  = true;
     locatePending = null; _locateDragging = false;
-    // Hide draw tools immediately; show locate button
+    // Hide draw/new-map tools immediately; show locate button
     document.getElementById('draw-mode-btn').style.display  = 'none';
+    document.getElementById('new-map-btn').style.display    = 'none';
     document.getElementById('draw-tools-bar').style.display = 'none';
     if (drawMode) { drawMode = false; document.getElementById('map-canvas').style.cursor = 'crosshair'; }
     const lb = document.getElementById('locate-mode-btn');
@@ -1683,6 +1685,7 @@ async function toggleMapMode() {
     btn.style.color       = 'var(--green)';
     badge.style.display = 'inline';
     document.getElementById('draw-mode-btn').style.display  = 'inline';
+    document.getElementById('new-map-btn').style.display    = 'inline';
     document.getElementById('locate-mode-btn').style.display = 'none'; // no locate in mapping mode
     try { await fetch('/api/set_mode', {method:'POST',
       headers:{'Content-Type':'application/json'}, body:'{"mode":1}'}); } catch(e){}
@@ -1702,6 +1705,7 @@ function _completeNavMode() {
   btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = '';
   badge.style.display = 'none';
   document.getElementById('draw-mode-btn').style.display  = 'none';
+  document.getElementById('new-map-btn').style.display    = 'none';
   document.getElementById('draw-tools-bar').style.display = 'none';
   if (drawMode) { drawMode = false; document.getElementById('map-canvas').style.cursor = 'crosshair'; }
   const lb = document.getElementById('locate-mode-btn');
