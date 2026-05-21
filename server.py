@@ -128,6 +128,16 @@ def init_db():
             conn.execute("ALTER TABLE routes ADD COLUMN map_id INTEGER")
         except Exception:
             pass
+        # Migration: add charger columns to maps if not exist
+        for col_sql in [
+            "ALTER TABLE maps ADD COLUMN charger_x REAL",
+            "ALTER TABLE maps ADD COLUMN charger_y REAL",
+            "ALTER TABLE maps ADD COLUMN charger_theta REAL",
+        ]:
+            try:
+                conn.execute(col_sql)
+            except Exception:
+                pass
         conn.commit()
 
 init_db()
@@ -952,15 +962,20 @@ def api_map_save():
     if not name:
         return jsonify({"ok": False, "error": "地图名称不能为空"}), 400
 
-    cfg = load_config()
-    with sim_lock:
-        drawing = sim.get("_mode", 2) == 1
-    if cfg.get("simulation_mode", True) or drawing:
-        m = _sim_map()
+    # Prefer client-supplied map data (avoids robot round-trip, works when offline)
+    client_map = d.get("map_data")
+    if client_map and isinstance(client_map, dict) and client_map.get("data"):
+        m = client_map
     else:
-        m, err = rget(cfg, "/reeman/map")
-        if err or not m:
-            return jsonify({"ok": False, "error": err or "无法获取地图"}), 500
+        cfg = load_config()
+        with sim_lock:
+            drawing = sim.get("_mode", 2) == 1
+        if cfg.get("simulation_mode", True) or drawing:
+            m = _sim_map()
+        else:
+            m, err = rget(cfg, "/reeman/map")
+            if err or not m:
+                return jsonify({"ok": False, "error": err or "无法获取地图 (机器人离线，请确保地图已在客户端加载)"}), 500
 
     # Use client-supplied custom_resolution if provided (user-adjusted scale bar)
     custom_res = d.get("custom_resolution")
@@ -974,14 +989,19 @@ def api_map_save():
 
     created = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     data_json = json.dumps(m["data"])
+    charger = d.get("charger")  # optional {x,y,theta} from client
+    cx = charger.get("x") if charger else None
+    cy_val = charger.get("y") if charger else None
+    ct = charger.get("theta", 0) if charger else None
     try:
         with sqlite3.connect(DB_FILE) as conn:
             cur = conn.execute(
-                "INSERT INTO maps (name,width,height,resolution,origin_x,origin_y,data,created_by,created_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO maps (name,width,height,resolution,origin_x,origin_y,data,"
+                "charger_x,charger_y,charger_theta,created_by,created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (name, m["width"], m["height"], m["resolution"],
                  m["origin"]["x"], m["origin"]["y"],
-                 data_json, current_user.username, created)
+                 data_json, cx, cy_val, ct, current_user.username, created)
             )
             map_id = cur.lastrowid
             conn.commit()
@@ -1012,18 +1032,38 @@ def api_map_load(map_id):
     """Load a saved map (full data)."""
     with sqlite3.connect(DB_FILE) as conn:
         row = conn.execute(
-            "SELECT id,name,width,height,resolution,origin_x,origin_y,data,created_by,created_at "
+            "SELECT id,name,width,height,resolution,origin_x,origin_y,data,"
+            "created_by,created_at,charger_x,charger_y,charger_theta "
             "FROM maps WHERE id=?", (map_id,)
         ).fetchone()
     if not row:
         return jsonify({"error": "Not found"}), 404
+    charger = None
+    if row[10] is not None:
+        charger = {"x": row[10], "y": row[11], "theta": row[12] or 0}
     return jsonify({
         "id": row[0], "name": row[1],
         "width": row[2], "height": row[3], "resolution": row[4],
         "origin": {"x": row[5], "y": row[6]},
         "data": json.loads(row[7]),
-        "created_by": row[8], "created_at": row[9]
+        "created_by": row[8], "created_at": row[9],
+        "charger": charger
     })
+
+
+@app.route("/api/maps/<int:map_id>/charger", methods=["PUT"])
+@login_required
+def api_map_set_charger(map_id):
+    """Update charger position for a saved map."""
+    d = request.get_json(force=True) or {}
+    x, y, theta = d.get("x"), d.get("y"), d.get("theta", 0)
+    if x is None or y is None:
+        return jsonify({"ok": False, "error": "x and y required"}), 400
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.execute("UPDATE maps SET charger_x=?,charger_y=?,charger_theta=? WHERE id=?",
+                     (float(x), float(y), float(theta), map_id))
+        conn.commit()
+    return jsonify({"ok": True})
 
 
 @app.route("/api/maps/<int:map_id>", methods=["DELETE"])

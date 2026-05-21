@@ -1326,6 +1326,7 @@ async function pingRobot() {
 // ── SLAM Map ──────────────────────────────────────────────────────────────
 let mapData = null;       // {width,height,resolution,origin,data}
 let mapWaypoints = [];    // [{name,pose:{x,y,theta}}]
+let mapCharger = null;    // {wx,wy,theta} — persists per map, always shown
 let mapPose = null;       // {x,y,theta}
 let mapGoal = null;       // {x,y} current nav goal
 let mapFetchTimer = null;
@@ -1360,6 +1361,7 @@ async function fetchMap(force) {
 function returnToLiveMap() {
   viewingSavedMap = false;
   currentMapId = null; currentMapName = null;
+  mapCharger = null;  // live map has no persistent charger
   currentPath = []; if (routeRunning) _stopRoute(); _updatePathCount();
   document.getElementById('live-map-btn').style.display = 'none';
   fetchMap(true);
@@ -1552,6 +1554,26 @@ function renderMap() {
     ctx.restore();
   }
 
+  // ── Charger position (persistent, always shown) ───────────────────────────
+  if (mapCharger) {
+    const [chx, chy, chs] = worldToCanvas(mapCharger.wx, mapCharger.wy, mapData, cw, ch);
+    const cr = Math.max(7, chs * 1.8);
+    ctx.save();
+    // Filled yellow circle
+    ctx.beginPath(); ctx.arc(chx, chy, cr, 0, Math.PI * 2);
+    ctx.fillStyle = '#fbbf24'; ctx.fill();
+    ctx.strokeStyle = '#92400e'; ctx.lineWidth = 1.5 / mapZoom; ctx.stroke();
+    // ⚡ emoji label
+    ctx.font = `bold ${Math.max(8, 10/mapZoom)}px sans-serif`;
+    ctx.fillStyle = '#1c1917'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('⚡', chx, chy);
+    // "充电桩" label below
+    ctx.font = `${Math.max(6, 8/mapZoom)}px sans-serif`;
+    ctx.fillStyle = '#92400e'; ctx.textBaseline = 'top';
+    ctx.fillText('充电桩', chx, chy + cr + 2/mapZoom);
+    ctx.restore();
+  }
+
   // ── Realtime nav markers ──────────────────────────────────────────────────
   function _drawCrosshair(wx, wy, color, alpha, filled) {
     const [tx, ty] = worldToCanvas(wx, wy, mapData, cw, ch);
@@ -1740,7 +1762,7 @@ async function newBlankMap() {
        'nav-submode-bar','rt-cancel-btn']
         .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
       if (pathMode) { pathMode=false; document.getElementById('path-tools-bar').style.display='none'; }
-      mapWaypoints = []; // new map has no waypoints
+      mapWaypoints = []; mapCharger = null; // new map has no waypoints or charger
       mapPose = null;    // clear robot position marker
       currentPath = []; if (routeRunning) _stopRoute(); _updatePathCount();
       renderMap();
@@ -2812,6 +2834,7 @@ function toggleChargeSetMode() {
 }
 
 function _getChargerWaypoint() {
+  if (mapCharger) return {pose: {x: mapCharger.wx, y: mapCharger.wy, theta: mapCharger.theta}};
   return mapWaypoints.find(w => w.type === 'charge');
 }
 
@@ -2954,21 +2977,16 @@ function _getCanvasXY(e, canvas) {
       if (!mapData) return;
       const [wx, wy] = canvasToWorld(cx, cy, mapData, canvas.width, canvas.height);
       chargeSetMode = false; _updateChargeSetBtn();
-      // Save as waypoint type='charge' name='充电桩'
-      fetch('/api/waypoints/save', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({name: '充电桩', x: wx, y: wy, theta: 0, type: 'charge'})
-      }).then(r => r.json()).then(d => {
-        if (d.ok) {
-          // Update local waypoints
-          const existing = mapWaypoints.findIndex(w => w.type === 'charge');
-          const wp = {name:'充电桩', type:'charge', pose:{x:wx, y:wy, theta:0}};
-          if (existing >= 0) mapWaypoints[existing] = wp;
-          else mapWaypoints.push(wp);
-          toast('⚡ 充电桩位置已设定', 'green');
-          renderMap();
-        } else toast(d.error || '设定失败', 'red');
-      }).catch(() => toast('设定失败', 'red'));
+      mapCharger = {wx, wy, theta: 0};
+      renderMap();
+      toast('⚡ 充电桩位置已设定', 'green');
+      // Persist to current saved map if one is loaded
+      if (currentMapId != null) {
+        fetch(`/api/maps/${currentMapId}/charger`, {
+          method: 'PUT', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({x: wx, y: wy, theta: 0})
+        }).catch(() => {});
+      }
       e.stopPropagation(); return;
     }
     // Path mode: drag existing point OR add new point
@@ -3176,9 +3194,16 @@ async function saveCurrentMap() {
     await new Promise(r => setTimeout(r, 400)); // wait for fetchMap refresh
   }
   try {
+    // Send client-side mapData so server doesn't need to re-fetch from robot
+    const mapPayload = mapData ? {
+      width: mapData.width, height: mapData.height,
+      resolution: customResolution || mapData.resolution,
+      origin: mapData.origin, data: Array.from(mapData.data)
+    } : null;
+    const chargerPayload = mapCharger ? {x: mapCharger.wx, y: mapCharger.wy, theta: mapCharger.theta} : null;
     const r = await fetch('/api/map/save', {method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({name, custom_resolution: customResolution || null})});
+      body: JSON.stringify({name, custom_resolution: customResolution || null, map_data: mapPayload, charger: chargerPayload})});
     const d = await r.json();
     if (d.ok) {
       toast(`✅ 地图「${name}」已保存`,'green');
@@ -3236,6 +3261,8 @@ async function loadSavedMap(id, name) {
       currentMapName = name;
       mapWaypoints = [];  // clear old waypoints — they belong to other maps
       mapPose = null;     // clear robot position
+      // Load charger from map record
+      mapCharger = d.charger ? {wx: d.charger.x, wy: d.charger.y, theta: d.charger.theta || 0} : null;
       currentPath = []; if (routeRunning) _stopRoute(); _updatePathCount();
       // Restore saved resolution as custom scale
       customResolution = d.resolution;
