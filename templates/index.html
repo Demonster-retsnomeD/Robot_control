@@ -291,6 +291,24 @@ body.user-mode #page-user{display:flex!important;align-items:stretch}
       <div class="battery-bar"><div class="battery-fill" id="bat-fill" style="width:0%"></div></div>
     </div>
 
+    <!-- ── 运动状态 ── -->
+    <div class="sec">
+      <div class="sec-title">🤖 运动状态</div>
+      <div id="motion-state-card" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span id="motion-icon" style="font-size:1.5rem;line-height:1">⏸</span>
+          <div>
+            <div id="motion-label" style="font-size:.78rem;font-weight:700;color:var(--text)">静止</div>
+            <div id="motion-sub" style="font-size:.62rem;color:var(--text2)">等待指令</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;font-size:.62rem;color:var(--text2)">
+          <span>线速 <strong id="s-vx" style="color:var(--accent)">0.00</strong> m/s</span>
+          <span>角速 <strong id="s-vth" style="color:var(--accent)">0.00</strong> rad/s</span>
+        </div>
+      </div>
+    </div>
+
     <div class="sec">
       <div class="sec-title" data-i18n="sec.navstate">🚦 导航状态</div>
       <div class="nav-banner" id="nav-banner">
@@ -1044,6 +1062,44 @@ async function pollStatus() {
       progress.style.width = '0%';
       document.getElementById('m-sts').textContent = '空闲';
     }
+    // ── Motion state ──────────────────────────────────────────────────────
+    const spd  = d.speed || {};
+    const vx   = spd.vx  ?? 0;
+    const vth  = spd.vth ?? 0;
+    const estop = d.emergencyButton === 0;
+    const navMoving = (res === 1);         // robot thinks it's navigating
+    const speedLow  = Math.abs(vx) < 0.04 && Math.abs(vth) < 0.08;
+    const distFar   = (nav.dist ?? 0) > 0.4;
+
+    let mIcon, mLabel, mSub, mColor;
+    if (estop) {
+      mIcon = '🛑'; mLabel = '急停'; mSub = '请检查急停按钮'; mColor = 'var(--red)';
+    } else if (navMoving && speedLow && distFar) {
+      mIcon = '⚠️'; mLabel = '被障碍物阻挡'; mSub = `距目标 ${(nav.dist||0).toFixed(1)}m，速度为零`; mColor = 'var(--yellow)';
+    } else if (vx > 0.04) {
+      mIcon = '⬆️'; mLabel = '前进'; mSub = `${vx.toFixed(2)} m/s`; mColor = 'var(--green)';
+    } else if (vx < -0.04) {
+      mIcon = '⬇️'; mLabel = '后退'; mSub = `${Math.abs(vx).toFixed(2)} m/s`; mColor = 'var(--yellow)';
+    } else if (Math.abs(vth) > 0.08) {
+      const dir = vth > 0 ? '左转' : '右转';
+      mIcon = vth > 0 ? '↰' : '↱'; mLabel = `原地${dir}`; mSub = `${Math.abs(vth).toFixed(2)} rad/s`; mColor = 'var(--accent)';
+    } else {
+      mIcon = '⏸'; mLabel = '静止'; mSub = navMoving ? '正在规划路径…' : '等待指令'; mColor = 'var(--text2)';
+    }
+
+    const card = document.getElementById('motion-state-card');
+    if (card) card.style.borderColor = mColor;
+    const miEl = document.getElementById('motion-icon');
+    if (miEl) miEl.textContent = mIcon;
+    const mlEl = document.getElementById('motion-label');
+    if (mlEl) { mlEl.textContent = mLabel; mlEl.style.color = mColor; }
+    const msEl = document.getElementById('motion-sub');
+    if (msEl) msEl.textContent = mSub;
+    const vxEl = document.getElementById('s-vx');
+    if (vxEl) vxEl.textContent = vx.toFixed(2);
+    const vthEl = document.getElementById('s-vth');
+    if (vthEl) vthEl.textContent = vth.toFixed(2);
+
     updateMapFromStatus(d);
     updateUserStatus(d);
   } catch(e) {}
