@@ -112,6 +112,16 @@ def init_db():
                 created_at TEXT NOT NULL
             )
         """)
+        # Saved navigation routes (ordered point lists)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS routes (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                name       TEXT NOT NULL,
+                points     TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
         conn.commit()
 
 init_db()
@@ -649,6 +659,47 @@ def api_waypoints_save():
         rpost(cfg, "/cmd/set_point", {"name": name, "x": x, "y": y, "theta": theta})
 
     return jsonify({"ok": True, "name": name, "x": x, "y": y, "theta": theta})
+
+# ── Routes (saved navigation paths) ──────────────────────────────────────────
+@app.route("/api/routes", methods=["GET"])
+@login_required
+def api_routes_list():
+    with sqlite3.connect(DB_FILE) as conn:
+        rows = conn.execute(
+            "SELECT id, name, points, created_at FROM routes ORDER BY id DESC"
+        ).fetchall()
+    return jsonify({"routes": [
+        {"id": r[0], "name": r[1], "points": json.loads(r[2]), "created_at": r[3]}
+        for r in rows
+    ]})
+
+@app.route("/api/routes", methods=["POST"])
+@login_required
+def api_routes_save():
+    d = request.get_json(force=True) or {}
+    name   = d.get("name", "").strip()
+    points = d.get("points", [])
+    if not name:   return jsonify({"ok": False, "error": "名称不能为空"}), 400
+    if not points: return jsonify({"ok": False, "error": "路线无点位"}), 400
+    created = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.execute(
+                "INSERT INTO routes (name, points, created_by, created_at) VALUES (?,?,?,?)",
+                (name, json.dumps(points), current_user.username, created)
+            )
+            conn.commit()
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+    return jsonify({"ok": True})
+
+@app.route("/api/routes/<int:rid>", methods=["DELETE"])
+@login_required
+def api_routes_delete(rid):
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.execute("DELETE FROM routes WHERE id=?", (rid,))
+        conn.commit()
+    return jsonify({"ok": True})
 
 @app.route("/api/map", methods=["GET"])
 @login_required

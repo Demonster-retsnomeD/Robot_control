@@ -333,6 +333,15 @@ body.user-mode #page-user{display:flex!important;align-items:stretch}
         <span id="fog-badge" style="display:none;font-size:.62rem;padding:2px 7px;border-radius:10px;background:rgba(239,68,68,.12);color:var(--red)">🌫 雾效</span>
         <button class="btn-sm" id="locate-mode-btn" onclick="toggleLocateMode()" style="font-size:.65rem">📍 定位</button>
         <span id="localizing-badge" style="display:none;font-size:.62rem;padding:2px 8px;border-radius:10px"></span>
+        <button class="btn-sm" id="path-mode-btn" onclick="togglePathMode()" style="font-size:.65rem">🛤 路线规划</button>
+        <span id="path-tools-bar" style="display:none;align-items:center;gap:4px;font-size:.65rem">
+          <span id="path-count" style="font-size:.6rem;color:var(--text2);min-width:30px">0点</span>
+          <button class="btn-sm" onclick="undoPathPoint()" style="font-size:.63rem" title="撤销最后一个点">↩</button>
+          <button class="btn-sm" onclick="clearCurrentPath()" style="font-size:.63rem;color:var(--red)" title="清除所有点">🗑</button>
+          <button class="btn-sm" onclick="saveCurrentRoute()" style="font-size:.63rem;background:rgba(22,163,74,.12);border-color:var(--green);color:var(--green)">💾保存</button>
+          <button class="btn-sm" id="route-run-btn" onclick="runCurrentPath()" style="font-size:.63rem;background:rgba(14,165,233,.12);border-color:var(--accent);color:var(--accent)">▶运行</button>
+          <button class="btn-sm" onclick="openRouteLibrary()" style="font-size:.63rem">📋路线库</button>
+        </span>
         <button class="btn-sm" id="draw-mode-btn" onclick="toggleDrawMode()" style="display:none;font-size:.65rem">✏️ 手绘</button>
         <span id="draw-tools-bar" style="display:none;align-items:center;gap:4px;font-size:.65rem">
           <button class="btn-sm dt-btn" id="dt-wall"  onclick="setDrawTool('wall')"  style="font-size:.63rem">⬛墙</button>
@@ -580,6 +589,16 @@ body.user-mode #page-user{display:flex!important;align-items:stretch}
 <div id="toast"></div>
 
 <!-- ── Map Library Modal ──────────────────────────────────────────────── -->
+<div class="modal-overlay" id="route-library-modal" onclick="if(event.target===this)closeRouteLibrary()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>🛤 已保存路线</h3>
+      <button class="modal-close" onclick="closeRouteLibrary()">✕</button>
+    </div>
+    <div class="modal-body" id="route-library-body"><div class="no-maps">加载中...</div></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="map-library-modal" onclick="closeMapLibrary(event)">
   <div class="modal-box">
     <div class="modal-header">
@@ -1436,6 +1455,38 @@ function renderMap() {
     ctx.restore();
   }
 
+  // ── Route path overlay ────────────────────────────────────────────────────
+  const _drawPts = (routeRunning && routeRunPts.length) ? routeRunPts.map(p=>({wx:p.wx,wy:p.wy})) : currentPath;
+  if (_drawPts.length > 0) {
+    // Lines
+    if (_drawPts.length > 1) {
+      ctx.beginPath();
+      const [sx, sy] = worldToCanvas(_drawPts[0].wx, _drawPts[0].wy, mapData, cw, ch);
+      ctx.moveTo(sx, sy);
+      for (let i = 1; i < _drawPts.length; i++) {
+        const [px, py] = worldToCanvas(_drawPts[i].wx, _drawPts[i].wy, mapData, cw, ch);
+        ctx.lineTo(px, py);
+      }
+      ctx.strokeStyle = 'rgba(14,165,233,0.7)'; ctx.lineWidth = 2 / mapZoom;
+      ctx.setLineDash([6/mapZoom, 4/mapZoom]); ctx.stroke(); ctx.setLineDash([]);
+    }
+    // Numbered circles
+    _drawPts.forEach((p, i) => {
+      const [px, py] = worldToCanvas(p.wx, p.wy, mapData, cw, ch);
+      const r = Math.max(8, 10) / mapZoom;
+      const isDone   = routeRunning && i < routeRunIdx;
+      const isCur    = routeRunning && i === routeRunIdx;
+      ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2);
+      ctx.fillStyle  = isDone ? 'rgba(100,116,139,0.7)' : isCur ? '#f59e0b' : 'rgba(14,165,233,0.85)';
+      ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5 / mapZoom; ctx.stroke();
+      ctx.font = `bold ${Math.max(7, 9/mapZoom)}px sans-serif`;
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(i + 1, px, py);
+    });
+    ctx.textBaseline = 'alphabetic';
+  }
+
   ctx.restore(); // end zoom+pan transform
 
   // ── Scale bar (bottom-right, no transform) ────────────────────────────────
@@ -1475,9 +1526,16 @@ function renderMap() {
 const _origPollStatus = pollStatus;
 
 // Update pose + re-render map from status data
+let _lastNavRes = 0;
 function updateMapFromStatus(d) {
   if (d.pose && d.pose.x != null) mapPose = d.pose;
   if (navStatusCache && navStatusCache.goal) mapGoal = navStatusCache.goal;
+  // Route execution: detect nav completion (res transitions to 3)
+  const nav = d.nav || {};
+  if (routeRunning && nav.res === 3 && _lastNavRes !== 3) {
+    _onNavComplete(nav.reason ?? 0);
+  }
+  _lastNavRes = nav.res ?? 0;
   if (mapData) renderMap();
 }
 
@@ -1532,6 +1590,8 @@ async function newBlankMap() {
       document.getElementById('draw-mode-btn').style.display  = 'inline';
       document.getElementById('new-map-btn').style.display    = 'inline';
       document.getElementById('locate-mode-btn').style.display = 'none';
+      document.getElementById('path-mode-btn').style.display  = 'none';
+      if (pathMode) { pathMode=false; document.getElementById('path-tools-bar').style.display='none'; }
       renderMap();
       toast('🆕 新建空白地图 — 可用✏️手绘工具绘制地形', 'green');
       fetchMap(true);
@@ -1687,12 +1747,13 @@ async function toggleMapMode() {
     btn.textContent    = t('map.mapping');
     btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = '';
     badge.style.display = 'none';
-    // Hide mapping tools; show locate button
+    // Hide mapping tools; show locate + path buttons
     document.getElementById('draw-mode-btn').style.display  = 'none';
     document.getElementById('new-map-btn').style.display    = 'none';
     document.getElementById('draw-tools-bar').style.display = 'none';
     if (drawMode) { drawMode = false; document.getElementById('map-canvas').style.cursor = 'crosshair'; }
     document.getElementById('locate-mode-btn').style.display = 'inline';
+    document.getElementById('path-mode-btn').style.display  = 'inline';
     try { await fetch('/api/set_mode', {method:'POST',
       headers:{'Content-Type':'application/json'}, body:'{"mode":2}'}); } catch(e){}
     toast('🟢 导航模式 — 点📍定位机器人位置');
@@ -1708,6 +1769,9 @@ async function toggleMapMode() {
     document.getElementById('draw-mode-btn').style.display  = 'inline';
     document.getElementById('new-map-btn').style.display    = 'inline';
     document.getElementById('locate-mode-btn').style.display = 'none';
+    document.getElementById('path-mode-btn').style.display  = 'none';
+    // also exit path mode when switching to mapping
+    if (pathMode) { pathMode = false; document.getElementById('path-tools-bar').style.display='none'; }
     try { await fetch('/api/set_mode', {method:'POST',
       headers:{'Content-Type':'application/json'}, body:'{"mode":1}'}); } catch(e){}
     toast('🔴 建图模式 — 操控机器人扫描，或点✏️手绘');
@@ -2064,6 +2128,195 @@ function _showLocalizingBadge() {
   }, 4000);
 }
 
+// ── Route planning ────────────────────────────────────────────────────────
+let pathMode      = false;
+let currentPath   = [];          // [{wx,wy}] user-placed points
+let routeRunning  = false;
+let routeRunIdx   = 0;
+let routeRunPts   = [];          // points being executed
+
+function togglePathMode() {
+  pathMode = !pathMode;
+  const btn  = document.getElementById('path-mode-btn');
+  const bar  = document.getElementById('path-tools-bar');
+  btn.style.background  = pathMode ? 'rgba(14,165,233,.2)' : '';
+  btn.style.borderColor = pathMode ? 'var(--accent)' : '';
+  btn.style.color       = pathMode ? 'var(--accent)' : '';
+  bar.style.display     = pathMode ? 'flex' : 'none';
+  if (pathMode) {
+    // cancel other modes
+    if (locateMode) toggleLocateMode();
+    if (drawMode)   toggleDrawMode();
+    toast('🛤 路线规划：点击地图依次标点，完成后保存或运行');
+  }
+  _updatePathCount();
+  if (mapData) renderMap();
+}
+
+function _updatePathCount() {
+  const el = document.getElementById('path-count');
+  if (el) el.textContent = currentPath.length + '点';
+}
+
+function undoPathPoint() {
+  currentPath.pop();
+  _updatePathCount();
+  if (mapData) renderMap();
+}
+
+function clearCurrentPath() {
+  currentPath = [];
+  _updatePathCount();
+  if (mapData) renderMap();
+}
+
+function _pathTheta(pts, i) {
+  // Direction from pts[i] to pts[i+1]; last point reuses previous direction
+  const next = i + 1 < pts.length ? pts[i + 1] : (i > 0 ? pts[i] : null);
+  const prev = i > 0 ? pts[i - 1] : null;
+  if (i + 1 < pts.length) {
+    return Math.atan2(pts[i+1].wy - pts[i].wy, pts[i+1].wx - pts[i].wx);
+  } else if (prev) {
+    return Math.atan2(pts[i].wy - prev.wy, pts[i].wx - prev.wx);
+  }
+  return 0;
+}
+
+async function saveCurrentRoute() {
+  if (currentPath.length < 2) { toast('至少需要2个点', 'yellow'); return; }
+  const name = prompt('路线名称：');
+  if (!name || !name.trim()) return;
+  const pts = currentPath.map((p, i) => ({ wx: p.wx, wy: p.wy, theta: _pathTheta(currentPath, i) }));
+  try {
+    const r = await fetch('/api/routes', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name: name.trim(), points: pts})
+    });
+    const d = await r.json();
+    if (d.ok) toast('✅ 路线已保存: ' + name.trim(), 'green');
+    else toast(d.error || '保存失败', 'red');
+  } catch(e) { toast('保存失败', 'red'); }
+}
+
+async function runCurrentPath() {
+  if (currentPath.length < 1) { toast('请先标点', 'yellow'); return; }
+  const pts = currentPath.map((p, i) => ({ wx: p.wx, wy: p.wy, theta: _pathTheta(currentPath, i) }));
+  _execRoute(pts);
+}
+
+function _execRoute(pts) {
+  if (routeRunning) { _stopRoute(); return; }
+  routeRunPts  = pts;
+  routeRunIdx  = 0;
+  routeRunning = true;
+  document.getElementById('route-run-btn').textContent = '⏹停止';
+  toast(`▶ 开始执行路线 (共${pts.length}个点)`, 'green');
+  _navToRoutePoint();
+  if (mapData) renderMap();
+}
+
+function _stopRoute() {
+  routeRunning = false;
+  routeRunPts  = [];
+  routeRunIdx  = 0;
+  const rb = document.getElementById('route-run-btn');
+  if (rb) rb.textContent = '▶运行';
+  fetch('/api/cancel', {method:'POST'}).catch(()=>{});
+  toast('⏹ 路线已停止');
+  if (mapData) renderMap();
+}
+
+async function _navToRoutePoint() {
+  if (!routeRunning || routeRunIdx >= routeRunPts.length) {
+    if (routeRunning) {
+      toast('✅ 路线执行完毕', 'green');
+      routeRunning = false;
+      const rb = document.getElementById('route-run-btn');
+      if (rb) rb.textContent = '▶运行';
+    }
+    if (mapData) renderMap();
+    return;
+  }
+  const p = routeRunPts[routeRunIdx];
+  toast(`🚗 前往第${routeRunIdx+1}点 / 共${routeRunPts.length}点`);
+  try {
+    await fetch('/api/nav', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({x: p.wx, y: p.wy, theta: p.theta})
+    });
+  } catch(e) { toast('导航指令发送失败', 'red'); _stopRoute(); return; }
+  if (mapData) renderMap();
+}
+
+// Called from updateMapFromStatus when nav completes
+function _onNavComplete(reason) {
+  if (!routeRunning) return;
+  if (reason === 0) { // arrived
+    routeRunIdx++;
+    setTimeout(_navToRoutePoint, 500);
+  } else { // cancelled/error
+    toast('⚠️ 导航中断，路线停止', 'red');
+    _stopRoute();
+  }
+}
+
+// ── Route library ─────────────────────────────────────────────────────────
+async function openRouteLibrary() {
+  document.getElementById('route-library-modal').classList.add('open');
+  const body = document.getElementById('route-library-body');
+  body.innerHTML = '<div class="no-maps">加载中...</div>';
+  try {
+    const d = await (await fetch('/api/routes')).json();
+    const routes = d.routes || [];
+    if (!routes.length) {
+      body.innerHTML = '<div class="no-maps">暂无保存的路线</div>'; return;
+    }
+    body.innerHTML = routes.map(r => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-weight:600;font-size:.82rem">🛤 ${r.name}</div>
+          <div style="font-size:.68rem;color:var(--text2)">${r.points.length}个点 · ${r.created_at}</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn-sm" style="font-size:.65rem;background:rgba(14,165,233,.12);border-color:var(--accent);color:var(--accent)"
+            onclick="loadAndRunRoute(${r.id})">▶运行</button>
+          <button class="btn-sm" style="font-size:.65rem;background:rgba(239,68,68,.1);border-color:var(--red);color:var(--red)"
+            onclick="deleteRoute(${r.id},this)">删除</button>
+        </div>
+      </div>`).join('');
+  } catch(e) { body.innerHTML = '<div class="no-maps">加载失败</div>'; }
+}
+
+function closeRouteLibrary() {
+  document.getElementById('route-library-modal').classList.remove('open');
+}
+
+async function loadAndRunRoute(id) {
+  try {
+    const d = await (await fetch('/api/routes')).json();
+    const route = (d.routes||[]).find(r => r.id === id);
+    if (!route) { toast('路线不存在', 'red'); return; }
+    closeRouteLibrary();
+    // Load points into currentPath for display
+    currentPath = route.points.map(p => ({wx: p.wx, wy: p.wy}));
+    _updatePathCount();
+    // Switch to path mode if not already
+    if (!pathMode) togglePathMode();
+    // Execute
+    _execRoute(route.points.map(p => ({wx: p.wx, wy: p.wy, theta: p.theta})));
+  } catch(e) { toast('加载路线失败', 'red'); }
+}
+
+async function deleteRoute(id, btn) {
+  if (!confirm('确认删除该路线？')) return;
+  try {
+    const r = await fetch('/api/routes/' + id, {method: 'DELETE'});
+    const d = await r.json();
+    if (d.ok) { btn.closest('div[style]').remove(); toast('已删除', 'green'); }
+    else toast(d.error || '删除失败', 'red');
+  } catch(e) { toast('删除失败', 'red'); }
+}
+
 // ── Map drawing layer ─────────────────────────────────────────────────────
 let drawLayer = null;
 let drawMode  = false;
@@ -2184,6 +2437,14 @@ function _getCanvasXY(e, canvas) {
       _panStartPX = mapPanX; _panStartPY = mapPanY;
       canvas.style.cursor = 'grabbing';
       e.preventDefault(); return;
+    }
+    // Path mode: left click adds a point
+    if (pathMode && e.button === 0 && !_spaceDown) {
+      if (!mapData) return;
+      const [wx, wy] = canvasToWorld(cx, cy, mapData, canvas.width, canvas.height);
+      currentPath.push({wx, wy});
+      _updatePathCount();
+      renderMap(); e.stopPropagation(); return;
     }
     if (locateMode) {
       if (!mapData) return;
