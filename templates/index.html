@@ -1478,8 +1478,9 @@ function renderMap() {
       const r = Math.max(8, 10) / mapZoom;
       const isDone   = routeRunning && i < routeRunIdx;
       const isCur    = routeRunning && i === routeRunIdx;
+      const isDrag   = pathMode && i === _dragPtIdx;
       ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2);
-      ctx.fillStyle  = isDone ? 'rgba(100,116,139,0.7)' : isCur ? '#f59e0b' : 'rgba(14,165,233,0.85)';
+      ctx.fillStyle  = isDrag ? '#f59e0b' : isDone ? 'rgba(100,116,139,0.7)' : isCur ? '#f59e0b' : 'rgba(14,165,233,0.85)';
       ctx.fill();
       ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5 / mapZoom; ctx.stroke();
       ctx.font = `bold ${Math.max(7, 9/mapZoom)}px sans-serif`;
@@ -2133,13 +2134,16 @@ function _showLocalizingBadge() {
 }
 
 // ── Route planning ────────────────────────────────────────────────────────
-let pathMode      = false;
-let currentMapId  = null;        // DB id of currently loaded map (null = live/blank)
-let currentMapName = null;       // name for display
-let currentPath   = [];          // [{wx,wy}] user-placed points
-let routeRunning  = false;
-let routeRunIdx   = 0;
-let routeRunPts   = [];          // points being executed
+let pathMode       = false;
+let currentMapId   = null;        // DB id of currently loaded map (null = live/blank)
+let currentMapName = null;        // name for display
+let currentPath    = [];          // [{wx,wy}] user-placed points
+let editingRouteId = null;        // DB id of route being edited (null = new)
+let editingRouteName = null;
+let _dragPtIdx     = -1;          // index of path point being dragged (-1 = none)
+let routeRunning   = false;
+let routeRunIdx    = 0;
+let routeRunPts    = [];          // points being executed
 
 function togglePathMode() {
   pathMode = !pathMode;
@@ -2153,7 +2157,12 @@ function togglePathMode() {
     // cancel other modes
     if (locateMode) toggleLocateMode();
     if (drawMode)   toggleDrawMode();
-    toast('🛤 路线规划：点击地图依次标点，完成后保存或运行');
+    const hint = editingRouteId
+      ? `✏️ 编辑路线「${editingRouteName}」— 拖动点调整位置，点击空白处添加点`
+      : '🛤 路线规划：点击地图依次标点，完成后保存或运行';
+    toast(hint);
+  } else {
+    editingRouteId = null; editingRouteName = null; _dragPtIdx = -1;
   }
   _updatePathCount();
   if (mapData) renderMap();
@@ -2190,18 +2199,32 @@ function _pathTheta(pts, i) {
 
 async function saveCurrentRoute() {
   if (currentPath.length < 2) { toast('至少需要2个点', 'yellow'); return; }
-  const name = prompt('路线名称：');
-  if (!name || !name.trim()) return;
   const pts = currentPath.map((p, i) => ({ wx: p.wx, wy: p.wy, theta: _pathTheta(currentPath, i) }));
-  try {
-    const r = await fetch('/api/routes', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({name: name.trim(), points: pts, map_id: currentMapId})
-    });
-    const d = await r.json();
-    if (d.ok) toast('✅ 路线已保存: ' + name.trim(), 'green');
-    else toast(d.error || '保存失败', 'red');
-  } catch(e) { toast('保存失败', 'red'); }
+  if (editingRouteId) {
+    // Update existing route
+    try {
+      const r = await fetch(`/api/routes/${editingRouteId}`, {
+        method: 'PUT', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({points: pts})
+      });
+      const d = await r.json();
+      if (d.ok) toast(`✅ 路线「${editingRouteName}」已更新`, 'green');
+      else toast(d.error || '保存失败', 'red');
+    } catch(e) { toast('保存失败', 'red'); }
+  } else {
+    // Save new route
+    const name = prompt('路线名称：');
+    if (!name || !name.trim()) return;
+    try {
+      const r = await fetch('/api/routes', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: name.trim(), points: pts, map_id: currentMapId})
+      });
+      const d = await r.json();
+      if (d.ok) toast('✅ 路线已保存: ' + name.trim(), 'green');
+      else toast(d.error || '保存失败', 'red');
+    } catch(e) { toast('保存失败', 'red'); }
+  }
 }
 
 async function runCurrentPath() {
@@ -2290,6 +2313,8 @@ async function openRouteLibrary() {
         <div style="display:flex;gap:6px">
           <button class="btn-sm" style="font-size:.65rem;background:rgba(14,165,233,.12);border-color:var(--accent);color:var(--accent)"
             onclick="loadAndRunRoute(${r.id})">▶运行</button>
+          <button class="btn-sm" style="font-size:.65rem"
+            onclick="editRoute(${r.id},'${r.name.replace(/'/g,'')}')">✏️编辑</button>
           <button class="btn-sm" style="font-size:.65rem;background:rgba(239,68,68,.1);border-color:var(--red);color:var(--red)"
             onclick="deleteRoute(${r.id},this)">删除</button>
         </div>
@@ -2299,6 +2324,30 @@ async function openRouteLibrary() {
 
 function closeRouteLibrary() {
   document.getElementById('route-library-modal').classList.remove('open');
+}
+
+async function editRoute(id, name) {
+  closeRouteLibrary();
+  try {
+    const d = await (await fetch(`/api/routes?map_id=${currentMapId != null ? currentMapId : 'null'}`)).json();
+    const route = (d.routes||[]).find(r => r.id === id);
+    if (!route) { toast('路线不存在', 'red'); return; }
+    currentPath = route.points.map(p => ({wx: p.wx, wy: p.wy}));
+    editingRouteId   = id;
+    editingRouteName = name;
+    _updatePathCount();
+    if (!pathMode) {
+      pathMode = true;
+      const btn = document.getElementById('path-mode-btn');
+      const bar = document.getElementById('path-tools-bar');
+      btn.style.background  = 'rgba(14,165,233,.2)';
+      btn.style.borderColor = 'var(--accent)';
+      btn.style.color       = 'var(--accent)';
+      bar.style.display     = 'flex';
+    }
+    toast(`✏️ 编辑路线「${name}」— 拖动点调整位置，点击空白添加点`);
+    if (mapData) renderMap();
+  } catch(e) { toast('加载路线失败', 'red'); }
 }
 
 async function loadAndRunRoute(id) {
@@ -2448,9 +2497,20 @@ function _getCanvasXY(e, canvas) {
       canvas.style.cursor = 'grabbing';
       e.preventDefault(); return;
     }
-    // Path mode: left click adds a point
+    // Path mode: drag existing point OR add new point
     if (pathMode && e.button === 0 && !_spaceDown) {
       if (!mapData) return;
+      // Check if clicking near an existing point → drag it
+      const HIT = Math.max(12, 14 / mapZoom); // hit radius in canvas px
+      let hit = -1;
+      for (let i = 0; i < currentPath.length; i++) {
+        const [px, py] = worldToCanvas(currentPath[i].wx, currentPath[i].wy, mapData, canvas.width, canvas.height);
+        if (Math.hypot(cx - px, cy - py) < HIT) { hit = i; break; }
+      }
+      if (hit >= 0) {
+        _dragPtIdx = hit; e.stopPropagation(); return;
+      }
+      // No hit → add new point
       const [wx, wy] = canvasToWorld(cx, cy, mapData, canvas.width, canvas.height);
       currentPath.push({wx, wy});
       _updatePathCount();
@@ -2483,6 +2543,21 @@ function _getCanvasXY(e, canvas) {
 
   canvas.addEventListener('mousemove', e => {
     const [cx, cy] = _getCanvasXY(e, canvas);
+    // Drag path point
+    if (pathMode && _dragPtIdx >= 0 && mapData) {
+      const [wx, wy] = canvasToWorld(cx, cy, mapData, canvas.width, canvas.height);
+      currentPath[_dragPtIdx] = {wx, wy};
+      renderMap(); return;
+    }
+    // Path mode cursor: show 'move' when hovering an existing point
+    if (pathMode && mapData && _dragPtIdx < 0) {
+      const HIT = Math.max(12, 14 / mapZoom);
+      const near = currentPath.some((p) => {
+        const [px, py] = worldToCanvas(p.wx, p.wy, mapData, canvas.width, canvas.height);
+        return Math.hypot(cx - px, cy - py) < HIT;
+      });
+      canvas.style.cursor = near ? 'move' : 'crosshair';
+    }
     if (locateMode && _locateDragging && locatePending) {
       const dx = cx - _locateStartCX, dy = cy - _locateStartCY;
       if (Math.hypot(dx, dy) > 4) locatePending.theta = Math.atan2(-dy, dx);
@@ -2520,12 +2595,14 @@ function _getCanvasXY(e, canvas) {
       _paintCells(bresenhamLine(lineStart.gx, lineStart.gy, gx, gy));
       lineStart = null; linePreview = null;
     }
+    if (pathMode && _dragPtIdx >= 0) { _dragPtIdx = -1; if (mapData) renderMap(); return; }
     _isDrawing = false; _isPanning = false;
     // Restore cursor after pan release
     canvas.style.cursor = _spaceDown ? 'grab' : (drawMode ? 'cell' : 'crosshair');
     if (mapData) renderMap();
   });
   canvas.addEventListener('mouseleave', () => {
+    _dragPtIdx = -1;
     if (drawMode && lineMode && lineStart && _isDrawing) {
       lineStart = null; linePreview = null; if (mapData) renderMap();
     }

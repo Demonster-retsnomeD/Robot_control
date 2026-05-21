@@ -714,6 +714,31 @@ def api_routes_save():
         return jsonify({"ok": False, "error": str(e)}), 500
     return jsonify({"ok": True})
 
+@app.route("/api/routes/<int:rid>", methods=["PUT"])
+@login_required
+def api_routes_update(rid):
+    d = request.get_json(force=True) or {}
+    name   = d.get("name", "").strip()
+    points = d.get("points", [])
+    if not points: return jsonify({"ok": False, "error": "路线无点位"}), 400
+    updated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            if name:
+                conn.execute(
+                    "UPDATE routes SET name=?, points=?, created_at=? WHERE id=?",
+                    (name, json.dumps(points), updated, rid)
+                )
+            else:
+                conn.execute(
+                    "UPDATE routes SET points=?, created_at=? WHERE id=?",
+                    (json.dumps(points), updated, rid)
+                )
+            conn.commit()
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+    return jsonify({"ok": True})
+
 @app.route("/api/routes/<int:rid>", methods=["DELETE"])
 @login_required
 def api_routes_delete(rid):
