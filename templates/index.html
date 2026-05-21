@@ -328,23 +328,27 @@ body.user-mode #page-user{display:flex!important;align-items:stretch}
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:.7rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px" data-i18n="map.title">🗺 SLAM 地图</span>
         <button class="btn-sm" id="map-mode-btn" onclick="toggleMapMode()" style="font-size:.65rem" data-i18n="map.mapping">🔴 建图模式</button>
-        <button class="btn-sm" id="new-map-btn" onclick="newBlankMap()" style="display:none;font-size:.65rem;background:rgba(14,165,233,.12);border-color:var(--accent);color:var(--accent)" title="清空地图，从零手绘">🆕 新建地图</button>
         <span style="font-size:.62rem;padding:2px 7px;border-radius:10px;background:rgba(245,158,11,.15);color:var(--yellow);display:none" id="map-scan-badge">● 扫描中</span>
         <span id="fog-badge" style="display:none;font-size:.62rem;padding:2px 7px;border-radius:10px;background:rgba(239,68,68,.12);color:var(--red)">🌫 雾效</span>
-        <button class="btn-sm" id="locate-mode-btn" onclick="toggleLocateMode()" style="font-size:.65rem">📍 定位</button>
-        <span id="localizing-badge" style="display:none;font-size:.62rem;padding:2px 8px;border-radius:10px"></span>
-        <button class="btn-sm" id="path-mode-btn" onclick="togglePathMode()" style="font-size:.65rem">🛤 路线规划</button>
+
+        <!-- ── 建图模式专属 ── -->
+        <button class="btn-sm" id="new-map-btn" onclick="newBlankMap()" style="display:none;font-size:.65rem;background:rgba(14,165,233,.12);border-color:var(--accent);color:var(--accent)" title="清空地图，从零手绘">🆕 新建地图</button>
+        <button class="btn-sm" id="draw-mode-btn" onclick="toggleDrawMode()" style="display:none;font-size:.65rem">✏️ 手绘</button>
+        <button class="btn-sm" id="path-mode-btn" onclick="togglePathMode()" style="display:none;font-size:.65rem">🛤 路线规划</button>
         <button class="btn-sm" id="charge-set-btn" onclick="toggleChargeSetMode()" style="display:none;font-size:.65rem" title="在地图上点击设定充电桩位置">⚡ 设置充电桩</button>
-        <button class="btn-sm" id="charge-go-btn" onclick="returnToCharger()" style="display:none;font-size:.65rem;background:rgba(250,204,21,.12);border-color:var(--yellow);color:var(--yellow)" title="导航到充电桩">🔋 返回充电</button>
         <span id="path-tools-bar" style="display:none;align-items:center;gap:4px;font-size:.65rem">
           <span id="path-count" style="font-size:.6rem;color:var(--text2);min-width:30px">0点</span>
           <button class="btn-sm" onclick="undoPathPoint()" style="font-size:.63rem" title="撤销最后一个点">↩</button>
           <button class="btn-sm" onclick="clearCurrentPath()" style="font-size:.63rem;color:var(--red)" title="清除所有点">🗑</button>
-          <button class="btn-sm" onclick="saveCurrentRoute()" style="font-size:.63rem;background:rgba(22,163,74,.12);border-color:var(--green);color:var(--green)">💾保存</button>
-          <button class="btn-sm" id="route-run-btn" onclick="runCurrentPath()" style="font-size:.63rem;background:rgba(14,165,233,.12);border-color:var(--accent);color:var(--accent)">▶运行</button>
-          <button class="btn-sm" onclick="openRouteLibrary()" style="font-size:.63rem">📋路线库</button>
+          <button class="btn-sm" onclick="saveCurrentRoute()" style="font-size:.63rem;background:rgba(22,163,74,.12);border-color:var(--green);color:var(--green)">💾保存路线</button>
         </span>
-        <button class="btn-sm" id="draw-mode-btn" onclick="toggleDrawMode()" style="display:none;font-size:.65rem">✏️ 手绘</button>
+
+        <!-- ── 导航模式专属 ── -->
+        <button class="btn-sm" id="locate-mode-btn" onclick="toggleLocateMode()" style="font-size:.65rem">📍 定位</button>
+        <span id="localizing-badge" style="display:none;font-size:.62rem;padding:2px 8px;border-radius:10px"></span>
+        <button class="btn-sm" id="nav-route-btn" onclick="openRouteLibrary()" style="font-size:.65rem">🛤 选择路线</button>
+        <button class="btn-sm" id="route-run-btn" onclick="_stopRoute()" style="display:none;font-size:.65rem;background:rgba(239,68,68,.12);border-color:var(--red);color:var(--red)">⏹ 停止路线</button>
+        <button class="btn-sm" id="charge-go-btn" onclick="returnToCharger()" style="font-size:.65rem;background:rgba(250,204,21,.12);border-color:var(--yellow);color:var(--yellow)" title="导航到充电桩">🔋 返回充电</button>
         <span id="draw-tools-bar" style="display:none;align-items:center;gap:4px;font-size:.65rem">
           <button class="btn-sm dt-btn" id="dt-wall"  onclick="setDrawTool('wall')"  style="font-size:.63rem">⬛墙</button>
           <button class="btn-sm dt-btn" id="dt-free"  onclick="setDrawTool('free')"  style="font-size:.63rem">⬜空地</button>
@@ -1619,10 +1623,12 @@ async function newBlankMap() {
       btn.style.borderColor = 'var(--green)';
       btn.style.color = 'var(--green)';
       document.getElementById('map-scan-badge').style.display = 'inline';
-      document.getElementById('draw-mode-btn').style.display  = 'inline';
-      document.getElementById('new-map-btn').style.display    = 'inline';
-      document.getElementById('locate-mode-btn').style.display = 'none';
-      document.getElementById('path-mode-btn').style.display  = 'none';
+      // Show mapping tools
+      ['draw-mode-btn','new-map-btn','path-mode-btn','charge-set-btn']
+        .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'inline'; });
+      // Hide nav tools
+      ['locate-mode-btn','nav-route-btn','charge-go-btn','route-run-btn']
+        .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
       if (pathMode) { pathMode=false; document.getElementById('path-tools-bar').style.display='none'; }
       mapWaypoints = []; // new map has no waypoints
       mapPose = null;    // clear robot position marker
@@ -1777,41 +1783,41 @@ async function toggleMapMode() {
   _navPending = false;
 
   if (mapScanMode) {
-    // ── Mapping → Navigation (direct, no mandatory localization) ──────────
+    // ── Mapping → Navigation ──────────────────────────────────────────────
     mapScanMode = false;
-    btn.textContent    = t('map.mapping');
+    btn.textContent      = t('map.mapping');
     btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = '';
-    badge.style.display = 'none';
-    // Hide mapping tools; show locate + path buttons
-    document.getElementById('draw-mode-btn').style.display  = 'none';
-    document.getElementById('new-map-btn').style.display    = 'none';
-    document.getElementById('draw-tools-bar').style.display = 'none';
+    badge.style.display  = 'none';
+    // Exit any active mapping sub-modes
     if (drawMode) { drawMode = false; document.getElementById('map-canvas').style.cursor = 'crosshair'; }
-    document.getElementById('locate-mode-btn').style.display = 'inline';
-    document.getElementById('path-mode-btn').style.display  = 'inline';
-    document.getElementById('charge-set-btn').style.display = 'inline';
-    document.getElementById('charge-go-btn').style.display  = 'inline';
+    if (pathMode) { pathMode = false; document.getElementById('path-tools-bar').style.display = 'none'; }
+    if (chargeSetMode) { chargeSetMode = false; _updateChargeSetBtn(); }
+    // Hide mapping-only tools
+    ['draw-mode-btn','new-map-btn','draw-tools-bar','path-mode-btn','charge-set-btn','path-tools-bar']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+    // Show nav-only tools
+    ['locate-mode-btn','nav-route-btn','charge-go-btn']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'inline'; });
     try { await fetch('/api/set_mode', {method:'POST',
       headers:{'Content-Type':'application/json'}, body:'{"mode":2}'}); } catch(e){}
-    toast('🟢 导航模式 — 点📍定位机器人位置');
+    toast('🟢 导航模式 — 点📍定位，选🛤路线运行');
     renderMap();
   } else {
-    // ── Navigation → Mapping (direct) ────────────────────────────────────
+    // ── Navigation → Mapping ──────────────────────────────────────────────
     mapScanMode = true;
-    btn.textContent = t('map.nav');
+    btn.textContent      = t('map.nav');
     btn.style.background = 'rgba(34,197,94,.15)';
     btn.style.borderColor = 'var(--green)';
-    btn.style.color       = 'var(--green)';
-    badge.style.display = 'inline';
-    document.getElementById('draw-mode-btn').style.display  = 'inline';
-    document.getElementById('new-map-btn').style.display    = 'inline';
-    document.getElementById('locate-mode-btn').style.display = 'none';
-    document.getElementById('path-mode-btn').style.display  = 'none';
-    document.getElementById('charge-set-btn').style.display = 'none';
-    document.getElementById('charge-go-btn').style.display  = 'none';
-    // also exit path/charge mode when switching to mapping
-    if (pathMode) { pathMode = false; document.getElementById('path-tools-bar').style.display='none'; }
-    if (chargeSetMode) { chargeSetMode = false; _updateChargeSetBtn(); }
+    btn.style.color      = 'var(--green)';
+    badge.style.display  = 'inline';
+    // Stop any running route
+    if (routeRunning) _stopRoute();
+    // Hide nav-only tools
+    ['locate-mode-btn','nav-route-btn','charge-go-btn','route-run-btn']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+    // Show mapping-only tools
+    ['draw-mode-btn','new-map-btn','path-mode-btn','charge-set-btn']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'inline'; });
     try { await fetch('/api/set_mode', {method:'POST',
       headers:{'Content-Type':'application/json'}, body:'{"mode":1}'}); } catch(e){}
     toast('🔴 建图模式 — 操控机器人扫描，或点✏️手绘');
@@ -2317,7 +2323,8 @@ function _execRoute(pts) {
   routeRunPts  = pts;
   routeRunIdx  = 0;
   routeRunning = true;
-  document.getElementById('route-run-btn').textContent = '⏹停止';
+  const rb0 = document.getElementById('route-run-btn');
+  if (rb0) rb0.style.display = 'inline';
   toast(`▶ 开始执行路线 (共${pts.length}个点)`, 'green');
   _navToRoutePoint();
   if (mapData) renderMap();
@@ -2328,7 +2335,7 @@ function _stopRoute() {
   routeRunPts  = [];
   routeRunIdx  = 0;
   const rb = document.getElementById('route-run-btn');
-  if (rb) rb.textContent = '▶运行';
+  if (rb) rb.style.display = 'none';
   fetch('/api/cancel', {method:'POST'}).catch(()=>{});
   toast('⏹ 路线已停止');
   if (mapData) renderMap();
@@ -2340,7 +2347,7 @@ async function _navToRoutePoint() {
       toast('✅ 路线执行完毕', 'green');
       routeRunning = false;
       const rb = document.getElementById('route-run-btn');
-      if (rb) rb.textContent = '▶运行';
+      if (rb) rb.style.display = 'none';
     }
     if (mapData) renderMap();
     return;
@@ -2411,6 +2418,8 @@ async function editRoute(id, name) {
     const d = await (await fetch(`/api/routes?map_id=${currentMapId != null ? currentMapId : 'null'}`)).json();
     const route = (d.routes||[]).find(r => r.id === id);
     if (!route) { toast('路线不存在', 'red'); return; }
+    // Must be in mapping mode to edit
+    if (!mapScanMode) await toggleMapMode();
     currentPath = route.points.map(p => ({wx: p.wx, wy: p.wy, name: p.name||''}));
     editingRouteId   = id;
     editingRouteName = name;
@@ -2420,10 +2429,8 @@ async function editRoute(id, name) {
       pathMode = true;
       const btn = document.getElementById('path-mode-btn');
       const bar = document.getElementById('path-tools-bar');
-      btn.style.background  = 'rgba(14,165,233,.2)';
-      btn.style.borderColor = 'var(--accent)';
-      btn.style.color       = 'var(--accent)';
-      bar.style.display     = 'flex';
+      if (btn) { btn.style.background = 'rgba(14,165,233,.2)'; btn.style.borderColor = 'var(--accent)'; btn.style.color = 'var(--accent)'; }
+      if (bar) bar.style.display = 'flex';
     }
     toast(`✏️ 编辑路线「${name}」— 拖动点调整位置，点击空白添加点`);
     if (mapData) renderMap();
@@ -2432,18 +2439,17 @@ async function editRoute(id, name) {
 
 async function loadAndRunRoute(id) {
   try {
-    const d = await (await fetch('/api/routes')).json();
+    const mapParam = currentMapId != null ? currentMapId : 'null';
+    const d = await (await fetch(`/api/routes?map_id=${mapParam}`)).json();
     const route = (d.routes||[]).find(r => r.id === id);
     if (!route) { toast('路线不存在', 'red'); return; }
     closeRouteLibrary();
-    // Load points into currentPath for display
+    // Load points into currentPath for display on map
     currentPath = route.points.map(p => ({wx: p.wx, wy: p.wy, name: p.name||''}));
     currentRouteName = route.name || '';
     _updatePathCount();
-    // Switch to path mode if not already
-    if (!pathMode) togglePathMode();
-    // Execute
-    _execRoute(route.points.map(p => ({wx: p.wx, wy: p.wy, theta: p.theta})));
+    // Execute (nav mode — no need to enter pathMode)
+    _execRoute(route.points.map(p => ({wx: p.wx, wy: p.wy, theta: p.theta ?? 0})));
   } catch(e) { toast('加载路线失败', 'red'); }
 }
 
