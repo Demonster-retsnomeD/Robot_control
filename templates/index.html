@@ -334,6 +334,8 @@ body.user-mode #page-user{display:flex!important;align-items:stretch}
         <button class="btn-sm" id="locate-mode-btn" onclick="toggleLocateMode()" style="font-size:.65rem">📍 定位</button>
         <span id="localizing-badge" style="display:none;font-size:.62rem;padding:2px 8px;border-radius:10px"></span>
         <button class="btn-sm" id="path-mode-btn" onclick="togglePathMode()" style="font-size:.65rem">🛤 路线规划</button>
+        <button class="btn-sm" id="charge-set-btn" onclick="toggleChargeSetMode()" style="display:none;font-size:.65rem" title="在地图上点击设定充电桩位置">⚡ 设置充电桩</button>
+        <button class="btn-sm" id="charge-go-btn" onclick="returnToCharger()" style="display:none;font-size:.65rem;background:rgba(250,204,21,.12);border-color:var(--yellow);color:var(--yellow)" title="导航到充电桩">🔋 返回充电</button>
         <span id="path-tools-bar" style="display:none;align-items:center;gap:4px;font-size:.65rem">
           <span id="path-count" style="font-size:.6rem;color:var(--text2);min-width:30px">0点</span>
           <button class="btn-sm" onclick="undoPathPoint()" style="font-size:.63rem" title="撤销最后一个点">↩</button>
@@ -1403,16 +1405,23 @@ function renderMap() {
     if (!wp.pose) continue;
     const [cx, cy, cs] = worldToCanvas(wp.pose.x, wp.pose.y, mapData, cw, ch);
     const r = Math.max(4, cs * 1.2);
-    const isGoal = navStatusCache && navStatusCache.goal === wp.name && navStatusCache.res === 1;
+    const isGoal   = navStatusCache && navStatusCache.goal === wp.name && navStatusCache.res === 1;
+    const isCharge = wp.type === 'charge';
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2);
-    ctx.fillStyle = isGoal ? '#f59e0b' : (wp.type === 'charge' ? '#4ade80' : '#22c55e');
+    ctx.fillStyle = isGoal ? '#f59e0b' : (isCharge ? '#fde047' : '#22c55e');
     ctx.fill();
-    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1; ctx.stroke();
-    // Label
+    ctx.strokeStyle = isCharge ? '#ca8a04' : '#1e293b';
+    ctx.lineWidth = isCharge ? 2 : 1; ctx.stroke();
+    // Label / icon
     ctx.font = `bold ${Math.max(9, cs * 1.5)}px sans-serif`;
-    ctx.fillStyle = '#1e293b';
     ctx.textAlign = 'center';
-    ctx.fillText(wp.name, cx, cy - r - 2);
+    if (isCharge) {
+      ctx.fillStyle = '#ca8a04';
+      ctx.fillText('⚡', cx, cy - r - 2);
+    } else {
+      ctx.fillStyle = '#1e293b';
+      ctx.fillText(wp.name, cx, cy - r - 2);
+    }
   }
 
   // Draw robot
@@ -1597,6 +1606,8 @@ async function newBlankMap() {
       document.getElementById('locate-mode-btn').style.display = 'none';
       document.getElementById('path-mode-btn').style.display  = 'none';
       if (pathMode) { pathMode=false; document.getElementById('path-tools-bar').style.display='none'; }
+      mapWaypoints = []; // new map has no waypoints
+      currentPath = []; if (routeRunning) _stopRoute(); _updatePathCount();
       renderMap();
       toast('🆕 新建空白地图 — 可用✏️手绘工具绘制地形', 'green');
       fetchMap(true);
@@ -1759,6 +1770,8 @@ async function toggleMapMode() {
     if (drawMode) { drawMode = false; document.getElementById('map-canvas').style.cursor = 'crosshair'; }
     document.getElementById('locate-mode-btn').style.display = 'inline';
     document.getElementById('path-mode-btn').style.display  = 'inline';
+    document.getElementById('charge-set-btn').style.display = 'inline';
+    document.getElementById('charge-go-btn').style.display  = 'inline';
     try { await fetch('/api/set_mode', {method:'POST',
       headers:{'Content-Type':'application/json'}, body:'{"mode":2}'}); } catch(e){}
     toast('🟢 导航模式 — 点📍定位机器人位置');
@@ -1775,8 +1788,11 @@ async function toggleMapMode() {
     document.getElementById('new-map-btn').style.display    = 'inline';
     document.getElementById('locate-mode-btn').style.display = 'none';
     document.getElementById('path-mode-btn').style.display  = 'none';
-    // also exit path mode when switching to mapping
+    document.getElementById('charge-set-btn').style.display = 'none';
+    document.getElementById('charge-go-btn').style.display  = 'none';
+    // also exit path/charge mode when switching to mapping
     if (pathMode) { pathMode = false; document.getElementById('path-tools-bar').style.display='none'; }
+    if (chargeSetMode) { chargeSetMode = false; _updateChargeSetBtn(); }
     try { await fetch('/api/set_mode', {method:'POST',
       headers:{'Content-Type':'application/json'}, body:'{"mode":1}'}); } catch(e){}
     toast('🔴 建图模式 — 操控机器人扫描，或点✏️手绘');
@@ -2376,6 +2392,44 @@ async function deleteRoute(id, btn) {
   } catch(e) { toast('删除失败', 'red'); }
 }
 
+// ── Charger waypoint ──────────────────────────────────────────────────────
+let chargeSetMode = false;
+
+function _updateChargeSetBtn() {
+  const btn = document.getElementById('charge-set-btn');
+  if (!btn) return;
+  btn.style.background  = chargeSetMode ? 'rgba(250,204,21,.2)' : '';
+  btn.style.borderColor = chargeSetMode ? 'var(--yellow)' : '';
+  btn.style.color       = chargeSetMode ? 'var(--yellow)' : '';
+}
+
+function toggleChargeSetMode() {
+  chargeSetMode = !chargeSetMode;
+  _updateChargeSetBtn();
+  if (chargeSetMode) {
+    if (locateMode) toggleLocateMode();
+    if (pathMode)   togglePathMode();
+    toast('⚡ 点击地图设定充电桩位置');
+  }
+}
+
+function _getChargerWaypoint() {
+  return mapWaypoints.find(w => w.type === 'charge');
+}
+
+async function returnToCharger() {
+  const chg = _getChargerWaypoint();
+  if (!chg) { toast('未找到充电桩位置，请先⚡设置', 'yellow'); return; }
+  try {
+    const r = await fetch('/api/nav', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({x: chg.pose.x, y: chg.pose.y, theta: chg.pose.theta || 0})
+    });
+    const d = await r.json();
+    toast('🔋 导航至充电桩中...');
+  } catch(e) { toast('发送失败', 'red'); }
+}
+
 // ── Map drawing layer ─────────────────────────────────────────────────────
 let drawLayer = null;
 let drawMode  = false;
@@ -2496,6 +2550,28 @@ function _getCanvasXY(e, canvas) {
       _panStartPX = mapPanX; _panStartPY = mapPanY;
       canvas.style.cursor = 'grabbing';
       e.preventDefault(); return;
+    }
+    // Charger set mode: click to place charger
+    if (chargeSetMode && e.button === 0 && !_spaceDown) {
+      if (!mapData) return;
+      const [wx, wy] = canvasToWorld(cx, cy, mapData, canvas.width, canvas.height);
+      chargeSetMode = false; _updateChargeSetBtn();
+      // Save as waypoint type='charge' name='充电桩'
+      fetch('/api/waypoints/save', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: '充电桩', x: wx, y: wy, theta: 0, type: 'charge'})
+      }).then(r => r.json()).then(d => {
+        if (d.ok) {
+          // Update local waypoints
+          const existing = mapWaypoints.findIndex(w => w.type === 'charge');
+          const wp = {name:'充电桩', type:'charge', pose:{x:wx, y:wy, theta:0}};
+          if (existing >= 0) mapWaypoints[existing] = wp;
+          else mapWaypoints.push(wp);
+          toast('⚡ 充电桩位置已设定', 'green');
+          renderMap();
+        } else toast(d.error || '设定失败', 'red');
+      }).catch(() => toast('设定失败', 'red'));
+      e.stopPropagation(); return;
     }
     // Path mode: drag existing point OR add new point
     if (pathMode && e.button === 0 && !_spaceDown) {
