@@ -1651,36 +1651,57 @@ async function saveClickWaypoint() {
 }
 
 // ── Mapping mode (faster poll + mode switch) ──────────────────────────────
+let _navPending = false; // waiting for localization before completing nav mode switch
+
 async function toggleMapMode() {
-  mapScanMode = !mapScanMode;
-  const btn = document.getElementById('map-mode-btn');
+  const btn   = document.getElementById('map-mode-btn');
   const badge = document.getElementById('map-scan-badge');
+
   if (mapScanMode) {
+    // ── Mapping → Navigation: localize first ─────────────────────────────
+    _navPending = true;
+    locateMode  = true;
+    locatePending = null; _locateDragging = false;
+    const lb = document.getElementById('locate-mode-btn');
+    lb.style.background  = 'rgba(34,197,94,.2)';
+    lb.style.borderColor = 'var(--green)';
+    lb.style.color       = 'var(--green)';
+    toast('📍 切换导航模式 — 请在地图上按住拖动，设定机器人当前位置和朝向');
+    renderMap();
+  } else {
+    // ── Navigation → Mapping: no localization needed ──────────────────────
+    mapScanMode = true;
     btn.textContent = t('map.nav');
     btn.style.background = 'rgba(34,197,94,.15)';
     btn.style.borderColor = 'var(--green)';
-    btn.style.color = 'var(--green)';
+    btn.style.color       = 'var(--green)';
     badge.style.display = 'inline';
     document.getElementById('draw-mode-btn').style.display = 'inline';
-    // Switch robot to mapping mode
     try { await fetch('/api/set_mode', {method:'POST',
       headers:{'Content-Type':'application/json'}, body:'{"mode":1}'}); } catch(e){}
-    toast('🔴 建图模式 — 手动操控机器人扫描环境，可点✏️手绘框架');
+    toast('🔴 建图模式 — 操控机器人扫描，或点✏️手绘');
     clearTimeout(mapFetchTimer);
-    mapFetchTimer = setTimeout(fetchMap, 800); // faster during scan
-  } else {
-    btn.textContent = t('map.mapping');
-    btn.style.background = '';
-    btn.style.borderColor = '';
-    btn.style.color = '';
-    badge.style.display = 'none';
-    document.getElementById('draw-mode-btn').style.display = 'none';
-    document.getElementById('draw-tools-bar').style.display = 'none';
-    if (drawMode) { drawMode = false; document.getElementById('map-canvas').style.cursor = 'crosshair'; }
-    try { await fetch('/api/set_mode', {method:'POST',
-      headers:{'Content-Type':'application/json'}, body:'{"mode":2}'}); } catch(e){}
-    toast('✅ 已切换导航模式');
+    mapFetchTimer = setTimeout(fetchMap, 800);
   }
+}
+
+function _completeNavMode() {
+  // Called after successful localization when _navPending
+  mapScanMode = false;
+  _navPending = false;
+  const btn   = document.getElementById('map-mode-btn');
+  const badge = document.getElementById('map-scan-badge');
+  btn.textContent    = t('map.mapping');
+  btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = '';
+  badge.style.display = 'none';
+  document.getElementById('draw-mode-btn').style.display  = 'none';
+  document.getElementById('draw-tools-bar').style.display = 'none';
+  if (drawMode) { drawMode = false; document.getElementById('map-canvas').style.cursor = 'crosshair'; }
+  const lb = document.getElementById('locate-mode-btn');
+  lb.style.background = ''; lb.style.borderColor = ''; lb.style.color = '';
+  fetch('/api/set_mode', {method:'POST',headers:{'Content-Type':'application/json'}, body:'{"mode":2}'}).catch(()=>{});
+  toast('✅ 定位完成，已进入导航模式', 'green');
+  _showLocalizingBadge();
 }
 
 // Override fetchMap interval based on mode
@@ -1968,13 +1989,15 @@ let _locateDragging = false, _locateStartCX = 0, _locateStartCY = 0;
 function toggleLocateMode() {
   locateMode = !locateMode;
   locatePending = null; _locateDragging = false;
+  if (!locateMode && _navPending) {
+    _navPending = false; // user canceled nav mode switch
+    toast('已取消切换导航模式');
+  }
   const btn = document.getElementById('locate-mode-btn');
   btn.style.background  = locateMode ? 'rgba(34,197,94,.2)' : '';
   btn.style.borderColor = locateMode ? 'var(--green)' : '';
   btn.style.color       = locateMode ? 'var(--green)' : '';
-  const canvas = document.getElementById('map-canvas');
-  if (canvas) canvas.style.cursor = locateMode ? 'crosshair' : 'crosshair';
-  toast(locateMode ? '📍 定位：在地图上按住拖动 — 落点=位置，拖动方向=朝向' : '已退出定位模式');
+  if (locateMode) toast('📍 定位：在地图上按住拖动 — 落点=位置，拖动方向=朝向');
   if (mapData) renderMap();
 }
 
@@ -1986,13 +2009,16 @@ async function _doSetPose(wx, wy, theta) {
     });
     const d = await r.json();
     if (d.ok) {
-      // Immediately show robot at the set position (don't wait for next poll)
       mapPose = {x: wx, y: wy, theta};
-      toast(`📍 定位成功  θ:${(theta*180/Math.PI).toFixed(0)}°`, 'green');
-      _showLocalizingBadge();
       locateMode = false;
-      const btn = document.getElementById('locate-mode-btn');
-      btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = '';
+      if (_navPending) {
+        _completeNavMode();
+      } else {
+        const btn = document.getElementById('locate-mode-btn');
+        btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = '';
+        toast(`📍 定位成功  θ:${(theta*180/Math.PI).toFixed(0)}°`, 'green');
+        _showLocalizingBadge();
+      }
       renderMap();
     } else { toast('定位失败: ' + (d.error || ''), 'red'); }
   } catch(e) { toast('发送失败', 'red'); }
