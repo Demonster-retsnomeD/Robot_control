@@ -2815,6 +2815,8 @@ async function loadSavedMap(id, name) {
       viewingSavedMap = true;
       currentMapId   = parseInt(id);
       currentMapName = name;
+      mapWaypoints = [];  // clear old waypoints — they belong to other maps
+      mapPose = null;     // clear robot position
       currentPath = []; if (routeRunning) _stopRoute(); _updatePathCount();
       // Restore saved resolution as custom scale
       customResolution = d.resolution;
