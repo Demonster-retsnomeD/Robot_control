@@ -348,6 +348,7 @@ body.user-mode #page-user{display:flex!important;align-items:stretch}
         <span id="localizing-badge" style="display:none;font-size:.62rem;padding:2px 8px;border-radius:10px"></span>
         <button class="btn-sm" id="nav-route-btn" onclick="openRouteLibrary()" style="font-size:.65rem">🛤 选择路线</button>
         <button class="btn-sm" id="route-run-btn" onclick="_startSelectedRoute()" style="display:none;font-size:.65rem;background:rgba(34,197,94,.12);border-color:var(--green);color:var(--green)">▶ 运行路线</button>
+        <button class="btn-sm" id="route-edit-btn" onclick="_editSelectedRoute()" style="display:none;font-size:.65rem">✏️ 编辑路线</button>
         <button class="btn-sm" id="charge-go-btn" onclick="returnToCharger()" style="font-size:.65rem;background:rgba(250,204,21,.12);border-color:var(--yellow);color:var(--yellow)" title="导航到充电桩">🔋 返回充电</button>
         <span id="draw-tools-bar" style="display:none;align-items:center;gap:4px;font-size:.65rem">
           <button class="btn-sm dt-btn" id="dt-wall"  onclick="setDrawTool('wall')"  style="font-size:.63rem">⬛墙</button>
@@ -1627,7 +1628,7 @@ async function newBlankMap() {
       ['draw-mode-btn','new-map-btn','path-mode-btn','charge-set-btn']
         .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'inline'; });
       // Hide nav tools
-      ['locate-mode-btn','nav-route-btn','charge-go-btn','route-run-btn']
+      ['locate-mode-btn','nav-route-btn','charge-go-btn','route-run-btn','route-edit-btn']
         .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
       if (pathMode) { pathMode=false; document.getElementById('path-tools-bar').style.display='none'; }
       mapWaypoints = []; // new map has no waypoints
@@ -1812,9 +1813,10 @@ async function toggleMapMode() {
     badge.style.display  = 'inline';
     // Stop any running route and clear selection
     if (routeRunning) _stopRoute();
-    _selectedRoutePts = null; currentPath = []; _updatePathCount();
+    _selectedRoutePts = null; _selectedRouteId = null; _selectedRouteName = null;
+    currentPath = []; _updatePathCount();
     // Hide nav-only tools
-    ['locate-mode-btn','nav-route-btn','charge-go-btn','route-run-btn']
+    ['locate-mode-btn','nav-route-btn','charge-go-btn','route-run-btn','route-edit-btn']
       .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
     // Show mapping-only tools
     ['draw-mode-btn','new-map-btn','path-mode-btn','charge-set-btn']
@@ -2187,7 +2189,9 @@ let _dragPtIdx     = -1;          // index of path point being dragged (-1 = non
 let routeRunning      = false;
 let routeRunIdx       = 0;
 let routeRunPts       = [];          // points being executed
-let _selectedRoutePts = null;        // loaded but not yet running (preview state)
+let _selectedRoutePts  = null;        // loaded but not yet running (preview state)
+let _selectedRouteId   = null;        // id of selected route (for edit)
+let _selectedRouteName = null;        // name of selected route (for edit)
 
 function togglePathMode() {
   pathMode = !pathMode;
@@ -2323,24 +2327,36 @@ async function runCurrentPath() {
 function _setRouteBtn(state) {
   // state: 'hidden' | 'ready' | 'running'
   const rb = document.getElementById('route-run-btn');
-  if (!rb) return;
+  const eb = document.getElementById('route-edit-btn');
   if (state === 'hidden') {
-    rb.style.display = 'none';
+    if (rb) rb.style.display = 'none';
+    if (eb) eb.style.display = 'none';
   } else if (state === 'ready') {
-    rb.textContent    = '▶ 运行路线';
-    rb.style.display  = 'inline';
-    rb.style.background  = 'rgba(34,197,94,.12)';
-    rb.style.borderColor = 'var(--green)';
-    rb.style.color       = 'var(--green)';
-    rb.onclick = _startSelectedRoute;
+    if (rb) {
+      rb.textContent    = '▶ 运行路线';
+      rb.style.display  = 'inline';
+      rb.style.background  = 'rgba(34,197,94,.12)';
+      rb.style.borderColor = 'var(--green)';
+      rb.style.color       = 'var(--green)';
+      rb.onclick = _startSelectedRoute;
+    }
+    if (eb) eb.style.display = 'inline';  // show edit button after selection
   } else if (state === 'running') {
-    rb.textContent    = '⏹ 停止路线';
-    rb.style.display  = 'inline';
-    rb.style.background  = 'rgba(239,68,68,.12)';
-    rb.style.borderColor = 'var(--red)';
-    rb.style.color       = 'var(--red)';
-    rb.onclick = _stopRoute;
+    if (rb) {
+      rb.textContent    = '⏹ 停止路线';
+      rb.style.display  = 'inline';
+      rb.style.background  = 'rgba(239,68,68,.12)';
+      rb.style.borderColor = 'var(--red)';
+      rb.style.color       = 'var(--red)';
+      rb.onclick = _stopRoute;
+    }
+    if (eb) eb.style.display = 'none';   // hide edit while running
   }
+}
+
+function _editSelectedRoute() {
+  if (_selectedRouteId == null) { toast('请先选择路线', 'yellow'); return; }
+  editRoute(_selectedRouteId, _selectedRouteName || '');
 }
 
 function _startSelectedRoute() {
@@ -2360,11 +2376,13 @@ function _execRoute(pts) {
 }
 
 function _stopRoute() {
-  routeRunning      = false;
-  routeRunPts       = [];
-  routeRunIdx       = 0;
-  _selectedRoutePts = null;
-  currentPath       = [];
+  routeRunning       = false;
+  routeRunPts        = [];
+  routeRunIdx        = 0;
+  _selectedRoutePts  = null;
+  _selectedRouteId   = null;
+  _selectedRouteName = null;
+  currentPath        = [];
   _updatePathCount();
   _setRouteBtn('hidden');
   fetch('/api/cancel', {method:'POST'}).catch(()=>{});
@@ -2376,9 +2394,11 @@ async function _navToRoutePoint() {
   if (!routeRunning || routeRunIdx >= routeRunPts.length) {
     if (routeRunning) {
       toast('✅ 路线执行完毕', 'green');
-      routeRunning      = false;
-      _selectedRoutePts = null;
-      currentPath       = [];
+      routeRunning       = false;
+      _selectedRoutePts  = null;
+      _selectedRouteId   = null;
+      _selectedRouteName = null;
+      currentPath        = [];
       _updatePathCount();
       _setRouteBtn('hidden');
     }
@@ -2432,8 +2452,6 @@ async function openRouteLibrary() {
         <div style="display:flex;gap:6px">
           <button class="btn-sm" style="font-size:.65rem;background:rgba(34,197,94,.12);border-color:var(--green);color:var(--green)"
             onclick="selectRoute(${r.id})">✓ 选择</button>
-          <button class="btn-sm" style="font-size:.65rem"
-            onclick="editRoute(${r.id},'${r.name.replace(/'/g,'')}')">✏️编辑</button>
           <button class="btn-sm" style="font-size:.65rem;background:rgba(239,68,68,.1);border-color:var(--red);color:var(--red)"
             onclick="deleteRoute(${r.id},this)">删除</button>
         </div>
@@ -2482,9 +2500,11 @@ async function selectRoute(id) {
     // Load points for map preview
     currentPath = route.points.map(p => ({wx: p.wx, wy: p.wy, name: p.name||''}));
     currentRouteName = route.name || '';
-    _selectedRoutePts = route.points.map(p => ({wx: p.wx, wy: p.wy, theta: p.theta ?? 0}));
+    _selectedRoutePts  = route.points.map(p => ({wx: p.wx, wy: p.wy, theta: p.theta ?? 0}));
+    _selectedRouteId   = route.id;
+    _selectedRouteName = route.name || '';
     _updatePathCount();
-    // Show ready-to-run button
+    // Show ready-to-run + edit buttons
     _setRouteBtn('ready');
     toast(`✅ 已选择「${route.name}」— 点▶运行路线开始执行`, 'green');
     if (mapData) renderMap();
