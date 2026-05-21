@@ -1463,7 +1463,7 @@ const _origPollStatus = pollStatus;
 
 // Update pose + re-render map from status data
 function updateMapFromStatus(d) {
-  if (d.pose) mapPose = d.pose;
+  if (d.pose && d.pose.x != null) mapPose = d.pose;
   if (navStatusCache && navStatusCache.goal) mapGoal = navStatusCache.goal;
   if (mapData) renderMap();
 }
@@ -1516,6 +1516,7 @@ async function newBlankMap() {
       btn.style.color = 'var(--green)';
       document.getElementById('map-scan-badge').style.display = 'inline';
       document.getElementById('draw-mode-btn').style.display = 'inline';
+      document.getElementById('locate-mode-btn').style.display = 'none';
       renderMap();
       toast('🆕 新建空白地图 — 可用✏️手绘工具绘制地形', 'green');
       fetchMap(true);
@@ -1662,11 +1663,12 @@ async function toggleMapMode() {
     _navPending = true;
     locateMode  = true;
     locatePending = null; _locateDragging = false;
-    // Hide draw tools immediately when entering nav mode flow
+    // Hide draw tools immediately; show locate button
     document.getElementById('draw-mode-btn').style.display  = 'none';
     document.getElementById('draw-tools-bar').style.display = 'none';
     if (drawMode) { drawMode = false; document.getElementById('map-canvas').style.cursor = 'crosshair'; }
     const lb = document.getElementById('locate-mode-btn');
+    lb.style.display     = 'inline';
     lb.style.background  = 'rgba(34,197,94,.2)';
     lb.style.borderColor = 'var(--green)';
     lb.style.color       = 'var(--green)';
@@ -1680,7 +1682,8 @@ async function toggleMapMode() {
     btn.style.borderColor = 'var(--green)';
     btn.style.color       = 'var(--green)';
     badge.style.display = 'inline';
-    document.getElementById('draw-mode-btn').style.display = 'inline';
+    document.getElementById('draw-mode-btn').style.display  = 'inline';
+    document.getElementById('locate-mode-btn').style.display = 'none'; // no locate in mapping mode
     try { await fetch('/api/set_mode', {method:'POST',
       headers:{'Content-Type':'application/json'}, body:'{"mode":1}'}); } catch(e){}
     toast('🔴 建图模式 — 操控机器人扫描，或点✏️手绘');
@@ -1702,6 +1705,7 @@ function _completeNavMode() {
   document.getElementById('draw-tools-bar').style.display = 'none';
   if (drawMode) { drawMode = false; document.getElementById('map-canvas').style.cursor = 'crosshair'; }
   const lb = document.getElementById('locate-mode-btn');
+  lb.style.display = 'inline';
   lb.style.background = ''; lb.style.borderColor = ''; lb.style.color = '';
   fetch('/api/set_mode', {method:'POST',headers:{'Content-Type':'application/json'}, body:'{"mode":2}'}).catch(()=>{});
   toast('✅ 定位完成，已进入导航模式', 'green');
