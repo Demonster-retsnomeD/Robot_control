@@ -1607,6 +1607,7 @@ async function newBlankMap() {
       document.getElementById('path-mode-btn').style.display  = 'none';
       if (pathMode) { pathMode=false; document.getElementById('path-tools-bar').style.display='none'; }
       mapWaypoints = []; // new map has no waypoints
+      mapPose = null;    // clear robot position marker
       currentPath = []; if (routeRunning) _stopRoute(); _updatePathCount();
       renderMap();
       toast('🆕 新建空白地图 — 可用✏️手绘工具绘制地形', 'green');
