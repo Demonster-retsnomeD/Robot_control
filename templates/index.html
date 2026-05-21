@@ -1662,6 +1662,10 @@ async function toggleMapMode() {
     _navPending = true;
     locateMode  = true;
     locatePending = null; _locateDragging = false;
+    // Hide draw tools immediately when entering nav mode flow
+    document.getElementById('draw-mode-btn').style.display  = 'none';
+    document.getElementById('draw-tools-bar').style.display = 'none';
+    if (drawMode) { drawMode = false; document.getElementById('map-canvas').style.cursor = 'crosshair'; }
     const lb = document.getElementById('locate-mode-btn');
     lb.style.background  = 'rgba(34,197,94,.2)';
     lb.style.borderColor = 'var(--green)';
@@ -2002,26 +2006,27 @@ function toggleLocateMode() {
 }
 
 async function _doSetPose(wx, wy, theta) {
+  // Show pose on map immediately (works even without robot)
+  mapPose = {x: wx, y: wy, theta};
+  locateMode = false;
+  const lb = document.getElementById('locate-mode-btn');
+  lb.style.background = ''; lb.style.borderColor = ''; lb.style.color = '';
+  if (_navPending) {
+    _completeNavMode();
+  } else {
+    toast(`📍 定位点已标注  θ:${(theta*180/Math.PI).toFixed(0)}°`, 'green');
+    _showLocalizingBadge();
+  }
+  renderMap();
+  // Then sync with robot (best-effort)
   try {
     const r = await fetch('/api/set_pose', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({x: wx, y: wy, theta})
     });
     const d = await r.json();
-    if (d.ok) {
-      mapPose = {x: wx, y: wy, theta};
-      locateMode = false;
-      if (_navPending) {
-        _completeNavMode();
-      } else {
-        const btn = document.getElementById('locate-mode-btn');
-        btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = '';
-        toast(`📍 定位成功  θ:${(theta*180/Math.PI).toFixed(0)}°`, 'green');
-        _showLocalizingBadge();
-      }
-      renderMap();
-    } else { toast('定位失败: ' + (d.error || ''), 'red'); }
-  } catch(e) { toast('发送失败', 'red'); }
+    if (!d.ok) toast('⚠️ 机器人定位同步失败: ' + (d.error || ''), 'red');
+  } catch(e) { /* robot not connected, pose shown locally */ }
 }
 
 function _showLocalizingBadge() {
