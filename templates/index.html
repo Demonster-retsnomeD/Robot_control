@@ -1653,45 +1653,38 @@ async function saveClickWaypoint() {
 }
 
 // ── Mapping mode (faster poll + mode switch) ──────────────────────────────
-let _navPending = false; // waiting for localization before completing nav mode switch
+let _navPending = false; // (kept for _doSetPose compat, no longer gates mode switch)
 
 async function toggleMapMode() {
   const btn   = document.getElementById('map-mode-btn');
   const badge = document.getElementById('map-scan-badge');
 
+  // Cancel any pending localize state when switching modes
+  if (locateMode) {
+    locateMode = false; locatePending = null; _locateDragging = false;
+    const lb = document.getElementById('locate-mode-btn');
+    lb.style.background = ''; lb.style.borderColor = ''; lb.style.color = '';
+  }
+  _navPending = false;
+
   if (mapScanMode) {
-    if (_navPending) {
-      // ── Already waiting for localization → cancel, stay in mapping mode ──
-      _navPending = false;
-      locateMode = false; locatePending = null; _locateDragging = false;
-      document.getElementById('draw-mode-btn').style.display  = 'inline';
-      document.getElementById('new-map-btn').style.display    = 'inline';
-      document.getElementById('draw-tools-bar').style.display = drawMode ? 'flex' : 'none';
-      const lb = document.getElementById('locate-mode-btn');
-      lb.style.display = 'none';
-      lb.style.background = ''; lb.style.borderColor = ''; lb.style.color = '';
-      toast('已取消切换导航模式，返回建图模式');
-      renderMap();
-      return;
-    }
-    // ── Mapping → Navigation: localize first ─────────────────────────────
-    _navPending = true;
-    locateMode  = true;
-    locatePending = null; _locateDragging = false;
-    // Hide draw/new-map tools immediately; show locate button
+    // ── Mapping → Navigation (direct, no mandatory localization) ──────────
+    mapScanMode = false;
+    btn.textContent    = t('map.mapping');
+    btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = '';
+    badge.style.display = 'none';
+    // Hide mapping tools; show locate button
     document.getElementById('draw-mode-btn').style.display  = 'none';
     document.getElementById('new-map-btn').style.display    = 'none';
     document.getElementById('draw-tools-bar').style.display = 'none';
     if (drawMode) { drawMode = false; document.getElementById('map-canvas').style.cursor = 'crosshair'; }
-    const lb = document.getElementById('locate-mode-btn');
-    lb.style.display     = 'inline';
-    lb.style.background  = 'rgba(34,197,94,.2)';
-    lb.style.borderColor = 'var(--green)';
-    lb.style.color       = 'var(--green)';
-    toast('📍 切换导航模式 — 请在地图上按住拖动，设定机器人当前位置和朝向（再次点击取消）');
+    document.getElementById('locate-mode-btn').style.display = 'inline';
+    try { await fetch('/api/set_mode', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body:'{"mode":2}'}); } catch(e){}
+    toast('🟢 导航模式 — 点📍定位机器人位置');
     renderMap();
   } else {
-    // ── Navigation → Mapping: no localization needed ──────────────────────
+    // ── Navigation → Mapping (direct) ────────────────────────────────────
     mapScanMode = true;
     btn.textContent = t('map.nav');
     btn.style.background = 'rgba(34,197,94,.15)';
@@ -1700,33 +1693,22 @@ async function toggleMapMode() {
     badge.style.display = 'inline';
     document.getElementById('draw-mode-btn').style.display  = 'inline';
     document.getElementById('new-map-btn').style.display    = 'inline';
-    document.getElementById('locate-mode-btn').style.display = 'none'; // no locate in mapping mode
+    document.getElementById('locate-mode-btn').style.display = 'none';
     try { await fetch('/api/set_mode', {method:'POST',
       headers:{'Content-Type':'application/json'}, body:'{"mode":1}'}); } catch(e){}
     toast('🔴 建图模式 — 操控机器人扫描，或点✏️手绘');
     clearTimeout(mapFetchTimer);
     mapFetchTimer = setTimeout(fetchMap, 800);
+    renderMap();
   }
 }
 
 function _completeNavMode() {
-  // Called after successful localization when _navPending
-  mapScanMode = false;
+  // Called after localization completes (via 📍 button, not mode switch)
   _navPending = false;
-  const btn   = document.getElementById('map-mode-btn');
-  const badge = document.getElementById('map-scan-badge');
-  btn.textContent    = t('map.mapping');
-  btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = '';
-  badge.style.display = 'none';
-  document.getElementById('draw-mode-btn').style.display  = 'none';
-  document.getElementById('new-map-btn').style.display    = 'none';
-  document.getElementById('draw-tools-bar').style.display = 'none';
-  if (drawMode) { drawMode = false; document.getElementById('map-canvas').style.cursor = 'crosshair'; }
   const lb = document.getElementById('locate-mode-btn');
-  lb.style.display = 'inline';
   lb.style.background = ''; lb.style.borderColor = ''; lb.style.color = '';
-  fetch('/api/set_mode', {method:'POST',headers:{'Content-Type':'application/json'}, body:'{"mode":2}'}).catch(()=>{});
-  toast('✅ 定位完成，已进入导航模式', 'green');
+  toast('✅ 定位完成', 'green');
   _showLocalizingBadge();
 }
 
@@ -2016,11 +1998,8 @@ function toggleLocateMode() {
   locateMode = !locateMode;
   locatePending = null; _locateDragging = false;
   if (!locateMode && _navPending) {
-    _navPending = false; // user canceled nav mode switch
-    // Still in mapping mode — restore draw/new-map buttons
-    document.getElementById('draw-mode-btn').style.display  = 'inline';
-    document.getElementById('new-map-btn').style.display    = 'inline';
-    toast('已取消切换导航模式，返回建图模式');
+    _navPending = false;
+    toast('已取消定位');
   }
   const btn = document.getElementById('locate-mode-btn');
   btn.style.background  = locateMode ? 'rgba(34,197,94,.2)' : '';
