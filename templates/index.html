@@ -364,6 +364,15 @@ body.user-mode #page-user{display:flex!important;align-items:stretch}
         <!-- ── 导航模式专属 ── -->
         <button class="btn-sm" id="locate-mode-btn" onclick="toggleLocateMode()" style="font-size:.65rem">📍 定位</button>
         <span id="localizing-badge" style="display:none;font-size:.62rem;padding:2px 8px;border-radius:10px"></span>
+        <!-- 导航子模式 -->
+        <span id="nav-submode-bar" style="display:inline-flex;gap:2px;background:var(--border);border-radius:7px;padding:2px">
+          <button id="submode-route-btn" class="btn-sm" onclick="setNavSubMode('route')"
+            style="font-size:.63rem;background:#fff;border-color:var(--accent);color:var(--accent)">🗺 固定路径</button>
+          <button id="submode-rt-btn" class="btn-sm" onclick="setNavSubMode('realtime')"
+            style="font-size:.63rem">🎮 实时控制</button>
+        </span>
+        <button class="btn-sm" id="rt-cancel-btn" onclick="_cancelRealtimeNav()"
+          style="display:none;font-size:.65rem;background:rgba(239,68,68,.12);border-color:var(--red);color:var(--red)">⏹ 取消导航</button>
         <button class="btn-sm" id="nav-route-btn" onclick="openRouteLibrary()" style="font-size:.65rem">🛤 选择路线</button>
         <button class="btn-sm" id="route-run-btn" onclick="_startSelectedRoute()" style="display:none;font-size:.65rem;background:rgba(34,197,94,.12);border-color:var(--green);color:var(--green)">▶ 运行路线</button>
         <button class="btn-sm" id="route-edit-btn" onclick="_editSelectedRoute()" style="display:none;font-size:.65rem">✏️ 编辑路线</button>
@@ -1539,6 +1548,27 @@ function renderMap() {
     ctx.restore();
   }
 
+  // ── Realtime nav target marker ────────────────────────────────────────────
+  if (realtimeTarget && !mapScanMode) {
+    const [tx, ty] = worldToCanvas(realtimeTarget.wx, realtimeTarget.wy, mapData, cw, ch);
+    const tr = 10 / mapZoom;
+    ctx.save();
+    ctx.strokeStyle = '#0ea5e9'; ctx.lineWidth = 2 / mapZoom;
+    // Outer circle
+    ctx.beginPath(); ctx.arc(tx, ty, tr, 0, Math.PI * 2); ctx.stroke();
+    // Inner dot
+    ctx.beginPath(); ctx.arc(tx, ty, 3 / mapZoom, 0, Math.PI * 2);
+    ctx.fillStyle = '#0ea5e9'; ctx.fill();
+    // Crosshair lines
+    ctx.beginPath();
+    ctx.moveTo(tx - tr * 1.8, ty); ctx.lineTo(tx - tr * 1.1, ty);
+    ctx.moveTo(tx + tr * 1.1, ty); ctx.lineTo(tx + tr * 1.8, ty);
+    ctx.moveTo(tx, ty - tr * 1.8); ctx.lineTo(tx, ty - tr * 1.1);
+    ctx.moveTo(tx, ty + tr * 1.1); ctx.lineTo(tx, ty + tr * 1.8);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   // ── Route path overlay ────────────────────────────────────────────────────
   const _drawPts = (routeRunning && routeRunPts.length) ? routeRunPts.map(p=>({wx:p.wx,wy:p.wy})) : currentPath;
   if (_drawPts.length > 0) {
@@ -1684,7 +1714,8 @@ async function newBlankMap() {
       ['draw-mode-btn','new-map-btn','path-mode-btn','charge-set-btn']
         .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'inline'; });
       // Hide nav tools
-      ['locate-mode-btn','nav-route-btn','charge-go-btn','route-run-btn','route-edit-btn']
+      ['locate-mode-btn','nav-route-btn','charge-go-btn','route-run-btn','route-edit-btn',
+       'nav-submode-bar','rt-cancel-btn']
         .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
       if (pathMode) { pathMode=false; document.getElementById('path-tools-bar').style.display='none'; }
       mapWaypoints = []; // new map has no waypoints
@@ -1751,6 +1782,13 @@ function initMapClick() {
     const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
     const cy = (e.clientY - rect.top)  * (canvas.height / rect.height);
     const [wx, wy] = canvasToWorld(cx, cy, mapData, canvas.width, canvas.height);
+
+    // Realtime control mode: click → immediate single-point nav
+    if (navSubMode === 'realtime' && !mapScanMode && !locateMode) {
+      const [wx, wy] = canvasToWorld(cx, cy, mapData, canvas.width, canvas.height);
+      _realtimeNav(wx, wy);
+      return;
+    }
 
     // Measure mode: intercept clicks for A→B distance
     if (measureMode) {
@@ -1855,6 +1893,10 @@ async function toggleMapMode() {
     // Show nav-only tools
     ['locate-mode-btn','nav-route-btn','charge-go-btn']
       .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'inline'; });
+    const nsb = document.getElementById('nav-submode-bar');
+    if (nsb) nsb.style.display = 'inline-flex';
+    // Reset to route sub-mode
+    navSubMode = 'route'; setNavSubMode('route');
     try { await fetch('/api/set_mode', {method:'POST',
       headers:{'Content-Type':'application/json'}, body:'{"mode":2}'}); } catch(e){}
     toast('🟢 导航模式 — 点📍定位，选🛤路线运行');
@@ -1867,12 +1909,14 @@ async function toggleMapMode() {
     btn.style.borderColor = 'var(--green)';
     btn.style.color      = 'var(--green)';
     badge.style.display  = 'inline';
-    // Stop any running route and clear selection
+    // Stop any running route and clear selection + realtime state
     if (routeRunning) _stopRoute();
     _selectedRoutePts = null; _selectedRouteId = null; _selectedRouteName = null;
+    realtimeTarget = null; navSubMode = 'route';
     currentPath = []; _updatePathCount();
     // Hide nav-only tools
-    ['locate-mode-btn','nav-route-btn','charge-go-btn','route-run-btn','route-edit-btn']
+    ['locate-mode-btn','nav-route-btn','charge-go-btn','route-run-btn','route-edit-btn',
+     'nav-submode-bar','rt-cancel-btn']
       .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
     // Show mapping-only tools
     ['draw-mode-btn','new-map-btn','path-mode-btn','charge-set-btn']
@@ -2248,6 +2292,59 @@ let routeRunPts       = [];          // points being executed
 let _selectedRoutePts  = null;        // loaded but not yet running (preview state)
 let _selectedRouteId   = null;        // id of selected route (for edit)
 let _selectedRouteName = null;        // name of selected route (for edit)
+let navSubMode         = 'route';     // 'route' | 'realtime'
+let realtimeTarget     = null;        // {wx,wy} single-point realtime nav target
+
+function setNavSubMode(mode) {
+  navSubMode = mode;
+  const rb  = document.getElementById('submode-route-btn');
+  const rtb = document.getElementById('submode-rt-btn');
+  if (mode === 'route') {
+    if (rb)  { rb.style.background = '#fff'; rb.style.borderColor = 'var(--accent)'; rb.style.color = 'var(--accent)'; }
+    if (rtb) { rtb.style.background = ''; rtb.style.borderColor = ''; rtb.style.color = ''; }
+    // Clear realtime state
+    realtimeTarget = null;
+    const rc = document.getElementById('rt-cancel-btn');
+    if (rc) rc.style.display = 'none';
+    // Show route tools
+    const nrb = document.getElementById('nav-route-btn');
+    if (nrb) nrb.style.display = 'inline';
+  } else {
+    if (rtb) { rtb.style.background = '#fff'; rtb.style.borderColor = 'var(--accent)'; rtb.style.color = 'var(--accent)'; }
+    if (rb)  { rb.style.background = ''; rb.style.borderColor = ''; rb.style.color = ''; }
+    // Stop any running route; hide route tools
+    if (routeRunning) _stopRoute();
+    _selectedRoutePts = null; _selectedRouteId = null; _selectedRouteName = null;
+    _setRouteBtn('hidden');
+    const nrb = document.getElementById('nav-route-btn');
+    if (nrb) nrb.style.display = 'none';
+    toast('🎮 实时控制 — 点击地图任意位置，机器人即走到该点');
+  }
+  if (mapData) renderMap();
+}
+
+async function _realtimeNav(wx, wy) {
+  realtimeTarget = {wx, wy};
+  renderMap();
+  try {
+    const r = await fetch('/api/nav', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({x: wx, y: wy, theta: 0})});
+    const d = await r.json();
+    const rc = document.getElementById('rt-cancel-btn');
+    if (rc) rc.style.display = 'inline';
+    if (d.status === 'success' || d.ok !== false) toast(`🎮 → (${wx.toFixed(1)}, ${wy.toFixed(1)})`);
+    else toast('导航失败: ' + (d.error||''), 'red');
+  } catch(e) { toast('导航指令发送失败', 'red'); }
+}
+
+function _cancelRealtimeNav() {
+  realtimeTarget = null;
+  const rc = document.getElementById('rt-cancel-btn');
+  if (rc) rc.style.display = 'none';
+  fetch('/api/cancel', {method:'POST'}).catch(()=>{});
+  toast('⏹ 导航已取消');
+  if (mapData) renderMap();
+}
 
 function togglePathMode() {
   pathMode = !pathMode;
