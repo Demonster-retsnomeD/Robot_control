@@ -32,8 +32,15 @@
     }
     .content {
       display: grid;
-      grid-template-columns: 1fr 320px;
+      grid-template-columns: 200px 1fr 320px;
       gap: 24px;
+    }
+    .left-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+      max-height: 750px;
     }
     .canvas-wrapper {
       background: #ffffff;
@@ -176,6 +183,23 @@
   <h1>🛣️ 机器人路径网络规划</h1>
 
   <div class="content">
+    <div class="left-panel">
+      <div class="panel">
+        <h3>🤖 机器人设置</h3>
+        <div style="font-size: 12px; margin-bottom: 12px; padding: 8px; background: #f1f5f9; border-radius: 4px;">
+          <label style="display: flex; align-items: center; gap: 4px;">
+            数量:
+            <button onclick="setRobotCount(Math.max(1, parseInt(document.getElementById('robotCount').value) - 1))" style="width: 28px; height: 28px; padding: 0; cursor: pointer; font-size: 12px;">−</button>
+            <input type="number" id="robotCount" value="3" min="1" max="5" style="width: 40px; text-align: center; font-size: 12px;" onchange="setRobotCount(this.value)">
+            <button onclick="setRobotCount(Math.min(5, parseInt(document.getElementById('robotCount').value) + 1))" style="width: 28px; height: 28px; padding: 0; cursor: pointer; font-size: 12px;">+</button>
+          </label>
+        </div>
+
+        <div style="font-size: 11px; margin-bottom: 6px; color: #0f172a; font-weight: 600;">速度 (m/s)</div>
+        <div id="speedSettingsContainer" style="font-size: 11px;"></div>
+      </div>
+    </div>
+
     <div class="canvas-wrapper">
       <div class="overlay" id="editOverlay">✏️ 编辑模式 - 选择起点，点击添加路径</div>
       <canvas id="map" width="700" height="700"></canvas>
@@ -242,21 +266,6 @@
       <div class="panel">
         <h3>📋 任务队列</h3>
         <div id="queue" style="max-height: 100px; overflow-y: auto;"></div>
-      </div>
-
-      <div class="panel">
-        <h3>🤖 机器人设置</h3>
-        <div style="font-size: 12px; margin-bottom: 12px; padding: 8px; background: #f1f5f9; border-radius: 4px;">
-          <label style="display: flex; align-items: center; gap: 8px;">
-            数量:
-            <button onclick="setRobotCount(Math.max(1, parseInt(document.getElementById('robotCount').value) - 1))" style="width: 30px; height: 30px; padding: 0; cursor: pointer;">−</button>
-            <input type="number" id="robotCount" value="3" min="1" max="5" style="width: 40px; text-align: center;" onchange="setRobotCount(this.value)">
-            <button onclick="setRobotCount(Math.min(5, parseInt(document.getElementById('robotCount').value) + 1))" style="width: 30px; height: 30px; padding: 0; cursor: pointer;">+</button>
-          </label>
-        </div>
-
-        <div style="font-size: 12px; margin-bottom: 8px; color: #0f172a; font-weight: 600;">速度设置 (m/s)</div>
-        <div id="speedSettingsContainer"></div>
       </div>
 
       <div class="panel">
@@ -1241,15 +1250,15 @@ function updateSpeedSettings() {
     const speed = robot ? robot.speed : defaultSpeeds[i - 1] || 5;
 
     const div = document.createElement('div');
-    div.style.fontSize = '12px';
-    div.style.marginBottom = '8px';
+    div.style.fontSize = '11px';
+    div.style.marginBottom = '6px';
     div.style.display = 'flex';
     div.style.alignItems = 'center';
-    div.style.gap = '8px';
+    div.style.gap = '4px';
 
     const label = document.createElement('label');
-    label.textContent = `机器人${i}:`;
-    label.style.minWidth = '60px';
+    label.textContent = `R${i}:`;
+    label.style.minWidth = '25px';
 
     const input = document.createElement('input');
     input.type = 'number';
@@ -1257,15 +1266,12 @@ function updateSpeedSettings() {
     input.min = '1';
     input.max = '20';
     input.step = '1';
-    input.style.width = '50px';
+    input.style.width = '45px';
+    input.style.fontSize = '11px';
     input.onchange = () => setRobotSpeed(i, input.value);
-
-    const unit = document.createElement('span');
-    unit.textContent = 'm/s';
 
     div.appendChild(label);
     div.appendChild(input);
-    div.appendChild(unit);
     container.appendChild(div);
   }
 }
