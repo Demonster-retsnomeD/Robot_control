@@ -429,6 +429,11 @@ def index():
 def mobile():
     return render_template("mobile.html", username=current_user.username, role=current_user.role)
 
+@app.route("/route-planning")
+@login_required
+def route_planning():
+    return render_template("combined-sim.html", username=current_user.username, role=current_user.role)
+
 @app.route("/api/version")
 def api_version():
     """Returns a hash of template+static mtime. Client polls this to detect code changes."""
