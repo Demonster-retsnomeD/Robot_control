@@ -1239,9 +1239,24 @@ function assignTask(task) {
 }
 
 function updateRobots(dt) {
-  // 分配待处理的任务
+  // 分配待处理的任务（同目标地点独占）
   for (const task of taskQueue) {
-    if (task.status === 'pending') assignTask(task);
+    if (task.status === 'pending') {
+      // 检查该目标地点是否已有机器人在处理或服务
+      const hasRobotAtTarget = Object.values(robots).some(r =>
+        r.currentTask && r.currentTask.target === task.target && (r.status === 'moving' || r.status === 'serving')
+      );
+
+      // 检查是否有其他处于assigned状态的同目标任务（防止多个任务竞争）
+      const hasOtherAssignedAtTarget = taskQueue.some(t =>
+        t !== task && t.target === task.target && t.status === 'assigned'
+      );
+
+      // 只有在该目标地点没有其他机器人或任务处理时才分配
+      if (!hasRobotAtTarget && !hasOtherAssignedAtTarget) {
+        assignTask(task);
+      }
+    }
   }
 
   // 更新机器人位置
