@@ -183,25 +183,23 @@
 
     <div class="sidebar">
       <div class="panel">
-        <h3>📐 点位配置</h3>
-        <div style="font-size: 12px; margin-bottom: 8px;">
-          <label>机器人: <input type="number" id="numRobots" value="3" min="1" max="5" style="width: 50px;"> 个</label>
+        <h3>📐 点位编辑</h3>
+        <button id="btnPointEdit" class="btn-edit" onclick="togglePointEditMode()" style="background: #06b6d4; margin-top: 0;">✏️ 编辑点位</button>
+        <button id="btnPointSave" class="btn-edit" onclick="savePointConfigUI()" style="background: #10b981; margin-top: 4px; display: none;">💾 保存完成</button>
+
+        <div id="pointEditPanel" style="display: none; margin-top: 12px; padding: 12px; border: 2px dashed #0ea5e9; border-radius: 6px;">
+          <div style="font-size: 12px; color: #0ea5e9; margin-bottom: 8px; font-weight: bold;">创建模式: <span id="modeIndicator">—</span></div>
+          <button class="btn-primary" onclick="activateCreationMode('patrol')" style="background: #10b981;">📍 轮巡点</button>
+          <button class="btn-primary" onclick="activateCreationMode('call')" style="background: #8b5cf6;">📞 呼叫点</button>
+          <div style="font-size: 11px; color: #64748b; margin-top: 8px;">点击地图上的空白区域创建新点</div>
         </div>
-        <div style="font-size: 12px; margin-bottom: 8px;">
-          <label>轮巡点: <input type="number" id="numPatrol" value="5" min="2" max="10" style="width: 50px;"> 个</label>
-        </div>
-        <div style="font-size: 12px; margin-bottom: 8px;">
-          <label>呼叫点: <input type="number" id="numCall" value="3" min="1" max="10" style="width: 50px;"> 个</label>
-        </div>
-        <button id="btnPointEdit" class="btn-edit" onclick="togglePointEditMode()" style="background: #06b6d4; margin-top: 8px;">✏️ 编辑点位</button>
-        <button id="btnPointSave" class="btn-edit" onclick="savePointConfigUI()" style="background: #10b981; margin-top: 4px; display: none;">💾 保存点位</button>
 
         <div id="pointListPanel" style="display: none; margin-top: 12px; border-top: 1px solid #e2e8f0; padding-top: 8px;">
-          <h4 style="font-size: 12px; margin-bottom: 8px;">📍 当前点位</h4>
-          <div id="pointList" style="max-height: 150px; overflow-y: auto; font-size: 11px;"></div>
+          <h4 style="font-size: 12px; margin-bottom: 8px;">📍 已有点位</h4>
+          <div id="pointList" style="max-height: 200px; overflow-y: auto; font-size: 11px;"></div>
         </div>
 
-        <div id="pointConfigDisplay" style="font-size: 11px; color: #64748b; margin-top: 8px;">未配置</div>
+        <div id="pointConfigDisplay" style="font-size: 11px; color: #64748b; margin-top: 8px;">未编辑</div>
       </div>
 
       <div class="panel">
@@ -281,6 +279,7 @@ let hoveredIntermediatePoint = null;
 let hoveredPathSegment = null; // { pathKey, segmentIndex }
 let draggedPointLabel = null;
 let selectedPointLabel = null; // 当前选中的点位（仅在点位编辑模式）
+let pointCreationMode = null; // 'patrol' | 'call' | null
 
 const robots = {};
 
@@ -295,79 +294,85 @@ function fromRoman(str) {
   return romanMap[str] || 0;
 }
 
-function initializeKeyPoints(numRobots = 3, numPatrolPoints = 5, numCallPoints = 3) {
-  const newKeyPoints = {};
-  let xOffset = 50;
-  const xStep = 250;
-  const yBase = 350;
-  const ySpacing = 60;
+function getNextPatrolLabel() {
+  // 找到最大的字母标签
+  let maxIdx = -1;
+  for (const label of Object.keys(keyPoints)) {
+    if (/^[A-Z]$/.test(label)) {
+      maxIdx = Math.max(maxIdx, label.charCodeAt(0) - 65);
+    }
+  }
+  return String.fromCharCode(65 + maxIdx + 1);
+}
 
-  // 机器人：蓝色，左侧
-  for (let i = 1; i <= numRobots; i++) {
-    const y = yBase - (numRobots - 1) * ySpacing / 2 + (i - 1) * ySpacing;
-    newKeyPoints[String(i)] = {
-      x: xOffset,
-      y: Math.max(50, Math.min(y, 650)),
-      label: String(i),
-      color: '#3b82f6',
-      type: 'robot'
-    };
+function getNextCallLabel() {
+  // 找到最大的罗马数字
+  let maxNum = 0;
+  for (const label of Object.keys(keyPoints)) {
+    const pt = keyPoints[label];
+    if (pt.type === 'call') {
+      const num = fromRoman(label);
+      maxNum = Math.max(maxNum, num);
+    }
+  }
+  return toRoman(maxNum + 1);
+}
+
+function createPoint(type, x, y) {
+  let label;
+  if (type === 'patrol') {
+    label = getNextPatrolLabel();
+  } else if (type === 'call') {
+    label = getNextCallLabel();
+  } else {
+    return;
   }
 
-  // 轮巡点位：绿色，中间
-  xOffset += xStep;
-  for (let i = 0; i < numPatrolPoints; i++) {
-    const label = String.fromCharCode(65 + i); // A, B, C, ...
-    const y = yBase - (numPatrolPoints - 1) * ySpacing / 2 + i * ySpacing;
-    newKeyPoints[label] = {
-      x: xOffset,
-      y: Math.max(50, Math.min(y, 650)),
-      label: label,
-      color: '#10b981',
-      type: 'patrol'
-    };
-  }
+  const colors = { patrol: '#10b981', call: '#8b5cf6', robot: '#3b82f6' };
+  keyPoints[label] = {
+    x: Math.round(x * 100) / 100,
+    y: Math.round(y * 100) / 100,
+    label: label,
+    color: colors[type],
+    type: type
+  };
 
-  // 呼叫点位：紫色，右侧
-  xOffset += xStep;
-  for (let i = 1; i <= numCallPoints; i++) {
-    const label = toRoman(i);
-    const y = yBase - (numCallPoints - 1) * ySpacing / 2 + (i - 1) * ySpacing;
-    newKeyPoints[label] = {
-      x: xOffset,
-      y: Math.max(50, Math.min(y, 650)),
-      label: label,
-      color: '#8b5cf6',
-      type: 'call'
-    };
-  }
+  console.log(`[点位] 创建${type}点位 ${label} (${keyPoints[label].x}, ${keyPoints[label].y})`);
+  updatePointList();
+}
 
-  pointConfig = { numRobots, numPatrolPoints, numCallPoints };
-  return newKeyPoints;
+function deletePoint(label) {
+  if (label in keyPoints) {
+    delete keyPoints[label];
+    console.log(`[点位] 删除点位 ${label}`);
+    updatePointList();
+  }
+}
+
+function activateCreationMode(type) {
+  pointCreationMode = type;
+  const modeText = type === 'patrol' ? '📍 轮巡点' : '📞 呼叫点';
+  document.getElementById('modeIndicator').textContent = modeText;
+  console.log(`[点位] 激活创建模式: ${type}`);
 }
 
 function loadPointConfig() {
-  const saved = localStorage.getItem('pointConfig');
-  if (saved) {
+  const savedKeys = localStorage.getItem('keyPoints');
+  if (savedKeys) {
     try {
-      pointConfig = JSON.parse(saved);
-      const savedKeys = localStorage.getItem('keyPoints');
-      if (savedKeys) {
-        keyPoints = JSON.parse(savedKeys);
-        console.log(`[点位] 从localStorage加载，${pointConfig.numRobots}机+${pointConfig.numPatrolPoints}轮+${pointConfig.numCallPoints}呼`);
-        return;
-      }
+      keyPoints = JSON.parse(savedKeys);
+      console.log(`[点位] 从localStorage加载，共${Object.keys(keyPoints).length}个点位`);
+      return;
     } catch (e) {
-      console.warn('[点位] localStorage解析失败，使用默认配置');
+      console.warn('[点位] localStorage解析失败');
     }
   }
-  // 默认配置
-  keyPoints = initializeKeyPoints(3, 5, 3);
-  console.log('[点位] 使用默认配置：3机+5轮+3呼');
+  // 空配置，等待用户创建
+  keyPoints = {};
+  console.log('[点位] 未加载任何点位，等待用户创建');
 }
 
 function savePointConfig() {
-  localStorage.setItem('pointConfig', JSON.stringify(pointConfig));
   localStorage.setItem('keyPoints', JSON.stringify(keyPoints));
   console.log('[点位] 已保存到localStorage');
 }
@@ -587,7 +592,35 @@ canvas.addEventListener('mouseup', (e) => {
 // 鼠标点击
 canvas.addEventListener('click', (e) => {
   if (!editMode && !deleteMode && !pointEditMode) return;
-  if (pointEditMode) return;  // 点位编辑模式不处理点击
+
+  // 点位编辑模式：创建新点或不处理
+  if (pointEditMode) {
+    if (pointCreationMode) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
+      const px = x / SCALE;
+      const py = y / SCALE;
+
+      // 检查是否点击到已有的点
+      let hitPoint = false;
+      for (const [key, pt] of Object.entries(keyPoints)) {
+        const dist = Math.sqrt(Math.pow(px - pt.x, 2) + Math.pow(py - pt.y, 2));
+        if (dist < 2.0) {
+          hitPoint = true;
+          break;
+        }
+      }
+
+      // 点击到空白区域才创建新点
+      if (!hitPoint) {
+        createPoint(pointCreationMode, px, py);
+      }
+    }
+    return;
+  }
 
   // 删除模式：点击线段分割路径
   if (deleteMode && hoveredPathSegment) {
@@ -785,12 +818,15 @@ function togglePointEditMode() {
   pointEditMode = !pointEditMode;
   editMode = false;
   deleteMode = false;
+  pointCreationMode = null;
 
   const btnPointEdit = document.getElementById('btnPointEdit');
   const btnPointSave = document.getElementById('btnPointSave');
   const btnEdit = document.getElementById('btnEdit');
   const btnStart = document.getElementById('btnStart');
+  const pointEditPanel = document.getElementById('pointEditPanel');
   const pointListPanel = document.getElementById('pointListPanel');
+  const modeIndicator = document.getElementById('modeIndicator');
 
   if (pointEditMode) {
     btnPointEdit.textContent = '✏️ 编辑中...';
@@ -798,8 +834,9 @@ function togglePointEditMode() {
     btnPointSave.style.display = 'inline-block';
     btnEdit.disabled = true;
     btnStart.disabled = true;
+    pointEditPanel.style.display = 'block';
     pointListPanel.style.display = 'block';
-    selectedPointLabel = null;
+    modeIndicator.textContent = '—';
     updatePointList();
     console.log('[点位] 进入编辑模式');
   } else {
@@ -807,44 +844,60 @@ function togglePointEditMode() {
     btnPointEdit.style.background = '#06b6d4';
     btnPointSave.style.display = 'none';
     btnEdit.disabled = false;
-    btnStart.disabled = false;
+    btnStart.disabled = Object.keys(pathNetwork).length === 0;
+    pointEditPanel.style.display = 'none';
     pointListPanel.style.display = 'none';
-    selectedPointLabel = null;
     console.log('[点位] 退出编辑模式');
   }
 }
 
 function savePointConfigUI() {
-  const num1 = parseInt(document.getElementById('numRobots').value) || 3;
-  const num2 = parseInt(document.getElementById('numPatrol').value) || 5;
-  const num3 = parseInt(document.getElementById('numCall').value) || 3;
+  // 检查是否有轮巡点
+  const hasPatrol = Object.values(keyPoints).some(pt => pt.type === 'patrol');
+  if (!hasPatrol) {
+    alert('至少需要创建1个轮巡点');
+    return;
+  }
 
-  keyPoints = initializeKeyPoints(num1, num2, num3);
   savePointConfig();
   initializeRobots();
   initializeCallStates();
   pointEditMode = false;
+  pointCreationMode = null;
 
   document.getElementById('btnPointEdit').textContent = '✏️ 编辑点位';
   document.getElementById('btnPointEdit').style.background = '#06b6d4';
   document.getElementById('btnPointSave').style.display = 'none';
   document.getElementById('btnEdit').disabled = false;
   document.getElementById('btnStart').disabled = false;
+  document.getElementById('pointEditPanel').style.display = 'none';
+  document.getElementById('pointListPanel').style.display = 'none';
 
   updatePointConfigDisplay();
   updateCallButtons();
-  console.log(`[点位] 已保存：${num1}机+${num2}轮+${num3}呼`);
+  const patrolCount = Object.values(keyPoints).filter(p => p.type === 'patrol').length;
+  const callCount = Object.values(keyPoints).filter(p => p.type === 'call').length;
+  console.log(`[点位] 已保存：${patrolCount}轮+${callCount}呼，3个机器人就位`);
 }
 
 function updatePointConfigDisplay() {
-  if (pointConfig) {
-    document.getElementById('pointConfigDisplay').textContent = `${pointConfig.numRobots}机 · ${pointConfig.numPatrolPoints}轮 · ${pointConfig.numCallPoints}呼`;
+  const patrolCount = Object.values(keyPoints).filter(p => p.type === 'patrol').length;
+  const callCount = Object.values(keyPoints).filter(p => p.type === 'call').length;
+  if (patrolCount > 0 || callCount > 0) {
+    document.getElementById('pointConfigDisplay').textContent = `${patrolCount}轮 · ${callCount}呼 · 3🤖`;
+  } else {
+    document.getElementById('pointConfigDisplay').textContent = '未编辑';
   }
 }
 
 function updatePointList() {
   const listDiv = document.getElementById('pointList');
   listDiv.innerHTML = '';
+
+  if (Object.keys(keyPoints).length === 0) {
+    listDiv.innerHTML = '<div style="padding: 8px; color: #64748b; font-size: 11px;">无点位，点击上方按钮创建</div>';
+    return;
+  }
 
   const typeIcons = { robot: '🤖', patrol: '📍', call: '📞' };
   const typeNames = { robot: '机器人', patrol: '轮巡点', call: '呼叫点' };
@@ -854,22 +907,33 @@ function updatePointList() {
     item.style.padding = '6px 8px';
     item.style.marginBottom = '4px';
     item.style.borderRadius = '4px';
-    item.style.cursor = 'pointer';
-    item.style.background = selectedPointLabel === label ? '#0ea5e9' : '#f1f5f9';
-    item.style.color = selectedPointLabel === label ? '#ffffff' : '#0f172a';
-    item.style.border = `2px solid ${selectedPointLabel === label ? '#0ea5e9' : 'transparent'}`;
-    item.onclick = () => selectPoint(label);
+    item.style.background = '#f1f5f9';
+    item.style.border = '1px solid #e2e8f0';
+    item.style.display = 'flex';
+    item.style.justifyContent = 'space-between';
+    item.style.alignItems = 'center';
+    item.style.fontSize = '11px';
 
     const typeIcon = typeIcons[pt.type] || '?';
     const typeName = typeNames[pt.type] || '?';
-    item.innerHTML = `${typeIcon} ${label} (${typeName})<br/><span style="font-size: 10px; opacity: 0.7;">x=${pt.x.toFixed(0)}, y=${pt.y.toFixed(0)}</span>`;
+    const info = document.createElement('span');
+    info.innerHTML = `${typeIcon} <strong>${label}</strong> (${pt.x.toFixed(0)},${pt.y.toFixed(0)})`;
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = '✕';
+    deleteBtn.style.background = 'transparent';
+    deleteBtn.style.border = 'none';
+    deleteBtn.style.color = '#ef4444';
+    deleteBtn.style.cursor = 'pointer';
+    deleteBtn.style.fontSize = '12px';
+    deleteBtn.style.fontWeight = 'bold';
+    deleteBtn.style.padding = '0 4px';
+    deleteBtn.onclick = () => deletePoint(label);
+
+    item.appendChild(info);
+    item.appendChild(deleteBtn);
     listDiv.appendChild(item);
   }
-}
-
-function selectPoint(label) {
-  selectedPointLabel = label;
-  updatePointList();
 }
 
 function updateCallButtons() {
@@ -902,26 +966,37 @@ function toggleSimulation() {
 }
 
 function initializeRobots() {
-  // 根据keyPoints中的robot类型点位初始化机器人
+  // 找第一个轮巡点作为所有机器人的起始位置
+  let startPt = null;
   for (const [label, pt] of Object.entries(keyPoints)) {
-    if (pt.type === 'robot') {
-      const robotId = parseInt(label);
-      const speeds = [5, 10, 3, 4, 6];  // 默认速度列表
-      robots[robotId] = {
-        x: pt.x,
-        y: pt.y,
-        speed: speeds[robotId - 1] || 5,
-        color: '#ef4444',  // 运动时的红色
-        patrolMode: true,
-        path: null,
-        pathProgress: 0,
-        serviceTarget: null,
-        serviceStart: null,
-        returning: false
-      };
+    if (pt.type === 'patrol') {
+      startPt = pt;
+      break;
     }
   }
-  console.log(`[机器人] 已初始化${Object.keys(robots).length}个机器人`);
+
+  if (!startPt) {
+    console.warn('[机器人] 未找到轮巡点，机器人无法初始化');
+    return;
+  }
+
+  // 初始化3个机器人，都在第一个轮巡点
+  const speeds = [5, 10, 3];
+  for (let i = 1; i <= 3; i++) {
+    robots[i] = {
+      x: startPt.x,
+      y: startPt.y,
+      speed: speeds[i - 1],
+      color: '#ef4444',  // 运动时的红色
+      patrolMode: true,
+      path: null,
+      pathProgress: 0,
+      serviceTarget: null,
+      serviceStart: null,
+      returning: false
+    };
+  }
+  console.log(`[机器人] 已初始化3个机器人于${startPt.label}(${startPt.x}, ${startPt.y})`);
 }
 
 function resetRobots() {
