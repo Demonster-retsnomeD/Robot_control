@@ -1249,9 +1249,21 @@ function updateRobots(dt) {
 
             // 然后添加从nearestLabel到target的路径
             const routePath = getFullPath(nodeRoute);
-            console.log(`[机器人${id}]routePath长度=${routePath.length}, fullPath长度=${fullPath.length}`);
+            console.log(`[机器人${id}]routePath长度=${routePath.length}, nodeRoute=${JSON.stringify(nodeRoute)}, fullPath长度=${fullPath.length}`);
+
             if (routePath && routePath.length > 0) {
-              fullPath.push(...routePath);
+              // 确保routePath从nearestLabel开始（跳过之前的节点）
+              let startIdx = 0;
+              for (let i = 0; i < routePath.length; i++) {
+                const pt = routePath[i];
+                const dist = Math.sqrt(Math.pow(pt.x - nearestPoint.x, 2) + Math.pow(pt.y - nearestPoint.y, 2));
+                if (dist < 2.0) {
+                  startIdx = i;
+                  break;
+                }
+              }
+              console.log(`[机器人${id}]routePath起点移动到index=${startIdx}`);
+              fullPath.push(...routePath.slice(startIdx));
             }
 
             if (fullPath.length > 1) {
