@@ -260,7 +260,6 @@ const robots = {
 
 // 每个地点的待处理请求（最后一次呼叫覆盖）
 let pendingRequests = {};  // { 'C': true, 'D': false, ... }
-let completedTasks = 0;
 let robotStateBeforeEdit = null; // 编辑前保存机器人状态
 let cachedGraph = null; // 缓存的路径图
 let cachedPathLengths = null;
@@ -556,11 +555,12 @@ function toggleEditMode() {
       robotStateBeforeEdit[id] = {
         x: robot.x,
         y: robot.y,
-        status: robot.status,
+        patrolMode: robot.patrolMode,
         path: robot.path ? [...robot.path] : null,
         pathProgress: robot.pathProgress,
-        currentTask: robot.currentTask,
-        isDefaultShuttle: robot.isDefaultShuttle
+        serviceTarget: robot.serviceTarget,
+        serviceStart: robot.serviceStart,
+        servicePath: robot.servicePath ? [...robot.servicePath] : null
       };
     }
   } else {
@@ -569,11 +569,12 @@ function toggleEditMode() {
       for (const [id, state] of Object.entries(robotStateBeforeEdit)) {
         robots[id].x = state.x;
         robots[id].y = state.y;
-        robots[id].status = state.status;
+        robots[id].patrolMode = state.patrolMode;
         robots[id].path = state.path;
         robots[id].pathProgress = state.pathProgress;
-        robots[id].currentTask = state.currentTask;
-        robots[id].isDefaultShuttle = state.isDefaultShuttle;
+        robots[id].serviceTarget = state.serviceTarget;
+        robots[id].serviceStart = state.serviceStart;
+        robots[id].servicePath = state.servicePath;
       }
       robotStateBeforeEdit = null;
     }
@@ -604,13 +605,12 @@ function toggleSimulation() {
 
 function resetRobots() {
   // 重置所有机器人到初始位置
-  robots[1] = { x: 10, y: 35, speed: 5, color: '#ef4444', status: 'idle', currentTask: null, path: null, pathProgress: 0, isDefaultShuttle: false };
-  robots[2] = { x: 60, y: 35, speed: 10, color: '#3b82f6', status: 'idle', currentTask: null, path: null, pathProgress: 0, isDefaultShuttle: false };
-  robots[3] = { x: 10, y: 35, speed: 3, color: '#06b6d4', status: 'idle', currentTask: null, path: null, pathProgress: 0, isDefaultShuttle: false };
+  robots[1] = { x: 10, y: 35, speed: 5, color: '#ef4444', patrolMode: true, path: null, pathProgress: 0, serviceTarget: null, serviceStart: null, servicePath: null };
+  robots[2] = { x: 60, y: 35, speed: 10, color: '#3b82f6', patrolMode: true, path: null, pathProgress: 0, serviceTarget: null, serviceStart: null, servicePath: null };
+  robots[3] = { x: 10, y: 35, speed: 3, color: '#06b6d4', patrolMode: true, path: null, pathProgress: 0, serviceTarget: null, serviceStart: null, servicePath: null };
 
-  // 清空任务队列
-  taskQueue = [];
-  completedTasks = 0;
+  // 清空待处理请求
+  pendingRequests = {};
   isRunning = false;
 
   // 重置UI
@@ -1553,14 +1553,13 @@ function animate() {
     time += dt;
     updateRobots(dt);
 
-    document.getElementById('queue').innerHTML = taskQueue.slice(0, 3).map(t => `
-      <div class="queue-item ${t.status === 'assigned' ? 'assigned' : ''}">
-        <strong>${t.target}</strong> ${t.assignedRobot ? `→ R${t.assignedRobot}` : ''}
-      </div>
-    `).join('');
+    document.getElementById('queue').innerHTML = Object.entries(pendingRequests)
+      .filter(([_, isPending]) => isPending)
+      .map(([location, _]) => `<div class="queue-item">📍 ${location}</div>`)
+      .join('');
 
     document.getElementById('robots').innerHTML = Object.entries(robots).map(([id, r]) => `
-      <div class="robot-status">R${id} ${r.status === 'moving' ? '🚗' : '⏳'} ${r.speed}m/s</div>
+      <div class="robot-status">R${id} ${r.patrolMode ? '🔄' : '🎯'} ${r.speed}m/s</div>
     `).join('');
   }
 
