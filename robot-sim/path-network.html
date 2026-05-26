@@ -675,7 +675,8 @@ function findShortestPath(start, end) {
     cachedPathLengths = pathLengths;
     cachedEdges = edges;
 
-    // 调试：打印图结构
+    // 调试：打印图结构和pathNetwork内容
+    console.log(`[pathNetwork内容]`, Object.keys(pathNetwork));
     console.log(`[Dijkstra图] pathNetwork有${Object.keys(pathNetwork).length}条路径，图有${Object.keys(graph).length}个节点:`, Object.keys(graph).join(', '));
     for (const [node, neighbors] of Object.entries(graph)) {
       console.log(`  ${node} → [${neighbors.join(', ')}]`);
