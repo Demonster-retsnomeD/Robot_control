@@ -497,9 +497,6 @@ canvas.addEventListener('click', (e) => {
       const key = `${selectedStartPoint}-${hitPoint}`;
       pathNetwork[key] = fullPath;
 
-      console.log(`[保存路径] ${selectedStartPoint} → ${hitPoint}: ${fullPath.length}个点`);
-      console.log(`  └─ 完整路径已保存（包含所有中间检查点）`);
-
       savePaths();
       updatePathList();
       currentEditPath = [];
@@ -697,12 +694,6 @@ function findShortestPath(start, end) {
     cachedEdges = edges;
   }
 
-  // 调试：打印图结构和pathNetwork内容（不管是否用缓存都打印）
-  console.log(`[pathNetwork内容] ${cacheUsed ? '(缓存)' : '(新建)'} 共${Object.keys(pathNetwork).length}条路径:`, Object.keys(pathNetwork).join(', '));
-  console.log(`[Dijkstra图] 图有${Object.keys(graph).length}个节点:`, Object.keys(graph).join(', '));
-  for (const [node, neighbors] of Object.entries(graph)) {
-    console.log(`  ${node} → [${neighbors.join(', ')}]`);
-  }
 
   // 确保start在图中
   if (!graph[start]) graph[start] = [];
@@ -742,11 +733,6 @@ function findShortestPath(start, end) {
 
   // 检查是否真的到达了目标
   if (!dist[end] || dist[end] === Infinity) {
-    console.warn(`[Dijkstra] ❌ 无法到达${end}（从${start}出发）`);
-    console.warn(`  原因：${end}不在可达节点中`);
-    console.warn(`  可达节点: ${Object.keys(dist).join(', ')}`);
-    console.warn(`  图的节点: ${Object.keys(graph).join(', ')}`);
-    console.warn(`  ${start}的邻接节点: ${(graph[start] || []).join(', ')}`);
     return [];
   }
 
@@ -761,7 +747,6 @@ function findShortestPath(start, end) {
 
     if (seen.has(current)) {
       // 检测到循环，中断
-      console.warn(`[路径重建]检测到循环：${current}`);
       break;
     }
 
@@ -770,10 +755,6 @@ function findShortestPath(start, end) {
     current = parent[current];
   }
 
-  // 如果路径太长（超过节点数），可能有问题
-  if (path.length > graphNodes.length * 2) {
-    console.warn(`[路径重建]路径异常长：${path.length}个节点，期望≤${graphNodes.length}`);
-  }
 
   // 检查是否用了虚拟边
   if (path.length > 1) {
@@ -784,9 +765,6 @@ function findShortestPath(start, end) {
         usedVirtual = true;
         break;
       }
-    }
-    if (usedVirtual) {
-      console.log(`⚠️ 路径${start}→${end}使用了虚拟连接（直线部分），建议创建真实路径优化`);
     }
   }
 
@@ -817,19 +795,10 @@ function findPathBetweenPoints(startLabel, endLabel) {
     if (!startPt && startLabel.match(/^\(\d+,\d+\)$/)) {
       const coords = startLabel.slice(1, -1).split(',');
       startPt = { x: parseInt(coords[0]), y: parseInt(coords[1]) };
-      console.log(`    [伪标签] ${startLabel} → (${startPt.x},${startPt.y})`);
     }
     if (!endPt && endLabel.match(/^\(\d+,\d+\)$/)) {
       const coords = endLabel.slice(1, -1).split(',');
       endPt = { x: parseInt(coords[0]), y: parseInt(coords[1]) };
-      console.log(`    [伪标签] ${endLabel} → (${endPt.x},${endPt.y})`);
-    }
-
-    if (!startPt) {
-      console.warn(`    [警告] 起点${startLabel}无法解析（不是keyPoint，也不是伪标签）`);
-    }
-    if (!endPt) {
-      console.warn(`    [警告] 终点${endLabel}无法解析（不是keyPoint，也不是伪标签）`);
     }
     if (!startPt || !endPt) return [];
 
@@ -843,7 +812,6 @@ function findPathBetweenPoints(startLabel, endLabel) {
       const distEnd = Math.sqrt(Math.pow(pathEnd.x - endPt.x, 2) + Math.pow(pathEnd.y - endPt.y, 2));
 
       if (distStart < 0.5 && distEnd < 0.5) {
-        console.log(`    [找到] 完整路径"${key}"（${path.length}个点）`);
         return path;
       }
 
@@ -851,14 +819,12 @@ function findPathBetweenPoints(startLabel, endLabel) {
       const distEndReverse = Math.sqrt(Math.pow(pathStart.x - endPt.x, 2) + Math.pow(pathStart.y - endPt.y, 2));
       const distStartReverse = Math.sqrt(Math.pow(pathEnd.x - startPt.x, 2) + Math.pow(pathEnd.y - startPt.y, 2));
       if (distEndReverse < 0.5 && distStartReverse < 0.5) {
-        console.log(`    [找到] 完整路径（反向）"${key}"（${path.length}个点）`);
         return [...path].reverse();
       }
     }
 
     // **方案2：查找包含start和end的路径（子路径）**
     // 用与图构建相同的逻辑为路径上的点生成标签，然后精确匹配
-    console.log(`    [子路径搜索] 查找包含${startLabel}和${endLabel}的路径...`);
     for (const [key, path] of Object.entries(pathNetwork)) {
       if (!path || path.length < 2) continue;
 
@@ -892,20 +858,16 @@ function findPathBetweenPoints(startLabel, endLabel) {
       if (startIdx !== -1 && endIdx !== -1) {
         if (startIdx < endIdx) {
           const subPath = path.slice(startIdx, endIdx + 1);
-          console.log(`    [找到] 子路径"${key}"[${startIdx}:${endIdx+1}]（${subPath.length}个点）`);
           return subPath;
         } else if (startIdx > endIdx) {
           const subPath = path.slice(endIdx, startIdx + 1).reverse();
-          console.log(`    [找到] 子路径（反向）"${key}"[${endIdx}:${startIdx+1}]（${subPath.length}个点）`);
           return subPath;
         }
       }
     }
 
-    console.warn(`    [未找到] ${startLabel}→${endLabel}的路径（完整或子路径）`);
     return [];
   } catch (err) {
-    console.error(`[错误] findPathBetweenPoints(${startLabel}, ${endLabel}):`, err.message);
     return [];
   }
 }
@@ -913,40 +875,27 @@ function findPathBetweenPoints(startLabel, endLabel) {
 function getFullPath(nodes) {
   try {
     if (!nodes || nodes.length === 0) {
-      console.warn(`[getFullPath] 节点列表为空！`);
       return [];
     }
 
     const fullPath = [];
-    console.log(`[getFullPath] 开始构建完整路径，共${nodes.length}个节点: ${JSON.stringify(nodes)}`);
-
     for (let i = 0; i < nodes.length - 1; i++) {
       const start = nodes[i];
       const end = nodes[i + 1];
-      console.log(`  [${i}] 寻找${start}→${end}的路径...`);
-
       const pathSegment = findPathBetweenPoints(start, end);
 
       if (pathSegment && pathSegment.length > 0) {
-        // 有真实路径
-        console.log(`    ✓ 找到${pathSegment.length}个点`);
         if (i === 0) {
           fullPath.push(...pathSegment);
         } else {
           fullPath.push(...pathSegment.slice(1));
         }
       } else {
-        // 没有真实路径 → 返回空（强制用户创建完整路径）
-        console.warn(`  ✗ 找不到${start}→${end}的路径！缺少这条边。`);
-        console.warn(`    pathNetwork中可用的路径: ${Object.keys(pathNetwork).join(', ')}`);
         return [];
       }
     }
-    console.log(`[getFullPath] 完成！总共${fullPath.length}个点`);
     return fullPath;
   } catch (err) {
-    console.error(`[错误] getFullPath异常:`, err.message);
-    console.error(err.stack);
     return [];
   }
 }
@@ -956,18 +905,6 @@ function generateTaskAtPoint(label) {
     alert('请先启动仿真');
     return;
   }
-
-  // 🔍 DEBUG：呼叫时的完整诊断
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(`🔍 DEBUG：呼叫${label}`);
-  console.log(`${'='.repeat(60)}`);
-  console.log(`[pathNetwork内容] 共${Object.keys(pathNetwork).length}条路径:`, Object.keys(pathNetwork).join(', '));
-  console.log(`[机器人当前位置]`);
-  for (const [id, robot] of Object.entries(robots)) {
-    console.log(`  机器人${id}: (${robot.x.toFixed(1)}, ${robot.y.toFixed(1)}) 状态=${robot.status}`);
-  }
-  console.log(`[目标] ${label}`);
-  console.log(`${'='.repeat(60)}\n`);
 
   taskQueue.push({
     id: Math.random(),
@@ -984,12 +921,8 @@ function splitPathsIntoSegments(segmentSize = 10) {
   const newPathNetwork = {};
   let segmentCount = 0;
 
-  console.log(`\n[拆解路径] 开始拆解（每段最多${segmentSize}个点）...`);
-
   for (const [originalKey, path] of Object.entries(pathNetwork)) {
     if (!path || path.length < 2) continue;
-
-    console.log(`\n【原路径】"${originalKey}": ${path.length}个点`);
 
     // 拆成多个小段
     for (let i = 0; i < path.length - 1; i += segmentSize) {
@@ -1002,7 +935,6 @@ function splitPathsIntoSegments(segmentSize = 10) {
         const segmentKey = `seg_${++segmentCount}_${startPt.x.toFixed(0)}_${startPt.y.toFixed(0)}_${endPt.x.toFixed(0)}_${endPt.y.toFixed(0)}`;
 
         newPathNetwork[segmentKey] = segment;
-        console.log(`  └─ 小段${segmentCount}: (${startPt.x.toFixed(0)},${startPt.y.toFixed(0)}) → (${endPt.x.toFixed(0)},${endPt.y.toFixed(0)}) [${segment.length}点]`);
       }
     }
   }
@@ -1013,7 +945,6 @@ function splitPathsIntoSegments(segmentSize = 10) {
 
   // 保存到 localStorage
   localStorage.setItem('pathNetwork', JSON.stringify(pathNetwork));
-  console.log(`\n✅ 拆解完成！共${segmentCount}个小段，已保存`);
 
   // 清空 Dijkstra 缓存
   cachedGraph = null;
@@ -1089,8 +1020,6 @@ function startDefaultShuttle(robot) {
 
   robot.status = 'moving';
   robot.isDefaultShuttle = true;
-
-  console.log(`[默认往返] 机器人从(${robot.x.toFixed(0)},${robot.y.toFixed(0)})开始，path=${robot.path.length}点，progress=${robot.pathProgress.toFixed(2)}`);
 }
 
 // 获取机器人实时位置标签（支持路径中间位置）
@@ -1177,8 +1106,6 @@ function getRobotCurrentPosition(robot) {
       distToStart += Math.sqrt(dx*dx + dy*dy);
     }
 
-    console.log(`    [位置检测] 机器人在路径"${pathKey_found}"第${pointIndex}点，${pathStartLabel}→${pathEndLabel}，继续走${distToEnd.toFixed(1)}到终点，或反向${distToStart.toFixed(1)}到起点`);
-
     return {
       label: pathStartLabel,          // 用于Dijkstra的起点
       endLabel: pathEndLabel,         // 路径的终点标签
@@ -1240,15 +1167,7 @@ function getDistanceBetweenLabels(startLabel, endLabel) {
 
 // 诊断：打印所有机器人当前位置
 function diagnosticRobotPositions() {
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(`[诊断] 所有机器人当前位置`);
-  for (const [id, robot] of Object.entries(robots)) {
-    const posInfo = getRobotCurrentPosition(robot);
-    const posType = posInfo.type === 'keypoint' ? '关键点' : '路径上';
-    const dist = posInfo.dist ? posInfo.dist.toFixed(1) : 'N/A';
-    console.log(`  机器人${id}: (${robot.x.toFixed(1)},${robot.y.toFixed(1)}) [${posType}:${posInfo.label}] 距离=${dist}`);
-  }
-  console.log(`${'='.repeat(60)}\n`);
+  // 不输出日志
 }
 
 function assignTask(task) {
@@ -1256,7 +1175,6 @@ function assignTask(task) {
     // 获取目标点坐标
     const targetPt = keyPoints[task.target];
     if (!targetPt) {
-      console.error(`[错误] 目标${task.target}不是有效关键点`);
       return;
     }
 
@@ -1269,28 +1187,21 @@ function assignTask(task) {
     let bestRobotDir = 'direct';
     let bestRobotPathInfo = null;
 
-    console.log(`\n[分配任务] 开始为任务"${task.target}"分配机器人（选最近距离）...`);
-    console.log(`[目标位置] ${task.target} (${targetPt.x}, ${targetPt.y})`);
-    console.log(`[机器人直线距离评估]`);
 
     for (const [id, robot] of Object.entries(robots)) {
       // 只跳过有真实任务在处理的机器人，shuttle可以被中断
       if (robot.status === 'moving' && robot.currentTask) {
-        console.log(`  机器人${id}：正在执行真实任务，跳过`);
         continue;
       }
 
       try {
         // 获取机器人当前位置
         const posInfo = getRobotCurrentPosition(robot);
-        const posType = posInfo.type === 'keypoint' ? '关键点' : '路径上';
 
         // 计算机器人到目标的直线距离（唯一指标）
         const dx = targetPt.x - robot.x;
         const dy = targetPt.y - robot.y;
         const directDist = Math.sqrt(dx * dx + dy * dy);
-
-        console.log(`  机器人${id} (${robot.x.toFixed(1)},${robot.y.toFixed(1)}) [${posType}:${posInfo.label}] → ${task.target}: 直线距离=${directDist.toFixed(1)}`);
 
         if (directDist < bestDist) {
           bestDist = directDist;
@@ -1298,24 +1209,17 @@ function assignTask(task) {
           bestRobotPos = posInfo.label;  // 机器人当前位置
           bestRobotDir = 'direct';  // 直接去目标
           bestRobotPathInfo = posInfo;
-
-          console.log(`  ✓ 机器人${id}：目前最优（直线距离${directDist.toFixed(1)}）`);
         }
       } catch (err) {
-        console.error(`[错误] 机器人${id}评估失败:`, err.message);
       }
     }
 
     if (bestRobot !== null) {
-      console.log(`[分配任务] 最优机器人=${bestRobot}，从${bestRobotPos}出发，直线距离=${bestDist.toFixed(1)}`);
-
       let fullPath = null;
 
       // 直接从当前位置计算路径到目标
       const nodeRoute = findShortestPath(bestRobotPos, task.target);
       fullPath = getFullPath(nodeRoute);
-
-      console.log(`[任务${task.target}] 机器人${bestRobot}从${bestRobotPos}直接走向${task.target}`);
 
       // 设置机器人的路径
       if (fullPath && fullPath.length > 1) {
@@ -1328,15 +1232,9 @@ function assignTask(task) {
         task.assignedRobot = bestRobot;
         task.status = 'assigned';
         console.log(`[任务${task.target}] ✅ 分配成功！机器人${bestRobot}，共${fullPath.length}个点，初始progress=${robot.pathProgress.toFixed(2)}`);
-      } else {
-        console.log(`[任务${task.target}] ❌ 路由失败，无法到达目标。请检查路径连接`);
       }
-    } else {
-      console.log(`[任务${task.target}] ❌ 失败：没有可用机器人`);
     }
   } catch (err) {
-    console.error(`[错误] assignTask异常:`, err);
-    console.error(err.stack);
   }
 }
 
@@ -1351,13 +1249,11 @@ function updateRobots(dt) {
     if (robot.status === 'moving' && robot.path) {
       const pathLen = getPathLength(robot.path);
       if (pathLen <= 0) {
-        console.warn(`[机器人${id}]路径长度=0，跳过`);
         continue;
       }
 
       const speed = robot.speed / pathLen;
       if (!isFinite(speed)) {
-        console.warn(`[机器人${id}]速度非有限值=${speed}，跳过`);
         continue;
       }
 
