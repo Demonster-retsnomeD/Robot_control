@@ -199,7 +199,6 @@
       <div class="panel">
         <h3>📂 已保存路径</h3>
         <div id="pathList" class="path-list">无路径</div>
-        <button class="btn-primary" onclick="splitPathsIntoSegments()" style="background: #f59e0b; margin-top: 8px; font-size: 12px;">⚡ 拆解为小段</button>
       </div>
 
       <div class="panel">
@@ -212,6 +211,19 @@
       <div class="panel">
         <h3>📋 任务队列</h3>
         <div id="queue" style="max-height: 100px; overflow-y: auto;"></div>
+      </div>
+
+      <div class="panel">
+        <h3>⚙️ 机器人速度设置</h3>
+        <div style="font-size: 12px; margin-bottom: 8px;">
+          <label>机器人1: <input type="number" id="speed1" value="5" min="1" max="20" step="1" style="width: 50px;" onchange="setRobotSpeed(1, this.value)"> m/s</label>
+        </div>
+        <div style="font-size: 12px; margin-bottom: 8px;">
+          <label>机器人2: <input type="number" id="speed2" value="10" min="1" max="20" step="1" style="width: 50px;" onchange="setRobotSpeed(2, this.value)"> m/s</label>
+        </div>
+        <div style="font-size: 12px;">
+          <label>机器人3: <input type="number" id="speed3" value="3" min="1" max="20" step="1" style="width: 50px;" onchange="setRobotSpeed(3, this.value)"> m/s</label>
+        </div>
       </div>
 
       <div class="panel">
@@ -902,6 +914,17 @@ function getFullPath(nodes) {
   }
 }
 
+function setRobotSpeed(robotId, speed) {
+  const speedValue = parseFloat(speed);
+  if (isNaN(speedValue) || speedValue < 1 || speedValue > 20) {
+    alert('速度应该在1-20之间');
+    return;
+  }
+  robots[robotId].speed = speedValue;
+  document.getElementById(`speed${robotId}`).value = speedValue;
+  console.log(`[机器人${robotId}]速度设置为 ${speedValue} m/s`);
+}
+
 function generateRequest(label) {
   if (!isRunning) {
     alert('请先启动仿真');
@@ -910,44 +933,6 @@ function generateRequest(label) {
 
   // 覆盖式记录：最后一次呼叫
   pendingRequests[label] = true;
-}
-
-// 拆解路径：把每条长路径分成多个小直线段
-function splitPathsIntoSegments(segmentSize = 10) {
-  const newPathNetwork = {};
-  let segmentCount = 0;
-
-  for (const [originalKey, path] of Object.entries(pathNetwork)) {
-    if (!path || path.length < 2) continue;
-
-    // 拆成多个小段
-    for (let i = 0; i < path.length - 1; i += segmentSize) {
-      const endIdx = Math.min(i + segmentSize + 1, path.length);
-      const segment = path.slice(i, endIdx);
-
-      if (segment.length > 1) {
-        const startPt = segment[0];
-        const endPt = segment[segment.length - 1];
-        const segmentKey = `seg_${++segmentCount}_${startPt.x.toFixed(0)}_${startPt.y.toFixed(0)}_${endPt.x.toFixed(0)}_${endPt.y.toFixed(0)}`;
-
-        newPathNetwork[segmentKey] = segment;
-      }
-    }
-  }
-
-  // 替换 pathNetwork
-  Object.keys(pathNetwork).forEach(k => delete pathNetwork[k]);
-  Object.assign(pathNetwork, newPathNetwork);
-
-  // 保存到 localStorage
-  localStorage.setItem('pathNetwork', JSON.stringify(pathNetwork));
-
-  // 清空 Dijkstra 缓存
-  cachedGraph = null;
-  cachedPathLengths = null;
-  cachedEdges = null;
-
-  return segmentCount;
 }
 
 function getDefaultABPath() {
