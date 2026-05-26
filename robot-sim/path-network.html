@@ -253,9 +253,9 @@ let hoveredIntermediatePoint = null;
 let hoveredPathSegment = null; // { pathKey, segmentIndex }
 
 const robots = {
-  1: { x: 10, y: 35, speed: 5, color: '#ef4444', status: 'idle', currentTarget: null, path: null, pathProgress: 0, isDefaultShuttle: false, isReturnPath: false, taskPath: null, arrivalTime: null },
-  2: { x: 60, y: 35, speed: 10, color: '#3b82f6', status: 'idle', currentTarget: null, path: null, pathProgress: 0, isDefaultShuttle: false, isReturnPath: false, taskPath: null, arrivalTime: null },
-  3: { x: 10, y: 35, speed: 3, color: '#06b6d4', status: 'idle', currentTarget: null, path: null, pathProgress: 0, isDefaultShuttle: false, isReturnPath: false, taskPath: null, arrivalTime: null }
+  1: { x: 10, y: 35, speed: 5, color: '#ef4444', patrolMode: true, path: null, pathProgress: 0, serviceTarget: null, serviceStart: null, servicePath: null },
+  2: { x: 60, y: 35, speed: 10, color: '#3b82f6', patrolMode: true, path: null, pathProgress: 0, serviceTarget: null, serviceStart: null, servicePath: null },
+  3: { x: 10, y: 35, speed: 3, color: '#06b6d4', patrolMode: true, path: null, pathProgress: 0, serviceTarget: null, serviceStart: null, servicePath: null }
 };
 
 // 每个地点的待处理请求（最后一次呼叫覆盖）
@@ -1166,114 +1166,157 @@ function diagnosticRobotPositions() {
 }
 
 function updateRobots(dt) {
-  // 状态机：处理每个机器人的状态转换
   for (const [id, robot] of Object.entries(robots)) {
-    // 1. idle: 检查是否有待处理请求，分配最近的地点
-    if (robot.status === 'idle' && !robot.isDefaultShuttle) {
-      let targetLabel = null;
-      let minDist = Infinity;
+    // 检查是否有呼叫请求
+    let pendingTarget = null;
+    for (const [label, hasPending] of Object.entries(pendingRequests)) {
+      if (hasPending) {
+        pendingTarget = label;
+        break;
+      }
+    }
 
-      // 找最近的待处理地点
-      for (const [label, hasPending] of Object.entries(pendingRequests)) {
-        if (hasPending && keyPoints[label]) {
-          const pt = keyPoints[label];
-          const dist = Math.sqrt(Math.pow(robot.x - pt.x, 2) + Math.pow(robot.y - pt.y, 2));
-          if (dist < minDist) {
-            minDist = dist;
-            targetLabel = label;
+    // 状态机
+    if (robot.patrolMode) {
+      // ========== 轮巡模式 ==========
+      // A↔B固定往返
+      if (!robot.path) {
+        startDefaultShuttle(robot);
+      }
+
+      // 沿路径运动
+      if (robot.path) {
+        const pathLen = getPathLength(robot.path);
+        if (pathLen > 0) {
+          const speed = robot.speed / pathLen;
+          if (isFinite(speed)) {
+            robot.pathProgress += speed * dt;
+
+            if (robot.pathProgress >= 1) {
+              // 到达端点，反向
+              robot.path.reverse();
+              robot.pathProgress = 0;
+              const endPos = robot.path[robot.path.length - 1];
+              robot.x = endPos.x;
+              robot.y = endPos.y;
+            } else {
+              const pos = getPositionOnPath(robot.path, robot.pathProgress);
+              robot.x = pos.x;
+              robot.y = pos.y;
+            }
           }
         }
       }
 
-      if (targetLabel) {
-        // 分配目标
-        robot.currentTarget = targetLabel;
+      // 有呼叫时切换到服务模式
+      if (pendingTarget) {
         const currentPos = getRobotCurrentPosition(robot);
-        const nodeRoute = findShortestPath(currentPos.label, targetLabel);
+        const nodeRoute = findShortestPath(currentPos.label, pendingTarget);
+        const fullPath = getFullPath(nodeRoute);
+
+        if (fullPath && fullPath.length > 1) {
+          robot.patrolMode = false;
+          robot.serviceTarget = pendingTarget;
+          robot.servicePath = robot.path;  // 保存轮巡路径用于返回
+          robot.path = fullPath;           // 设置去服务地点的路径
+          robot.pathProgress = getInitialProgress(robot, fullPath);
+          pendingRequests[pendingTarget] = false;
+          console.log(`[机器人${id}]离开轮巡，前往${pendingTarget}`);
+        }
+      }
+
+    } else {
+      // ========== 服务模式 ==========
+      if (!robot.serviceTarget) {
+        // 异常：无服务目标，返回轮巡
+        robot.patrolMode = true;
+        return;
+      }
+
+      // 检查是否有对服务目标的新呼叫
+      const hasNewServiceCall = pendingRequests[robot.serviceTarget];
+
+      // 沿路径运动
+      if (robot.path) {
+        const pathLen = getPathLength(robot.path);
+        if (pathLen > 0) {
+          const speed = robot.speed / pathLen;
+          if (isFinite(speed)) {
+            robot.pathProgress += speed * dt;
+
+            if (robot.pathProgress >= 1) {
+              // 到达目标点
+              const endPos = robot.path[robot.path.length - 1];
+              robot.x = endPos.x;
+              robot.y = endPos.y;
+
+              // 检查：是前往服务点还是返回轮巡
+              if (!robot.serviceStart) {
+                // 第一次到达服务点，开始服务
+                robot.path = null;
+                robot.serviceStart = time;
+                console.log(`[机器人${id}]到达${robot.serviceTarget}，开始服务3s`);
+              } else {
+                // 返回轮巡路径时到达，完成返回
+                robot.patrolMode = true;
+                robot.serviceTarget = null;
+                robot.serviceStart = null;
+                robot.servicePath = null;
+                robot.path = null;
+                robot.pathProgress = 0;
+                console.log(`[机器人${id}]返回轮巡路径`);
+              }
+            } else {
+              const pos = getPositionOnPath(robot.path, robot.pathProgress);
+              robot.x = pos.x;
+              robot.y = pos.y;
+            }
+          }
+        }
+      }
+
+      // 服务阶段：检查是否需要继续或返回
+      if (robot.serviceStart !== null && !robot.path) {
+        const serviceElapsed = time - robot.serviceStart;
+
+        if (serviceElapsed >= 3) {
+          // 3秒服务完成
+          if (hasNewServiceCall) {
+            // 有新呼叫，继续服务3秒
+            pendingRequests[robot.serviceTarget] = false;
+            robot.serviceStart = time;
+            console.log(`[机器人${id}]${robot.serviceTarget}有新呼叫，延长服务3s`);
+          } else {
+            // 无新呼叫，开始返回轮巡路径
+            if (robot.servicePath && robot.servicePath.length > 1) {
+              robot.path = robot.servicePath;
+              robot.servicePath = null;
+              robot.path.reverse();
+              robot.pathProgress = getInitialProgress(robot, robot.path);
+              console.log(`[机器人${id}]服务完成，返回轮巡路径`);
+            } else {
+              // 无保存路径，直接返回轮巡
+              robot.patrolMode = true;
+              robot.serviceTarget = null;
+              robot.serviceStart = null;
+            }
+          }
+        }
+      }
+
+      // 返回途中如果有同一地点的新呼叫，立即转身去服务
+      if (robot.path && hasNewServiceCall) {
+        // 已在返回途中，有新呼叫
+        const currentPos = getRobotCurrentPosition(robot);
+        const nodeRoute = findShortestPath(currentPos.label, robot.serviceTarget);
         const fullPath = getFullPath(nodeRoute);
 
         if (fullPath && fullPath.length > 1) {
           robot.path = fullPath;
           robot.pathProgress = getInitialProgress(robot, fullPath);
-          robot.status = 'moving';
-          robot.isDefaultShuttle = false;
-        }
-      } else {
-        // 没有待处理，启动默认往返
-        if (!robot.isDefaultShuttle) {
-          startDefaultShuttle(robot);
-        }
-      }
-    }
-
-    // 2. moving: 沿路径前进
-    if (robot.status === 'moving' && robot.path) {
-      const pathLen = getPathLength(robot.path);
-      if (pathLen > 0) {
-        const speed = robot.speed / pathLen;
-        if (isFinite(speed)) {
-          robot.pathProgress += speed * dt;
-
-          if (robot.pathProgress >= 1) {
-            // 到达目标点
-            const endPos = robot.path[robot.path.length - 1];
-            robot.x = endPos.x;
-            robot.y = endPos.y;
-
-            if (robot.isDefaultShuttle) {
-              // 默认往返：反向并继续
-              robot.path.reverse();
-              robot.pathProgress = 0;
-            } else if (robot.isReturnPath) {
-              // 返回完成
-              robot.isReturnPath = false;
-              robot.path = null;
-              robot.pathProgress = 0;
-              robot.status = 'idle';
-              console.log(`[机器人${id}]返回完成，恢复往返`);
-            } else {
-              // 到达服务地点
-              robot.status = 'serving';
-              robot.taskPath = robot.path;
-              robot.path = null;
-              robot.pathProgress = 0;
-              robot.arrivalTime = time;
-              console.log(`[机器人${id}]到达${robot.currentTarget}，开始服务`);
-            }
-          } else {
-            const pos = getPositionOnPath(robot.path, robot.pathProgress);
-            robot.x = pos.x;
-            robot.y = pos.y;
-          }
-        }
-      }
-    }
-
-    // 3. serving: 检查是否继续服务或返回
-    if (robot.status === 'serving' && robot.currentTarget) {
-      const serviceElapsed = time - robot.arrivalTime;
-      if (serviceElapsed >= 3) {
-        // 服务3秒完成，检查是否有新请求
-        if (pendingRequests[robot.currentTarget]) {
-          // 继续服务：清除请求标记后重置计时
-          pendingRequests[robot.currentTarget] = false;
-          robot.arrivalTime = time;  // 重置计时（继续服务另一个3秒）
-          console.log(`[机器人${id}]${robot.currentTarget}还有请求，继续服务`);
-        } else {
-          // 无新请求，准备返回
-          robot.status = 'moving';
-          if (robot.taskPath && robot.taskPath.length > 1) {
-            robot.path = robot.taskPath;
-            robot.taskPath = null;
-            robot.path.reverse();
-            robot.pathProgress = getInitialProgress(robot, robot.path);
-            robot.isDefaultShuttle = false;
-            robot.isReturnPath = true;
-            console.log(`[机器人${id}]服务完成，反向原路`);
-          } else {
-            robot.status = 'idle';
-            robot.currentTarget = null;
-          }
+          robot.serviceStart = null;  // 重置服务计时
+          pendingRequests[robot.serviceTarget] = false;
+          console.log(`[机器人${id}]返回途中有${robot.serviceTarget}的新呼叫，转身去服务`);
         }
       }
     }
