@@ -957,7 +957,7 @@ function splitPathsIntoSegments(segmentSize = 10) {
 function getDefaultABPath() {
   // 1. 查找标准格式 "A-B"
   if (pathNetwork['A-B']) {
-    return pathNetwork['A-B'];
+    return [...pathNetwork['A-B']];  // 返回副本，避免多机器人修改原始路径
   }
 
   // 2. 扫描所有路径，找起点A、终点B的路径
@@ -969,7 +969,7 @@ function getDefaultABPath() {
       const distToB = Math.sqrt(Math.pow(endPt.x - keyPoints.B.x, 2) + Math.pow(endPt.y - keyPoints.B.y, 2));
 
       if (distToA < 0.5 && distToB < 0.5) {
-        return path;
+        return [...path];  // 返回副本，避免多机器人修改原始路径
       }
     }
   }
