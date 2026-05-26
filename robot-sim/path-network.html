@@ -1303,13 +1303,25 @@ function updateRobots(dt) {
             robot.pathProgress += speed * dt;
 
             if (robot.pathProgress >= 1) {
-              // 到达服务点，开始服务
+              // 到达终点
               const endPos = robot.path[robot.path.length - 1];
               robot.x = endPos.x;
               robot.y = endPos.y;
               robot.path = null;
-              robot.serviceStart = time;
-              console.log(`[机器人${id}]到达${robot.serviceTarget}，开始服务3s`);
+              robot.pathProgress = 0;
+
+              if (robot.returning) {
+                // 返回轮巡路径完成
+                robot.patrolMode = true;
+                robot.serviceTarget = null;
+                robot.serviceStart = null;
+                robot.returning = false;
+                console.log(`[机器人${id}]返回轮巡主路完成`);
+              } else {
+                // 到达服务点，开始服务
+                robot.serviceStart = time;
+                console.log(`[机器人${id}]到达${robot.serviceTarget}，开始服务3s`);
+              }
             } else {
               const pos = getPositionOnPath(robot.path, robot.pathProgress);
               robot.x = pos.x;
@@ -1331,28 +1343,39 @@ function updateRobots(dt) {
               robot.serviceStart = time;
               console.log(`[机器人${id}]${robot.serviceTarget}有新呼叫，延长服务3s`);
             } else {
-              // 无新呼叫，进入返回状态（倒计时3秒）
+              // 无新呼叫，进入返回状态（沿路径回到轮巡主路）
               robot.returning = true;
-              robot.serviceStart = time;  // 重置为返回开始时间
-              console.log(`[机器人${id}]${robot.serviceTarget}服务完成，开始返回轮巡`);
+              robot.serviceStart = time;
+
+              // 计算返回路径：从serviceTarget回到轮巡起点(A)
+              const returnRoute = findShortestPath(robot.serviceTarget, 'A');
+              if (returnRoute && returnRoute.length > 0) {
+                robot.path = getFullPath(returnRoute, { x: robot.x, y: robot.y });
+                robot.pathProgress = 0;
+              }
+
+              console.log(`[机器人${id}]${robot.serviceTarget}服务完成，开始返回轮巡（${robot.path ? robot.path.length : 0}个点）`);
             }
           }
         } else {
           // === 返回状态 ===
-          const returningElapsed = time - robot.serviceStart;
-          if (hasNewServiceCall) {
-            // 返回途中被打断，重新服务同一地点
+          // 返回途中有新呼叫，立即转身去服务
+          if (hasNewServiceCall && robot.path) {
+            // 停止返回，重新前往服务地点
+            const returnRoute = findShortestPath(robot.serviceTarget, robot.serviceTarget); // 实际上是计算新路径
             robot.returning = false;
             robot.serviceStart = time;
+
+            // 从当前位置重新计算到service point的路径
+            const nearestNode = robot.serviceTarget; // 已经在service point附近了
+            const newRoute = findShortestPath(nearestNode, robot.serviceTarget);
+            if (newRoute && newRoute.length > 0) {
+              robot.path = getFullPath(newRoute, { x: robot.x, y: robot.y });
+              robot.pathProgress = 0;
+            }
+
             pendingRequests[robot.serviceTarget] = false;
             console.log(`[机器人${id}]返回途中${robot.serviceTarget}有新呼叫，重新服务`);
-          } else if (returningElapsed >= 3) {
-            // 返回完成，进入轮巡
-            robot.patrolMode = true;
-            robot.serviceTarget = null;
-            robot.serviceStart = null;
-            robot.returning = false;
-            console.log(`[机器人${id}]返回轮巡完成`);
           }
         }
       }
