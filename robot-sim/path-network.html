@@ -1430,7 +1430,7 @@ function drawMap() {
 
     // 显示默认路线信息
     const defaultPath = getDefaultABPath();
-    ctx.fillText(`🔄 默认往返路线: ${defaultPath.length} 个点`, 10, 49);
+    ctx.fillText(`🔄 默认往返路线: ${defaultPath ? defaultPath.length : '未连接'} 个点`, 10, 49);
   } else if (isRunning) {
     // 运行时显示默认路线信息
     ctx.fillStyle = '#10b981';
@@ -1438,7 +1438,7 @@ function drawMap() {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     const defaultPath = getDefaultABPath();
-    ctx.fillText(`🔄 A→B路线: ${defaultPath.length}点`, 10, 10);
+    ctx.fillText(`🔄 A→B路线: ${defaultPath ? defaultPath.length : '未连接'}点`, 10, 10);
     if (pathNetwork['A-B']) {
       ctx.fillText(`✓ A-B路径已保存`, 10, 23);
     } else {
