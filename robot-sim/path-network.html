@@ -270,8 +270,24 @@ const robots = {
   3: { x: 10, y: 35, speed: 3, color: '#06b6d4', patrolMode: true, path: null, pathProgress: 0, serviceTarget: null, serviceStart: null, returning: false }
 };
 
-// 每个地点的待处理请求（最后一次呼叫覆盖）
-let pendingRequests = {};  // { 'C': true, 'D': false, ... }
+// 每个地点的状态机
+// { 'C': { state: 'idle', assignedRobotId: null, hasPending: false }, ... }
+// state: 'idle' → 'pending' → 'assigned' → 'completed' → 'idle'
+let callStates = {};
+
+function initializeCallStates() {
+  callStates = {};
+  for (const key of Object.keys(keyPoints)) {
+    if (key !== 'A' && key !== 'B') {  // 只有C、D、E等是呼叫点
+      callStates[key] = {
+        state: 'idle',            // idle/pending/assigned/completed
+        assignedRobotId: null,    // 分配的机器人ID，null表示未分配
+        hasPending: false         // 是否有待处理呼叫
+      };
+    }
+  }
+}
+
 let robotStateBeforeEdit = null; // 编辑前保存机器人状态
 let cachedGraph = null; // 缓存的路径图
 let cachedPathLengths = null;
@@ -613,6 +629,11 @@ function toggleDeleteMode() {
 function toggleSimulation() {
   isRunning = !isRunning;
   document.getElementById('btnStart').textContent = isRunning ? '⏸️ 暂停' : '▶️ 开始';
+
+  // 启动时初始化呼叫点状态机
+  if (isRunning) {
+    initializeCallStates();
+  }
 }
 
 function resetRobots() {
@@ -621,8 +642,8 @@ function resetRobots() {
   robots[2] = { x: 60, y: 35, speed: 10, color: '#3b82f6', patrolMode: true, path: null, pathProgress: 0, serviceTarget: null, serviceStart: null, returning: false };
   robots[3] = { x: 10, y: 35, speed: 3, color: '#06b6d4', patrolMode: true, path: null, pathProgress: 0, serviceTarget: null, serviceStart: null, returning: false };
 
-  // 清空待处理请求
-  pendingRequests = {};
+  // 清空呼叫点状态机
+  initializeCallStates();
   isRunning = false;
 
   // 重置UI
@@ -931,8 +952,24 @@ function generateRequest(label) {
     return;
   }
 
-  // 覆盖式记录：最后一次呼叫
-  pendingRequests[label] = true;
+  if (!callStates[label]) {
+    callStates[label] = { state: 'idle', assignedRobotId: null, hasPending: false };
+  }
+
+  const state = callStates[label];
+
+  // 状态机逻辑
+  if (state.state === 'assigned' || state.state === 'pending') {
+    // 已有机器人前往：继续用同一机器人
+    state.hasPending = true;
+    console.log(`[呼叫${label}] 已分配给机器人${state.assignedRobotId}，再次呼叫继续使用该机器人`);
+  } else {
+    // idle或completed：重新选择最近的机器人
+    state.state = 'pending';
+    state.assignedRobotId = null;  // 重置，让分配逻辑选择最近的
+    state.hasPending = true;
+    console.log(`[呼叫${label}] 新呼叫，等待分配最近的机器人`);
+  }
 }
 
 function getDefaultABPath() {
@@ -1162,10 +1199,14 @@ function diagnosticRobotPositions() {
 
 function updateRobots(dt) {
   for (const [id, robot] of Object.entries(robots)) {
-    // 检查是否有呼叫请求
+    // 检查是否有呼叫请求（未分配的或已分配给本机器人的）
     let pendingTarget = null;
-    for (const [label, hasPending] of Object.entries(pendingRequests)) {
-      if (hasPending) {
+    for (const [label, state] of Object.entries(callStates)) {
+      if (state.hasPending) {
+        // 如果已分配给其他机器人，跳过
+        if (state.assignedRobotId !== null && state.assignedRobotId !== parseInt(id)) {
+          continue;
+        }
         pendingTarget = label;
         break;
       }
@@ -1279,8 +1320,13 @@ function updateRobots(dt) {
               robot.serviceTarget = pendingTarget;
               robot.path = fullPath;
               robot.pathProgress = 0;  // 现在fullPath[0]=robot当前位置，所以pathProgress=0不会瞬移
-              pendingRequests[pendingTarget] = false;
-              console.log(`[机器人${id}]✅分配成功，路径${fullPath.length}个点`);
+
+              // 更新呼叫点状态
+              callStates[pendingTarget].state = 'assigned';
+              callStates[pendingTarget].assignedRobotId = parseInt(id);
+              callStates[pendingTarget].hasPending = false;
+
+              console.log(`[机器人${id}]✅分配成功，路径${fullPath.length}个点，呼叫点${pendingTarget}状态→assigned`);
             } else {
               console.log(`[机器人${id}]❌分配失败，fullPath长度=${fullPath.length}`);
             }
@@ -1299,7 +1345,7 @@ function updateRobots(dt) {
       }
 
       // 检查是否有对服务目标的新呼叫
-      const hasNewServiceCall = pendingRequests[robot.serviceTarget];
+      const hasNewServiceCall = callStates[robot.serviceTarget] && callStates[robot.serviceTarget].hasPending;
 
       // 沿路径运动
       if (robot.path) {
@@ -1319,11 +1365,20 @@ function updateRobots(dt) {
 
               if (robot.returning) {
                 // 返回轮巡路径完成
+                const serviceTarget = robot.serviceTarget;
                 robot.patrolMode = true;
                 robot.serviceTarget = null;
                 robot.serviceStart = null;
                 robot.returning = false;
-                console.log(`[机器人${id}]返回轮巡主路完成`);
+
+                // 更新呼叫点状态：服务完全结束，回到idle
+                if (callStates[serviceTarget]) {
+                  callStates[serviceTarget].state = 'idle';
+                  callStates[serviceTarget].assignedRobotId = null;
+                  callStates[serviceTarget].hasPending = false;
+                }
+
+                console.log(`[机器人${id}]返回轮巡主路完成，呼叫点${serviceTarget}状态→idle`);
               } else {
                 // 到达服务点，开始服务
                 robot.serviceStart = time;
@@ -1346,7 +1401,9 @@ function updateRobots(dt) {
           if (serviceElapsed >= 3) {
             if (hasNewServiceCall) {
               // 有新呼叫，继续服务3秒
-              pendingRequests[robot.serviceTarget] = false;
+              if (callStates[robot.serviceTarget]) {
+                callStates[robot.serviceTarget].hasPending = false;  // 清除pending标记
+              }
               robot.serviceStart = time;
               console.log(`[机器人${id}]${robot.serviceTarget}有新呼叫，延长服务3s`);
             } else {
@@ -1397,12 +1454,19 @@ function updateRobots(dt) {
               }
             }
 
-            pendingRequests[robot.serviceTarget] = false;
+            if (callStates[robot.serviceTarget]) {
+              callStates[robot.serviceTarget].hasPending = false;
+            }
             console.log(`[机器人${id}]返回途中${robot.serviceTarget}有新呼叫，重新服务`);
           }
         }
       }
     }
+  }
+
+  // 初始化呼叫点状态（第一次运行）
+  if (Object.keys(callStates).length === 0) {
+    initializeCallStates();
   }
 }
 
