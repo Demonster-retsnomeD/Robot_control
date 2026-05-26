@@ -378,8 +378,52 @@ function deletePoint(label) {
   if (label in keyPoints) {
     delete keyPoints[label];
     console.log(`[点位] 删除点位 ${label}`);
+    relabelPoints();
     updatePointList();
   }
+}
+
+function relabelPoints() {
+  // 收集所有点按类型分组
+  const patrolPoints = [];
+  const callPoints = [];
+  const robotPoints = [];
+
+  for (const [label, pt] of Object.entries(keyPoints)) {
+    if (pt.type === 'patrol') {
+      patrolPoints.push(pt);
+    } else if (pt.type === 'call') {
+      callPoints.push(pt);
+    } else if (pt.type === 'robot') {
+      robotPoints.push(pt);
+    }
+  }
+
+  // 清空keyPoints并重新标签化
+  keyPoints = {};
+
+  // 轮巡点：A, B, C, ...
+  for (let i = 0; i < patrolPoints.length; i++) {
+    const pt = patrolPoints[i];
+    const newLabel = String.fromCharCode(65 + i);
+    keyPoints[newLabel] = { ...pt, label: newLabel };
+  }
+
+  // 呼叫点：I, II, III, ...
+  for (let i = 0; i < callPoints.length; i++) {
+    const pt = callPoints[i];
+    const newLabel = toRoman(i + 1);
+    keyPoints[newLabel] = { ...pt, label: newLabel };
+  }
+
+  // 机器人：1, 2, 3, ...
+  for (let i = 0; i < robotPoints.length; i++) {
+    const pt = robotPoints[i];
+    const newLabel = String(i + 1);
+    keyPoints[newLabel] = { ...pt, label: newLabel };
+  }
+
+  console.log(`[点位] 重新标签化完成`);
 }
 
 function activateCreationMode(type) {
