@@ -219,9 +219,7 @@
 
       <div class="panel">
         <h3>📞 呼叫</h3>
-        <button class="btn-primary" onclick="generateRequest('C')" style="background: #8b5cf6; margin-bottom: 8px;">📍 呼叫C</button>
-        <button class="btn-primary" onclick="generateRequest('D')" style="background: #f59e0b; margin-bottom: 8px;">📍 呼叫D</button>
-        <button class="btn-primary" onclick="generateRequest('E')" style="background: #06b6d4; margin-bottom: 8px;">📍 呼叫E</button>
+        <div id="callButtonsContainer"></div>
       </div>
 
       <div class="panel">
@@ -818,12 +816,32 @@ function savePointConfigUI() {
   document.getElementById('btnStart').disabled = false;
 
   updatePointConfigDisplay();
+  updateCallButtons();
   console.log(`[点位] 已保存：${num1}机+${num2}轮+${num3}呼`);
 }
 
 function updatePointConfigDisplay() {
   if (pointConfig) {
     document.getElementById('pointConfigDisplay').textContent = `${pointConfig.numRobots}机 · ${pointConfig.numPatrolPoints}轮 · ${pointConfig.numCallPoints}呼`;
+  }
+}
+
+function updateCallButtons() {
+  const container = document.getElementById('callButtonsContainer');
+  container.innerHTML = '';
+
+  const colors = ['#8b5cf6', '#f59e0b', '#06b6d4', '#ec4899', '#14b8a6'];
+  for (const [label, pt] of Object.entries(keyPoints)) {
+    if (pt.type === 'call') {
+      const color = colors[Object.keys(keyPoints).indexOf(label) % colors.length];
+      const btn = document.createElement('button');
+      btn.className = 'btn-primary';
+      btn.style.background = color;
+      btn.style.marginBottom = '8px';
+      btn.onclick = () => generateRequest(label);
+      btn.textContent = `📍 呼叫${label}`;
+      container.appendChild(btn);
+    }
   }
 }
 
@@ -1941,6 +1959,7 @@ loadPointConfig();
 initializeRobots();
 loadPaths();
 updatePointConfigDisplay();
+updateCallButtons();
 drawMap();
 // 初始化：删除按钮初始隐藏
 const btnDelete = document.getElementById('btnDelete');
