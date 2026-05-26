@@ -881,22 +881,23 @@ function getFullPath(nodes, robotStartPos = null) {
 
     const fullPath = [];
 
-    // 如果提供了机器人起始位置，从该位置直接连接到目标
+    // 如果提供了机器人起始位置，从该位置开始沿路径网络
     if (robotStartPos && nodes.length > 0) {
-      // 从robot当前位置到目标点
-      const target = nodes[nodes.length - 1];
-      const targetPt = keyPoints[target];
-      if (!targetPt) {
-        return [];
-      }
-
-      // 用直线路径从当前位置到目标（避免瞬移）
+      // 先添加robot当前位置
       fullPath.push({ x: robotStartPos.x, y: robotStartPos.y });
 
-      // 如果目标不在当前位置，添加目标点
-      const dist = Math.sqrt(Math.pow(targetPt.x - robotStartPos.x, 2) + Math.pow(targetPt.y - robotStartPos.y, 2));
-      if (dist > 1) {
-        fullPath.push(targetPt);
+      // 然后沿着nodes路径连接每段
+      for (let i = 0; i < nodes.length - 1; i++) {
+        const start = nodes[i];
+        const end = nodes[i + 1];
+        const pathSegment = findPathBetweenPoints(start, end);
+
+        if (pathSegment && pathSegment.length > 0) {
+          // 跳过第一个点（已经在fullPath里）
+          fullPath.push(...pathSegment.slice(1));
+        } else {
+          return [];
+        }
       }
       return fullPath;
     }
@@ -1228,16 +1229,57 @@ function updateRobots(dt) {
 
       // 有呼叫时切换到服务模式
       if (pendingTarget) {
-        // 从机器人当前位置直接到目标（不瞬移）
-        const fullPath = getFullPath([pendingTarget], { x: robot.x, y: robot.y });
+        // 找最近的路径点作为起点，然后用Dijkstra找到目标
+        let nearestPathNode = null;
+        let minDistToPath = Infinity;
 
-        if (fullPath && fullPath.length > 1) {
-          robot.patrolMode = false;
-          robot.serviceTarget = pendingTarget;
-          robot.path = fullPath;           // 设置去服务地点的路径（从当前位置开始）
-          robot.pathProgress = 0;          // 从路径起点开始
-          pendingRequests[pendingTarget] = false;
-          console.log(`[机器人${id}]从(${robot.x.toFixed(0)},${robot.y.toFixed(0)})前往${pendingTarget}`);
+        // 1. 检查是否接近关键点
+        for (const [key, pt] of Object.entries(keyPoints)) {
+          const dist = Math.sqrt(Math.pow(robot.x - pt.x, 2) + Math.pow(robot.y - pt.y, 2));
+          if (dist < minDistToPath) {
+            minDistToPath = dist;
+            nearestPathNode = key;
+          }
+        }
+
+        // 2. 检查是否在某条路径上
+        if (minDistToPath > 3) {
+          for (const [pathKey, pathPoints] of Object.entries(pathNetwork)) {
+            if (!pathPoints || pathPoints.length < 2) continue;
+            for (let i = 0; i < pathPoints.length; i++) {
+              const pt = pathPoints[i];
+              const dist = Math.sqrt(Math.pow(robot.x - pt.x, 2) + Math.pow(robot.y - pt.y, 2));
+              if (dist < minDistToPath) {
+                minDistToPath = dist;
+                // 用路径的起点标签
+                const startPt = pathPoints[0];
+                // 尝试匹配关键点
+                let label = null;
+                for (const [key, kpt] of Object.entries(keyPoints)) {
+                  const d = Math.sqrt(Math.pow(startPt.x - kpt.x, 2) + Math.pow(startPt.y - kpt.y, 2));
+                  if (d < 2.0) {
+                    label = key;
+                    break;
+                  }
+                }
+                nearestPathNode = label || `(${startPt.x.toFixed(0)},${startPt.y.toFixed(0)})`;
+              }
+            }
+          }
+        }
+
+        if (nearestPathNode) {
+          const nodeRoute = findShortestPath(nearestPathNode, pendingTarget);
+          const fullPath = getFullPath(nodeRoute, { x: robot.x, y: robot.y });
+
+          if (fullPath && fullPath.length > 1) {
+            robot.patrolMode = false;
+            robot.serviceTarget = pendingTarget;
+            robot.path = fullPath;
+            robot.pathProgress = 0;
+            pendingRequests[pendingTarget] = false;
+            console.log(`[机器人${id}]从(${robot.x.toFixed(0)},${robot.y.toFixed(0)})经${nearestPathNode}前往${pendingTarget}`);
+          }
         }
       }
 
