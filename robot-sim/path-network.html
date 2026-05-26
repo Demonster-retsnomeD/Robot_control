@@ -199,6 +199,7 @@
       <div class="panel">
         <h3>📂 已保存路径</h3>
         <div id="pathList" class="path-list">无路径</div>
+        <button class="btn-primary" onclick="splitPathsIntoSegments()" style="background: #f59e0b; margin-top: 8px; font-size: 12px;">⚡ 拆解为小段</button>
       </div>
 
       <div class="panel">
@@ -913,6 +914,50 @@ function generateTaskAtPoint(label) {
     arrivalTime: null,  // 到达目标时间
     serviceTime: 3      // 服务时间（秒）
   });
+}
+
+// 拆解路径：把每条长路径分成多个小直线段
+function splitPathsIntoSegments(segmentSize = 10) {
+  const newPathNetwork = {};
+  let segmentCount = 0;
+
+  console.log(`\n[拆解路径] 开始拆解（每段最多${segmentSize}个点）...`);
+
+  for (const [originalKey, path] of Object.entries(pathNetwork)) {
+    if (!path || path.length < 2) continue;
+
+    console.log(`\n【原路径】"${originalKey}": ${path.length}个点`);
+
+    // 拆成多个小段
+    for (let i = 0; i < path.length - 1; i += segmentSize) {
+      const endIdx = Math.min(i + segmentSize + 1, path.length);
+      const segment = path.slice(i, endIdx);
+
+      if (segment.length > 1) {
+        const startPt = segment[0];
+        const endPt = segment[segment.length - 1];
+        const segmentKey = `seg_${++segmentCount}_${startPt.x.toFixed(0)}_${startPt.y.toFixed(0)}_${endPt.x.toFixed(0)}_${endPt.y.toFixed(0)}`;
+
+        newPathNetwork[segmentKey] = segment;
+        console.log(`  └─ 小段${segmentCount}: (${startPt.x.toFixed(0)},${startPt.y.toFixed(0)}) → (${endPt.x.toFixed(0)},${endPt.y.toFixed(0)}) [${segment.length}点]`);
+      }
+    }
+  }
+
+  // 替换 pathNetwork
+  Object.keys(pathNetwork).forEach(k => delete pathNetwork[k]);
+  Object.assign(pathNetwork, newPathNetwork);
+
+  // 保存到 localStorage
+  localStorage.setItem('pathNetwork', JSON.stringify(pathNetwork));
+  console.log(`\n✅ 拆解完成！共${segmentCount}个小段，已保存`);
+
+  // 清空 Dijkstra 缓存
+  cachedGraph = null;
+  cachedPathLengths = null;
+  cachedEdges = null;
+
+  return segmentCount;
 }
 
 function getDefaultABPath() {
