@@ -1130,12 +1130,33 @@ function assignTask(task) {
     if (bestRobot !== null) {
       console.log(`[分配任务] 最优机器人=${bestRobot}，从${bestRobotPos}出发`);
 
-      const pathNodes = findShortestPath(bestRobotPos, task.target);
-      let fullPath = getFullPath(pathNodes);
+      // 新策略：直接找包含目标点的路径，不拼接
+      let directPath = null;
+      let directPathKey = null;
 
-      console.log(`[任务${task.target}] 机器人${bestRobot} | 起点:${bestRobotPos} | 路径节点:${JSON.stringify(pathNodes)} | 完整路径长度:${fullPath ? fullPath.length : 0}`);
+      for (const [key, path] of Object.entries(pathNetwork)) {
+        if (!path || path.length < 2) continue;
 
-      // 只允许完整的真实路径，无缺口
+        const pathEndPt = path[path.length - 1];
+        const distToTarget = Math.sqrt(Math.pow(pathEndPt.x - targetPt.x, 2) + Math.pow(pathEndPt.y - targetPt.y, 2));
+
+        // 如果这条路径的终点接近目标点
+        if (distToTarget < 3.0) {
+          directPath = path;
+          directPathKey = key;
+          console.log(`[任务${task.target}] 找到直接路径"${key}"，终点接近目标`);
+          break;
+        }
+      }
+
+      let fullPath = null;
+      if (directPath) {
+        fullPath = [...directPath];
+      }
+
+      console.log(`[任务${task.target}] 机器人${bestRobot} | 起点:${bestRobotPos} | 直接路径:"${directPathKey}" | 完整路径长度:${fullPath ? fullPath.length : 0}`);
+
+      // 只允许完整的真实路径
       if (fullPath && fullPath.length > 1) {
         robots[bestRobot].path = fullPath;
         robots[bestRobot].pathProgress = 0;
@@ -1146,7 +1167,7 @@ function assignTask(task) {
         task.status = 'assigned';
         console.log(`[任务${task.target}] ✅ 分配成功！机器人${bestRobot}，路径${fullPath.length}个点`);
       } else {
-        console.log(`[任务${task.target}] ❌ 路径不完整（节点:${JSON.stringify(pathNodes)}），无法到达。需要创建路径到${task.target}（编辑模式→创建路径）`);
+        console.log(`[任务${task.target}] ❌ 找不到直接路径到${task.target}。需要创建一条终点在${task.target}附近的路径`);
       }
     } else {
       console.log(`[任务${task.target}] ❌ 失败：没有可用机器人`);
