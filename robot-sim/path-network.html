@@ -1448,13 +1448,23 @@ function updateRobots(dt) {
     if (robot.status === 'serving' && robot.currentTask) {
       const serviceElapsed = time - robot.currentTask.arrivalTime;
       if (serviceElapsed >= robot.currentTask.serviceTime) {
-        // 服务完成，恢复shuttle
+        // 服务完成，反向原路返回（不瞬移）
         robot.currentTask.status = 'completed';
         completedTasks++;
         robot.currentTask = null;
-        robot.status = 'idle';
-        console.log(`[机器人${id}]服务完成，恢复运行`);
-        startDefaultShuttle(robot);
+        robot.status = 'moving';
+
+        if (robot.path && robot.path.length > 1) {
+          // 反向来时路径
+          robot.path.reverse();
+          robot.pathProgress = 0;
+          robot.isDefaultShuttle = false;  // 仍是任务路径反向
+          console.log(`[机器人${id}]服务完成，反向原路（${robot.path.length}点）`);
+        } else {
+          // fallback: 如果没有路径，启动A→B往返
+          robot.status = 'idle';
+          startDefaultShuttle(robot);
+        }
       }
     }
   }
