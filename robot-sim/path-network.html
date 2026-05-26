@@ -204,9 +204,9 @@
 
       <div class="panel">
         <h3>📞 呼叫</h3>
-        <button class="btn-primary" onclick="generateTaskAtPoint('C')" style="background: #8b5cf6; margin-bottom: 8px;">📍 呼叫C</button>
-        <button class="btn-primary" onclick="generateTaskAtPoint('D')" style="background: #f59e0b; margin-bottom: 8px;">📍 呼叫D</button>
-        <button class="btn-primary" onclick="generateTaskAtPoint('E')" style="background: #06b6d4; margin-bottom: 8px;">📍 呼叫E</button>
+        <button class="btn-primary" onclick="generateRequest('C')" style="background: #8b5cf6; margin-bottom: 8px;">📍 呼叫C</button>
+        <button class="btn-primary" onclick="generateRequest('D')" style="background: #f59e0b; margin-bottom: 8px;">📍 呼叫D</button>
+        <button class="btn-primary" onclick="generateRequest('E')" style="background: #06b6d4; margin-bottom: 8px;">📍 呼叫E</button>
       </div>
 
       <div class="panel">
@@ -253,12 +253,13 @@ let hoveredIntermediatePoint = null;
 let hoveredPathSegment = null; // { pathKey, segmentIndex }
 
 const robots = {
-  1: { x: 10, y: 35, speed: 5, color: '#ef4444', status: 'idle', currentTask: null, path: null, pathProgress: 0, isDefaultShuttle: false },
-  2: { x: 60, y: 35, speed: 10, color: '#3b82f6', status: 'idle', currentTask: null, path: null, pathProgress: 0, isDefaultShuttle: false },
-  3: { x: 10, y: 35, speed: 3, color: '#06b6d4', status: 'idle', currentTask: null, path: null, pathProgress: 0, isDefaultShuttle: false }
+  1: { x: 10, y: 35, speed: 5, color: '#ef4444', status: 'idle', currentTarget: null, path: null, pathProgress: 0, isDefaultShuttle: false, isReturnPath: false, taskPath: null, arrivalTime: null },
+  2: { x: 60, y: 35, speed: 10, color: '#3b82f6', status: 'idle', currentTarget: null, path: null, pathProgress: 0, isDefaultShuttle: false, isReturnPath: false, taskPath: null, arrivalTime: null },
+  3: { x: 10, y: 35, speed: 3, color: '#06b6d4', status: 'idle', currentTarget: null, path: null, pathProgress: 0, isDefaultShuttle: false, isReturnPath: false, taskPath: null, arrivalTime: null }
 };
 
-let taskQueue = [];
+// 每个地点的待处理请求（最后一次呼叫覆盖）
+let pendingRequests = {};  // { 'C': true, 'D': false, ... }
 let completedTasks = 0;
 let robotStateBeforeEdit = null; // 编辑前保存机器人状态
 let cachedGraph = null; // 缓存的路径图
@@ -900,20 +901,14 @@ function getFullPath(nodes) {
   }
 }
 
-function generateTaskAtPoint(label) {
+function generateRequest(label) {
   if (!isRunning) {
     alert('请先启动仿真');
     return;
   }
 
-  taskQueue.push({
-    id: Math.random(),
-    target: label,
-    status: 'pending',
-    assignedRobot: null,
-    arrivalTime: null,  // 到达目标时间
-    serviceTime: 3      // 服务时间（秒）
-  });
+  // 覆盖式记录：最后一次呼叫
+  pendingRequests[label] = true;
 }
 
 // 拆解路径：把每条长路径分成多个小直线段
@@ -1170,187 +1165,119 @@ function diagnosticRobotPositions() {
   // 不输出日志
 }
 
-function assignTask(task) {
-  try {
-    // 获取目标点坐标
-    const targetPt = keyPoints[task.target];
-    if (!targetPt) {
-      return;
-    }
-
-    // 诊断：显示当前所有机器人位置
-    diagnosticRobotPositions();
-
-    let bestRobot = null;
-    let bestDist = Infinity;
-    let bestRobotPos = 'A';
-    let bestRobotDir = 'direct';
-    let bestRobotPathInfo = null;
-
-
-    for (const [id, robot] of Object.entries(robots)) {
-      // 只跳过有真实任务在处理的机器人，shuttle可以被中断
-      if (robot.status === 'moving' && robot.currentTask) {
-        continue;
-      }
-
-      try {
-        // 获取机器人当前位置
-        const posInfo = getRobotCurrentPosition(robot);
-
-        // 计算机器人到目标的直线距离（唯一指标）
-        const dx = targetPt.x - robot.x;
-        const dy = targetPt.y - robot.y;
-        const directDist = Math.sqrt(dx * dx + dy * dy);
-
-        if (directDist < bestDist) {
-          bestDist = directDist;
-          bestRobot = parseInt(id);
-          bestRobotPos = posInfo.label;  // 机器人当前位置
-          bestRobotDir = 'direct';  // 直接去目标
-          bestRobotPathInfo = posInfo;
-        }
-      } catch (err) {
-      }
-    }
-
-    if (bestRobot !== null) {
-      let fullPath = null;
-
-      // 直接从当前位置计算路径到目标
-      const nodeRoute = findShortestPath(bestRobotPos, task.target);
-      fullPath = getFullPath(nodeRoute);
-
-      // 设置机器人的路径
-      if (fullPath && fullPath.length > 1) {
-        const robot = robots[bestRobot];
-        robot.path = fullPath;
-        robot.pathProgress = getInitialProgress(robot, fullPath);  // 计算初始进度，避免瞬移
-        robot.status = 'moving';
-        robot.isDefaultShuttle = false;
-        robot.currentTask = task;
-        task.assignedRobot = bestRobot;
-        task.status = 'assigned';
-        console.log(`[任务${task.target}] ✅ 分配成功！机器人${bestRobot}，共${fullPath.length}个点，初始progress=${robot.pathProgress.toFixed(2)}`);
-      }
-    }
-  } catch (err) {
-  }
-}
-
 function updateRobots(dt) {
-  // 分配待处理的任务（同目标地点独占）
-  for (const task of taskQueue) {
-    if (task.status === 'pending') {
-      // 检查该目标地点是否已有机器人在处理或服务
-      const hasRobotAtTarget = Object.values(robots).some(r =>
-        r.currentTask && r.currentTask.target === task.target && (r.status === 'moving' || r.status === 'serving')
-      );
-
-      // 检查是否有其他处于assigned状态的同目标任务（防止多个任务竞争）
-      const hasOtherAssignedAtTarget = taskQueue.some(t =>
-        t !== task && t.target === task.target && t.status === 'assigned'
-      );
-
-      // 只有在该目标地点没有其他机器人或任务处理时才分配
-      if (!hasRobotAtTarget && !hasOtherAssignedAtTarget) {
-        assignTask(task);
-      }
-    }
-  }
-
-  // 更新机器人位置
+  // 状态机：处理每个机器人的状态转换
   for (const [id, robot] of Object.entries(robots)) {
-    if (robot.status === 'moving' && robot.path) {
-      const pathLen = getPathLength(robot.path);
-      if (pathLen <= 0) {
-        continue;
-      }
+    // 1. idle: 检查是否有待处理请求，分配最近的地点
+    if (robot.status === 'idle' && !robot.isDefaultShuttle) {
+      let targetLabel = null;
+      let minDist = Infinity;
 
-      const speed = robot.speed / pathLen;
-      if (!isFinite(speed)) {
-        continue;
-      }
-
-      robot.pathProgress += speed * dt;
-
-      if (robot.pathProgress >= 1) {
-        // 到达目标点 — 先更新坐标到终点
-        const endPos = robot.path[robot.path.length - 1];
-        robot.x = endPos.x;
-        robot.y = endPos.y;
-
-        if (robot.isDefaultShuttle) {
-          // 默认往返：反向并继续
-          robot.path.reverse();
-          robot.pathProgress = 0;
-        } else if (robot.isReturnPath) {
-          // 返回路径完成 — 启动往返
-          robot.isReturnPath = false;
-          robot.path = null;
-          robot.pathProgress = 0;
-          robot.status = 'idle';
-          console.log(`[机器人${id}]返回完成，恢复往返`);
-          startDefaultShuttle(robot);
-        } else {
-          // 任务到达，开始服务 — 保存路径用于反向
-          robot.status = 'serving';
-          robot.taskPath = robot.path;  // 保存来时路径，用于服务完成后反向
-          robot.path = null;  // 清空path防止继续移动
-          robot.pathProgress = 0;
-          if (robot.currentTask && !robot.currentTask.arrivalTime) {
-            robot.currentTask.arrivalTime = time; // 记录到达时间
-            console.log(`[机器人${id}]到达${robot.currentTask.target}，开始服务3秒`);
+      // 找最近的待处理地点
+      for (const [label, hasPending] of Object.entries(pendingRequests)) {
+        if (hasPending && keyPoints[label]) {
+          const pt = keyPoints[label];
+          const dist = Math.sqrt(Math.pow(robot.x - pt.x, 2) + Math.pow(robot.y - pt.y, 2));
+          if (dist < minDist) {
+            minDist = dist;
+            targetLabel = label;
           }
         }
-      } else {
-        const pos = getPositionOnPath(robot.path, robot.pathProgress);
-        robot.x = pos.x;
-        robot.y = pos.y;
       }
-    }
 
-    // 处理服务状态
-    if (robot.status === 'serving' && robot.currentTask) {
-      const serviceElapsed = time - robot.currentTask.arrivalTime;
-      if (serviceElapsed >= robot.currentTask.serviceTime) {
-        // 服务完成，反向原路返回
-        robot.currentTask.status = 'completed';
-        completedTasks++;
-        robot.currentTask = null;
-        robot.status = 'moving';
+      if (targetLabel) {
+        // 分配目标
+        robot.currentTarget = targetLabel;
+        const currentPos = getRobotCurrentPosition(robot);
+        const nodeRoute = findShortestPath(currentPos.label, targetLabel);
+        const fullPath = getFullPath(nodeRoute);
 
-        if (robot.taskPath && robot.taskPath.length > 1) {
-          // 反向来时路径回到主路线
-          robot.path = robot.taskPath;
-          robot.taskPath = null;
-          robot.path.reverse();
-          robot.pathProgress = getInitialProgress(robot, robot.path);
+        if (fullPath && fullPath.length > 1) {
+          robot.path = fullPath;
+          robot.pathProgress = getInitialProgress(robot, fullPath);
+          robot.status = 'moving';
           robot.isDefaultShuttle = false;
-          robot.isReturnPath = true;
-          console.log(`[机器人${id}]服务完成，反向原路（${robot.path.length}点）`);
-        } else {
-          // fallback
-          robot.status = 'idle';
+        }
+      } else {
+        // 没有待处理，启动默认往返
+        if (!robot.isDefaultShuttle) {
           startDefaultShuttle(robot);
         }
       }
     }
-  }
 
-  // 检查是否有待处理任务
-  const hasPendingTasks = taskQueue.some(t => t.status === 'pending' || t.status === 'assigned');
+    // 2. moving: 沿路径前进
+    if (robot.status === 'moving' && robot.path) {
+      const pathLen = getPathLength(robot.path);
+      if (pathLen > 0) {
+        const speed = robot.speed / pathLen;
+        if (isFinite(speed)) {
+          robot.pathProgress += speed * dt;
 
-  // 对于空闲机器人，如果没有待处理任务，启动默认A→B往返
-  if (!hasPendingTasks) {
-    for (const [id, robot] of Object.entries(robots)) {
-      if (robot.status === 'idle' && !robot.path && !robot.isDefaultShuttle) {
-        startDefaultShuttle(robot);
+          if (robot.pathProgress >= 1) {
+            // 到达目标点
+            const endPos = robot.path[robot.path.length - 1];
+            robot.x = endPos.x;
+            robot.y = endPos.y;
+
+            if (robot.isDefaultShuttle) {
+              // 默认往返：反向并继续
+              robot.path.reverse();
+              robot.pathProgress = 0;
+            } else if (robot.isReturnPath) {
+              // 返回完成
+              robot.isReturnPath = false;
+              robot.path = null;
+              robot.pathProgress = 0;
+              robot.status = 'idle';
+              console.log(`[机器人${id}]返回完成，恢复往返`);
+            } else {
+              // 到达服务地点
+              robot.status = 'serving';
+              robot.taskPath = robot.path;
+              robot.path = null;
+              robot.pathProgress = 0;
+              robot.arrivalTime = time;
+              console.log(`[机器人${id}]到达${robot.currentTarget}，开始服务`);
+            }
+          } else {
+            const pos = getPositionOnPath(robot.path, robot.pathProgress);
+            robot.x = pos.x;
+            robot.y = pos.y;
+          }
+        }
+      }
+    }
+
+    // 3. serving: 检查是否继续服务或返回
+    if (robot.status === 'serving' && robot.currentTarget) {
+      const serviceElapsed = time - robot.arrivalTime;
+      if (serviceElapsed >= 3) {
+        // 服务3秒完成，检查是否有新请求
+        if (pendingRequests[robot.currentTarget]) {
+          // 继续服务：清除请求标记后重置计时
+          pendingRequests[robot.currentTarget] = false;
+          robot.arrivalTime = time;  // 重置计时（继续服务另一个3秒）
+          console.log(`[机器人${id}]${robot.currentTarget}还有请求，继续服务`);
+        } else {
+          // 无新请求，准备返回
+          robot.status = 'moving';
+          if (robot.taskPath && robot.taskPath.length > 1) {
+            robot.path = robot.taskPath;
+            robot.taskPath = null;
+            robot.path.reverse();
+            robot.pathProgress = getInitialProgress(robot, robot.path);
+            robot.isDefaultShuttle = false;
+            robot.isReturnPath = true;
+            console.log(`[机器人${id}]服务完成，反向原路`);
+          } else {
+            robot.status = 'idle';
+            robot.currentTarget = null;
+          }
+        }
       }
     }
   }
-
-  taskQueue = taskQueue.filter(t => t.status !== 'completed');
 }
 
 function getPositionOnPath(path, progress) {
