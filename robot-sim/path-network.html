@@ -1019,12 +1019,13 @@ function getRobotCurrentPosition(robot) {
     return { label: closestKeyPoint, type: 'keypoint', dist: minDistToKeyPoint };
   }
 
-  // 2. 检测机器人在哪条路径上
+  // 2. 检测机器人在哪条路径上的具体位置
   let closestPath = null;
   let closestPointOnPath = null;
   let minDistToPath = Infinity;
-  let pathStartLabel = null;
   let pathKey_found = null;
+  let pathStartLabel = null;
+  let pathEndLabel = null;
 
   for (const [pathKey, pathPoints] of Object.entries(pathNetwork)) {
     if (!pathPoints || pathPoints.length < 2) continue;
@@ -1040,30 +1041,61 @@ function getRobotCurrentPosition(robot) {
         closestPointOnPath = { pt, index: i, dist };
         pathKey_found = pathKey;
 
-        // 获取路径的起点标签
+        // 获取路径的起点和终点标签
         const startPt = pathPoints[0];
+        const endPt = pathPoints[pathPoints.length - 1];
+
+        // 尝试匹配关键点
         for (const [key, kpt] of Object.entries(keyPoints)) {
-          const d = Math.sqrt(Math.pow(startPt.x - kpt.x, 2) + Math.pow(startPt.y - kpt.y, 2));
-          if (d < 2.0) {
-            pathStartLabel = key;
-            break;
+          if (!pathStartLabel) {
+            const d = Math.sqrt(Math.pow(startPt.x - kpt.x, 2) + Math.pow(startPt.y - kpt.y, 2));
+            if (d < 2.0) pathStartLabel = key;
+          }
+          if (!pathEndLabel) {
+            const d = Math.sqrt(Math.pow(endPt.x - kpt.x, 2) + Math.pow(endPt.y - kpt.y, 2));
+            if (d < 2.0) pathEndLabel = key;
           }
         }
-        if (!pathStartLabel) {
-          pathStartLabel = `(${startPt.x.toFixed(0)},${startPt.y.toFixed(0)})`;
-        }
+
+        // 如果无法匹配，用坐标作为伪标签
+        if (!pathStartLabel) pathStartLabel = `(${startPt.x.toFixed(0)},${startPt.y.toFixed(0)})`;
+        if (!pathEndLabel) pathEndLabel = `(${endPt.x.toFixed(0)},${endPt.y.toFixed(0)})`;
       }
     }
   }
 
   if (closestPath) {
-    console.log(`    [位置检测] 机器人${robot === robots[1] ? '1' : robot === robots[2] ? '2' : '3'}在路径"${pathKey_found}"上，起点=${pathStartLabel}，距离=${minDistToPath.toFixed(1)}`);
+    const pointIndex = closestPointOnPath.index;
+    const pointLabel = `(${closestPointOnPath.pt.x.toFixed(0)},${closestPointOnPath.pt.y.toFixed(0)})`;
+
+    // 计算从当前点继续走到终点的距离（正向）
+    let distToEnd = 0;
+    for (let i = pointIndex; i < closestPath.length - 1; i++) {
+      const dx = closestPath[i+1].x - closestPath[i].x;
+      const dy = closestPath[i+1].y - closestPath[i].y;
+      distToEnd += Math.sqrt(dx*dx + dy*dy);
+    }
+
+    // 计算从当前点反向走到起点的距离
+    let distToStart = 0;
+    for (let i = pointIndex; i > 0; i--) {
+      const dx = closestPath[i-1].x - closestPath[i].x;
+      const dy = closestPath[i-1].y - closestPath[i].y;
+      distToStart += Math.sqrt(dx*dx + dy*dy);
+    }
+
+    console.log(`    [位置检测] 机器人在路径"${pathKey_found}"第${pointIndex}点，${pathStartLabel}→${pathEndLabel}，继续走${distToEnd.toFixed(1)}到终点，或反向${distToStart.toFixed(1)}到起点`);
+
     return {
-      label: pathStartLabel,
+      label: pathStartLabel,          // 用于Dijkstra的起点
+      endLabel: pathEndLabel,         // 路径的终点标签
       type: 'path',
       dist: minDistToPath,
-      pathIndex: closestPointOnPath.index,
-      onPathDist: closestPointOnPath.dist
+      pathKey: pathKey_found,
+      pathPoints: closestPath,
+      pointIndex: pointIndex,         // 在路径上的位置
+      distToEnd: distToEnd,           // 继续走到终点的距离
+      distToStart: distToStart        // 反向走到起点的距离
     };
   }
 
@@ -1141,8 +1173,10 @@ function assignTask(task) {
     let bestRobot = null;
     let bestDist = Infinity;
     let bestRobotPos = 'A';
+    let bestRobotDir = 'direct';
+    let bestRobotPathInfo = null;
 
-    console.log(`\n[分配任务] 开始为任务"${task.target}"分配机器人（按直线距离）...`);
+    console.log(`\n[分配任务] 开始为任务"${task.target}"分配机器人（考虑正向/反向）...`);
     console.log(`[目标位置] ${task.target} (${targetPt.x}, ${targetPt.y})`);
     console.log(`[机器人距离评估]`);
 
@@ -1154,9 +1188,8 @@ function assignTask(task) {
       }
 
       try {
-        // 获取机器人当前位置（优先级：先检测）
+        // 获取机器人当前位置
         const posInfo = getRobotCurrentPosition(robot);
-        const currentPosLabel = posInfo.label;
         const posType = posInfo.type === 'keypoint' ? '关键点' : '路径上';
 
         // 计算机器人到目标的直线距离
@@ -1164,14 +1197,48 @@ function assignTask(task) {
         const dy = targetPt.y - robot.y;
         const directDist = Math.sqrt(dx * dx + dy * dy);
 
-        console.log(`  机器人${id} (${robot.x.toFixed(1)},${robot.y.toFixed(1)}) [${posType}:${currentPosLabel}] → ${task.target}: 直线距离=${directDist.toFixed(1)}`);
+        // 如果在路径上，计算正向和反向的总距离
+        let routingDist = directDist;
+        let routingDir = 'direct';
+        let routingFrom = posInfo.label;
 
-        if (directDist < bestDist) {
-          bestDist = directDist;
+        if (posInfo.type === 'path') {
+          // 正向：走到路径终点，再从终点到目标
+          const forwardDist = posInfo.distToEnd;
+          const forwardNodes = findShortestPath(posInfo.endLabel, task.target);
+          let forwardFullPath = getFullPath(forwardNodes);
+          const forwardTotal = forwardDist + (forwardFullPath && forwardFullPath.length > 0 ? getPathLength(forwardFullPath) : Infinity);
+
+          // 反向：走回路径起点，再从起点到目标
+          const backwardDist = posInfo.distToStart;
+          const backwardNodes = findShortestPath(posInfo.label, task.target);
+          let backwardFullPath = getFullPath(backwardNodes);
+          const backwardTotal = backwardDist + (backwardFullPath && backwardFullPath.length > 0 ? getPathLength(backwardFullPath) : Infinity);
+
+          // 选择总距离更短的方向
+          if (forwardTotal <= backwardTotal) {
+            routingDist = forwardTotal;
+            routingDir = 'forward';
+            routingFrom = posInfo.endLabel;
+            console.log(`  机器人${id} [路径上] → ${task.target}: 正向=${forwardTotal.toFixed(1)} vs 反向=${backwardTotal.toFixed(1)} → 选正向`);
+          } else {
+            routingDist = backwardTotal;
+            routingDir = 'backward';
+            routingFrom = posInfo.label;
+            console.log(`  机器人${id} [路径上] → ${task.target}: 正向=${forwardTotal.toFixed(1)} vs 反向=${backwardTotal.toFixed(1)} → 选反向`);
+          }
+        } else {
+          console.log(`  机器人${id} (${robot.x.toFixed(1)},${robot.y.toFixed(1)}) [关键点:${posInfo.label}] → ${task.target}: 距离=${directDist.toFixed(1)}`);
+        }
+
+        if (routingDist < bestDist) {
+          bestDist = routingDist;
           bestRobot = parseInt(id);
-          bestRobotPos = currentPosLabel;
+          bestRobotPos = routingFrom;
+          bestRobotDir = routingDir;
+          bestRobotPathInfo = posInfo;
 
-          console.log(`  ✓ 机器人${id}：目前最优（距离${directDist.toFixed(1)}）`);
+          console.log(`  ✓ 机器人${id}：目前最优（总距离${routingDist.toFixed(1)}，方向=${routingDir}）`);
         }
       } catch (err) {
         console.error(`[错误] 机器人${id}评估失败:`, err.message);
@@ -1179,41 +1246,70 @@ function assignTask(task) {
     }
 
     if (bestRobot !== null) {
-      console.log(`[分配任务] 最优机器人=${bestRobot}，从${bestRobotPos}出发`);
+      console.log(`[分配任务] 最优机器人=${bestRobot}，方向=${bestRobotDir}，从${bestRobotPos}出发，总距离=${bestDist.toFixed(1)}`);
 
-      // 直接找包含目标的路径（不拆分、不Dijkstra）
-      let foundPath = null;
-      let foundPathKey = null;
+      let fullPath = null;
 
-      for (const [key, path] of Object.entries(pathNetwork)) {
-        if (!path || path.length < 2) continue;
+      // 如果在路径上且选择反向，先生成反向路径段
+      if (bestRobotDir === 'backward' && bestRobotPathInfo && bestRobotPathInfo.type === 'path') {
+        const pathPoints = bestRobotPathInfo.pathPoints;
+        const pointIndex = bestRobotPathInfo.pointIndex;
 
-        const pathEndPt = path[path.length - 1];
-        const distToTarget = Math.sqrt(Math.pow(pathEndPt.x - targetPt.x, 2) + Math.pow(pathEndPt.y - targetPt.y, 2));
+        // 反向走回起点
+        const reversedSegment = [];
+        for (let i = pointIndex; i >= 0; i--) {
+          reversedSegment.push(pathPoints[i]);
+        }
 
-        // 找终点接近目标的路径
-        if (distToTarget < 3.0) {
-          foundPath = path;
-          foundPathKey = key;
-          console.log(`[任务${task.target}] 找到路径"${key}"，终点接近目标`);
-          break;
+        // 从起点找到目标
+        const nodeRoute = findShortestPath(bestRobotPos, task.target);
+        const targetRoute = getFullPath(nodeRoute);
+
+        // 合并：反向段 + 目标路线
+        if (targetRoute && targetRoute.length > 0) {
+          fullPath = [...reversedSegment, ...targetRoute.slice(1)];  // slice(1)避免重复起点
+        }
+
+        console.log(`[任务${task.target}] 机器人${bestRobot}反向走回起点(${reversedSegment.length}点)，再走到目标(${targetRoute ? targetRoute.length : 0}点)`);
+      } else {
+        // 正向或关键点：直接Dijkstra路由
+        const nodeRoute = findShortestPath(bestRobotPos, task.target);
+        fullPath = getFullPath(nodeRoute);
+
+        // 如果在路径上选择正向，需要从当前点开始走
+        if (bestRobotDir === 'forward' && bestRobotPathInfo && bestRobotPathInfo.type === 'path') {
+          const pathPoints = bestRobotPathInfo.pathPoints;
+          const pointIndex = bestRobotPathInfo.pointIndex;
+
+          // 从当前点走到路径终点
+          const forwardSegment = [];
+          for (let i = pointIndex; i < pathPoints.length; i++) {
+            forwardSegment.push(pathPoints[i]);
+          }
+
+          // 从终点继续走到目标
+          if (fullPath && fullPath.length > 0) {
+            fullPath = [...forwardSegment, ...fullPath.slice(1)];
+          } else {
+            fullPath = forwardSegment;
+          }
+
+          console.log(`[任务${task.target}] 机器人${bestRobot}继续走到路径终点(${forwardSegment.length}点)，再走到目标`);
         }
       }
 
-      console.log(`[任务${task.target}] 机器人${bestRobot} | 起点:${bestRobotPos} | 路径:"${foundPathKey}" | 路径长度:${foundPath ? foundPath.length : 0}`);
-
-      // 只允许有效路径
-      if (foundPath && foundPath.length > 1) {
-        robots[bestRobot].path = foundPath;
+      // 设置机器人的路径
+      if (fullPath && fullPath.length > 1) {
+        robots[bestRobot].path = fullPath;
         robots[bestRobot].pathProgress = 0;
         robots[bestRobot].status = 'moving';
         robots[bestRobot].isDefaultShuttle = false;
         robots[bestRobot].currentTask = task;
         task.assignedRobot = bestRobot;
         task.status = 'assigned';
-        console.log(`[任务${task.target}] ✅ 分配成功！机器人${bestRobot}沿完整路径走，共${foundPath.length}个检查点`);
+        console.log(`[任务${task.target}] ✅ 分配成功！机器人${bestRobot}，共${fullPath.length}个点，方向=${bestRobotDir}`);
       } else {
-        console.log(`[任务${task.target}] ❌ 找不到终点在${task.target}附近的路径。请创建一条从某处走到${task.target}的路径`);
+        console.log(`[任务${task.target}] ❌ 路由失败，无法到达目标。请检查路径连接`);
       }
     } else {
       console.log(`[任务${task.target}] ❌ 失败：没有可用机器人`);
