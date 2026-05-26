@@ -1389,14 +1389,15 @@ function assignTask(task) {
 
       // 设置机器人的路径
       if (fullPath && fullPath.length > 1) {
-        robots[bestRobot].path = fullPath;
-        robots[bestRobot].pathProgress = 0;
-        robots[bestRobot].status = 'moving';
-        robots[bestRobot].isDefaultShuttle = false;
-        robots[bestRobot].currentTask = task;
+        const robot = robots[bestRobot];
+        robot.path = fullPath;
+        robot.pathProgress = getInitialProgress(robot, fullPath);  // 计算初始进度，避免瞬移
+        robot.status = 'moving';
+        robot.isDefaultShuttle = false;
+        robot.currentTask = task;
         task.assignedRobot = bestRobot;
         task.status = 'assigned';
-        console.log(`[任务${task.target}] ✅ 分配成功！机器人${bestRobot}，共${fullPath.length}个点，方向=${bestRobotDir}`);
+        console.log(`[任务${task.target}] ✅ 分配成功！机器人${bestRobot}，共${fullPath.length}个点，初始progress=${robot.pathProgress.toFixed(2)}，方向=${bestRobotDir}`);
       } else {
         console.log(`[任务${task.target}] ❌ 路由失败，无法到达目标。请检查路径连接`);
       }
@@ -1457,9 +1458,9 @@ function updateRobots(dt) {
         if (robot.path && robot.path.length > 1) {
           // 反向来时路径
           robot.path.reverse();
-          robot.pathProgress = 0;
+          robot.pathProgress = getInitialProgress(robot, robot.path);  // 计算初始进度，避免瞬移
           robot.isDefaultShuttle = false;  // 仍是任务路径反向
-          console.log(`[机器人${id}]服务完成，反向原路（${robot.path.length}点）`);
+          console.log(`[机器人${id}]服务完成，反向原路（${robot.path.length}点），初始progress=${robot.pathProgress.toFixed(2)}`);
         } else {
           // fallback: 如果没有路径，启动A→B往返
           robot.status = 'idle';
@@ -1501,6 +1502,40 @@ function getPositionOnPath(path, progress) {
     current += segLen;
   }
   return path[path.length - 1];
+}
+
+// 计算机器人当前位置在路径上的进度（0-1）
+function getInitialProgress(robot, path) {
+  if (!path || path.length < 2) return 0;
+
+  let minDist = Infinity;
+  let bestProgress = 0;
+  const totalLen = getPathLength(path);
+
+  let current = 0;
+  for (let i = 1; i < path.length; i++) {
+    const p1 = path[i-1];
+    const p2 = path[i];
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const segLen = Math.sqrt(dx*dx + dy*dy);
+
+    // 找路径上最近的点
+    const robotDx = robot.x - p1.x;
+    const robotDy = robot.y - p1.y;
+    const t = Math.max(0, Math.min(1, (robotDx*dx + robotDy*dy) / (segLen*segLen)));
+    const closestX = p1.x + t*dx;
+    const closestY = p1.y + t*dy;
+    const dist = Math.sqrt(Math.pow(robot.x - closestX, 2) + Math.pow(robot.y - closestY, 2));
+
+    if (dist < minDist) {
+      minDist = dist;
+      bestProgress = (current + t*segLen) / totalLen;
+    }
+    current += segLen;
+  }
+
+  return Math.max(0, Math.min(1, bestProgress));
 }
 
 function drawMap() {
