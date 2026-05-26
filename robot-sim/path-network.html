@@ -1061,12 +1061,20 @@ function getDistanceBetweenLabels(startLabel, endLabel) {
 
 function assignTask(task) {
   try {
+    // 获取目标点坐标
+    const targetPt = keyPoints[task.target];
+    if (!targetPt) {
+      console.error(`[错误] 目标${task.target}不是有效关键点`);
+      return;
+    }
+
     let bestRobot = null;
     let bestDist = Infinity;
     let bestRobotPos = 'A';
 
-    console.log(`\n[分配任务] 开始为任务"${task.target}"分配机器人...`);
-    console.log(`[当前位置检测详情]`);
+    console.log(`\n[分配任务] 开始为任务"${task.target}"分配机器人（按直线距离）...`);
+    console.log(`[目标位置] ${task.target} (${targetPt.x}, ${targetPt.y})`);
+    console.log(`[机器人距离评估]`);
 
     for (const [id, robot] of Object.entries(robots)) {
       // 只跳过有真实任务在处理的机器人，shuttle可以被中断
@@ -1076,33 +1084,22 @@ function assignTask(task) {
       }
 
       try {
-        // 找当前位置到目标的路径（使用新的位置检测）
-        const posInfo = getRobotCurrentPosition(robot);
-        const currentPos = posInfo.label;
+        // 计算机器人到目标的直线距离
+        const dx = targetPt.x - robot.x;
+        const dy = targetPt.y - robot.y;
+        const directDist = Math.sqrt(dx * dx + dy * dy);
 
-        console.log(`  机器人${id} (${robot.x.toFixed(1)},${robot.y.toFixed(1)}): [${posInfo.type}] 位置=${currentPos} (距离${posInfo.dist.toFixed(1)})`);
-        if (posInfo.type === 'path') {
-          console.log(`    └─ 在路径上，索引=${posInfo.pathIndex}, 路径上距离=${posInfo.onPathDist.toFixed(1)}`);
-        }
+        console.log(`  机器人${id} (${robot.x.toFixed(1)},${robot.y.toFixed(1)}) → ${task.target}: 直线距离=${directDist.toFixed(1)}`);
 
-        const pathNodes = findShortestPath(currentPos, task.target);
-        console.log(`  机器人${id}→${task.target}：路径节点=${JSON.stringify(pathNodes)}`);
-
-        let totalDist = 0;
-        for (let i = 0; i < pathNodes.length - 1; i++) {
-          const segDist = getDistanceBetweenLabels(pathNodes[i], pathNodes[i+1]);
-          totalDist += segDist;
-          console.log(`    ${pathNodes[i]}→${pathNodes[i+1]}：${segDist.toFixed(0)}`);
-        }
-
-        const timeToTask = totalDist / robot.speed;
-        console.log(`  机器人${id}：总距离=${totalDist.toFixed(0)}，耗时=${timeToTask.toFixed(2)}s`);
-
-        if (timeToTask < bestDist) {
-          bestDist = timeToTask;
+        if (directDist < bestDist) {
+          bestDist = directDist;
           bestRobot = parseInt(id);
-          bestRobotPos = currentPos;
-          console.log(`  机器人${id}：目前最优选择`);
+
+          // 获取机器人当前位置标签
+          const posInfo = getRobotCurrentPosition(robot);
+          bestRobotPos = posInfo.label;
+
+          console.log(`  ✓ 机器人${id}：目前最优（距离${directDist.toFixed(1)}）, 位置=${bestRobotPos}`);
         }
       } catch (err) {
         console.error(`[错误] 机器人${id}评估失败:`, err.message);
