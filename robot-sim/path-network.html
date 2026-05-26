@@ -491,27 +491,14 @@ canvas.addEventListener('click', (e) => {
       isDrawing = true;
       updateCurrentPath();
     } else {
-      // 后续的关键点，作为终点，保存路径 → 自动拆分成小段
+      // 后续的关键点，作为终点，保存完整路径（不拆分）
       const fullPath = [...currentEditPath, keyPoints[hitPoint]];
-      const segmentSize = 15; // 每个小路径最多15个点
+
+      const key = `${selectedStartPoint}-${hitPoint}`;
+      pathNetwork[key] = fullPath;
 
       console.log(`[保存路径] ${selectedStartPoint} → ${hitPoint}: ${fullPath.length}个点`);
-
-      // 拆分成小段
-      for (let i = 0; i < fullPath.length - 1; i += segmentSize) {
-        const endIdx = Math.min(i + segmentSize + 1, fullPath.length);
-        const segment = fullPath.slice(i, endIdx);
-
-        if (segment.length >= 2) {
-          const startPt = segment[0];
-          const endPt = segment[segment.length - 1];
-          // 小路径key：格式 "点1坐标-点2坐标_timestamp"
-          const segKey = `(${startPt.x.toFixed(0)},${startPt.y.toFixed(0)})-(${endPt.x.toFixed(0)},${endPt.y.toFixed(0)})_${Date.now()}_${Math.random()}`;
-
-          pathNetwork[segKey] = segment;
-          console.log(`  └─ 小路径: (${startPt.x.toFixed(0)},${startPt.y.toFixed(0)}) → (${endPt.x.toFixed(0)},${endPt.y.toFixed(0)}) [${segment.length}点]`);
-        }
-      }
+      console.log(`  └─ 完整路径已保存（包含所有中间检查点）`);
 
       savePaths();
       updatePathList();
@@ -1194,24 +1181,39 @@ function assignTask(task) {
     if (bestRobot !== null) {
       console.log(`[分配任务] 最优机器人=${bestRobot}，从${bestRobotPos}出发`);
 
-      // 用 Dijkstra 连接小路径段，从当前位置到目标
-      const pathNodes = findShortestPath(bestRobotPos, task.target);
-      let fullPath = getFullPath(pathNodes);
+      // 直接找包含目标的路径（不拆分、不Dijkstra）
+      let foundPath = null;
+      let foundPathKey = null;
 
-      console.log(`[任务${task.target}] 机器人${bestRobot} | 起点:${bestRobotPos} | 路径节点:${JSON.stringify(pathNodes)} | 完整路径长度:${fullPath ? fullPath.length : 0}`);
+      for (const [key, path] of Object.entries(pathNetwork)) {
+        if (!path || path.length < 2) continue;
 
-      // 只允许完整的真实路径
-      if (fullPath && fullPath.length > 1) {
-        robots[bestRobot].path = fullPath;
+        const pathEndPt = path[path.length - 1];
+        const distToTarget = Math.sqrt(Math.pow(pathEndPt.x - targetPt.x, 2) + Math.pow(pathEndPt.y - targetPt.y, 2));
+
+        // 找终点接近目标的路径
+        if (distToTarget < 3.0) {
+          foundPath = path;
+          foundPathKey = key;
+          console.log(`[任务${task.target}] 找到路径"${key}"，终点接近目标`);
+          break;
+        }
+      }
+
+      console.log(`[任务${task.target}] 机器人${bestRobot} | 起点:${bestRobotPos} | 路径:"${foundPathKey}" | 路径长度:${foundPath ? foundPath.length : 0}`);
+
+      // 只允许有效路径
+      if (foundPath && foundPath.length > 1) {
+        robots[bestRobot].path = foundPath;
         robots[bestRobot].pathProgress = 0;
         robots[bestRobot].status = 'moving';
         robots[bestRobot].isDefaultShuttle = false;
         robots[bestRobot].currentTask = task;
         task.assignedRobot = bestRobot;
         task.status = 'assigned';
-        console.log(`[任务${task.target}] ✅ 分配成功！机器人${bestRobot}，经过${pathNodes.length}个小路径，共${fullPath.length}个点`);
+        console.log(`[任务${task.target}] ✅ 分配成功！机器人${bestRobot}沿完整路径走，共${foundPath.length}个检查点`);
       } else {
-        console.log(`[任务${task.target}] ❌ 路径不完整（节点:${JSON.stringify(pathNodes)}），无法到达。需要创建连接到${task.target}的路径`);
+        console.log(`[任务${task.target}] ❌ 找不到终点在${task.target}附近的路径。请创建一条从某处走到${task.target}的路径`);
       }
     } else {
       console.log(`[任务${task.target}] ❌ 失败：没有可用机器人`);
