@@ -1235,6 +1235,8 @@ function updateRobots(dt) {
 
         if (nearestLabel) {
           const nodeRoute = findShortestPath(nearestLabel, pendingTarget);
+          console.log(`[机器人${id}]任务分配:nearestLabel=${nearestLabel}, target=${pendingTarget}, nodeRoute=${JSON.stringify(nodeRoute)}`);
+
           if (nodeRoute && nodeRoute.length > 0) {
             // 从最近点到目标的完整路径
             let fullPath = [];
@@ -1247,6 +1249,7 @@ function updateRobots(dt) {
 
             // 然后添加从nearestLabel到target的路径
             const routePath = getFullPath(nodeRoute);
+            console.log(`[机器人${id}]routePath长度=${routePath.length}, fullPath长度=${fullPath.length}`);
             if (routePath && routePath.length > 0) {
               fullPath.push(...routePath);
             }
@@ -1257,8 +1260,12 @@ function updateRobots(dt) {
               robot.path = fullPath;
               robot.pathProgress = 0;
               pendingRequests[pendingTarget] = false;
-              console.log(`[机器人${id}]从(${robot.x.toFixed(0)},${robot.y.toFixed(0)})沿路径前往${pendingTarget}`);
+              console.log(`[机器人${id}]✅分配成功，路径${fullPath.length}个点`);
+            } else {
+              console.log(`[机器人${id}]❌分配失败，fullPath长度=${fullPath.length}`);
             }
+          } else {
+            console.log(`[机器人${id}]❌nodeRoute为空或长度为0`);
           }
         }
       }
