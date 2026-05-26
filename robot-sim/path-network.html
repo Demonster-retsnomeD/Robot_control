@@ -616,11 +616,13 @@ function resetRobots() {
 function findShortestPath(start, end) {
   // 如果缓存存在，使用缓存；否则构建新图
   let graph, pathLengths, edges;
+  let cacheUsed = false;
 
   if (cachedGraph) {
     graph = cachedGraph;
     pathLengths = cachedPathLengths;
     edges = cachedEdges;
+    cacheUsed = true;
   } else {
     // 构建图：从路径网络提取关键点连接
     graph = {};
@@ -674,13 +676,13 @@ function findShortestPath(start, end) {
     cachedGraph = graph;
     cachedPathLengths = pathLengths;
     cachedEdges = edges;
+  }
 
-    // 调试：打印图结构和pathNetwork内容
-    console.log(`[pathNetwork内容]`, Object.keys(pathNetwork));
-    console.log(`[Dijkstra图] pathNetwork有${Object.keys(pathNetwork).length}条路径，图有${Object.keys(graph).length}个节点:`, Object.keys(graph).join(', '));
-    for (const [node, neighbors] of Object.entries(graph)) {
-      console.log(`  ${node} → [${neighbors.join(', ')}]`);
-    }
+  // 调试：打印图结构和pathNetwork内容（不管是否用缓存都打印）
+  console.log(`[pathNetwork内容] ${cacheUsed ? '(缓存)' : '(新建)'} 共${Object.keys(pathNetwork).length}条路径:`, Object.keys(pathNetwork).join(', '));
+  console.log(`[Dijkstra图] 图有${Object.keys(graph).length}个节点:`, Object.keys(graph).join(', '));
+  for (const [node, neighbors] of Object.entries(graph)) {
+    console.log(`  ${node} → [${neighbors.join(', ')}]`);
   }
 
   // 确保start在图中
