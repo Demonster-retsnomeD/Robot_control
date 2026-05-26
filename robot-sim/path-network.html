@@ -209,6 +209,11 @@
         <div style="font-size: 11px; margin-bottom: 6px; color: #0f172a; font-weight: 600;">速度 (m/s)</div>
         <div id="speedSettingsContainer" style="font-size: 11px;"></div>
       </div>
+
+      <div class="panel">
+        <h3>📞 呼叫</h3>
+        <div id="callButtonsContainer" style="display: grid; grid-template-columns: 1fr; gap: 6px;"></div>
+      </div>
     </div>
 
     <div class="canvas-wrapper">
@@ -259,19 +264,8 @@
       </div>
 
       <div class="panel">
-        <h3>📍 路径编辑</h3>
-        <div id="currentPath" style="font-size: 12px; color: #0ea5e9; padding: 8px; background: #ffffff; border-radius: 4px;">点击任意点开始绘制</div>
-        <button class="btn-primary btn-small" onclick="resetEditPath()" style="background: #ef4444; margin-top: 8px;">🗑️ 清除当前</button>
-      </div>
-
-      <div class="panel">
         <h3>📂 已保存路径</h3>
         <div id="pathList" class="path-list">无路径</div>
-      </div>
-
-      <div class="panel">
-        <h3>📞 呼叫</h3>
-        <div id="callButtonsContainer"></div>
       </div>
 
       <div class="panel">
@@ -989,17 +983,24 @@ function updateCallButtons() {
   container.innerHTML = '';
 
   const colors = ['#8b5cf6', '#f59e0b', '#06b6d4', '#ec4899', '#14b8a6'];
-  for (const [label, pt] of Object.entries(keyPoints)) {
-    if (pt.type === 'call') {
-      const color = colors[Object.keys(keyPoints).indexOf(label) % colors.length];
-      const btn = document.createElement('button');
-      btn.className = 'btn-primary';
-      btn.style.background = color;
-      btn.style.marginBottom = '8px';
-      btn.onclick = () => generateRequest(label);
-      btn.textContent = `📍 呼叫${label}`;
-      container.appendChild(btn);
-    }
+  const callPoints = Object.entries(keyPoints).filter(([_, pt]) => pt.type === 'call');
+
+  if (callPoints.length === 0) {
+    container.innerHTML = '<div style="font-size: 11px; color: #64748b;">无呼叫点</div>';
+    return;
+  }
+
+  for (const [label, pt] of callPoints) {
+    const color = colors[Object.keys(keyPoints).indexOf(label) % colors.length];
+    const btn = document.createElement('button');
+    btn.className = 'btn-primary';
+    btn.style.background = color;
+    btn.style.marginBottom = '4px';
+    btn.style.padding = '6px 8px';
+    btn.style.fontSize = '12px';
+    btn.onclick = () => generateRequest(label);
+    btn.textContent = `📞 ${label}`;
+    container.appendChild(btn);
   }
 }
 
