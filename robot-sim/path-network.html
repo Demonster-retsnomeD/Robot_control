@@ -1024,20 +1024,8 @@ function startDefaultShuttle(robot) {
   robot.path = [...path];
 
   // 计算当前位置对应的pathProgress（0-1）
-  // 基于累积路径长度而非点数比例
-  let cumulativeLen = 0;
-  let distToRobotPos = 0;
-  for (let i = 1; i < path.length; i++) {
-    const dx = path[i].x - path[i-1].x;
-    const dy = path[i].y - path[i-1].y;
-    const segLen = Math.sqrt(dx*dx + dy*dy);
-    if (i <= closestIdx) {
-      distToRobotPos += segLen;
-    }
-    cumulativeLen += segLen;
-  }
-  const pathLen = getPathLength(path);
-  const estimatedProgress = pathLen > 0 ? distToRobotPos / pathLen : 0;
+  // 简单估算：closestIdx / (path.length - 1)
+  const estimatedProgress = (path.length > 1) ? closestIdx / (path.length - 1) : 0;
 
   if (distToA < distToB) {
     // 离A近 → 反向走（将路径反序）
