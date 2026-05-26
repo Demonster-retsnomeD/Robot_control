@@ -11,29 +11,24 @@
       background: #f8fafc;
       color: #0f172a;
       display: flex;
-      align-items: stretch;
-      justify-content: center;
-      min-height: 100vh;
-      padding: 0;
-      margin: 0;
+      height: 100vh;
+      overflow: hidden;
     }
     .container {
-      background: #ffffff;
-      padding: 12px;
       width: 100%;
-      height: 100vh;
-      box-shadow: none;
-      border: none;
-      overflow: hidden;
+      height: 100%;
       display: flex;
       flex-direction: column;
     }
     .header {
+      background: linear-gradient(135deg, #1e3a5f, #2d1b5e);
+      color: white;
+      padding: 10px 16px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 8px;
       flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     h1 {
       margin: 0;
@@ -45,78 +40,50 @@
       gap: 8px;
       align-items: center;
     }
-    .conn-status {
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      background: #fee2e2;
-      color: #991b1b;
-    }
-    .conn-status.online {
-      background: #dcfce7;
-      color: #166534;
-    }
     .lang-btn {
       padding: 4px 10px;
-      background: #cbd5e1;
-      color: #0f172a;
-      border: none;
+      background: rgba(255,255,255,0.2);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.3);
       border-radius: 4px;
       cursor: pointer;
       font-size: 11px;
       font-weight: 600;
     }
     .lang-btn.active {
-      background: #0ea5e9;
-      color: white;
+      background: rgba(255,255,255,0.4);
+      border-color: white;
     }
-    .content {
+    .main {
       display: grid;
-      grid-template-columns: 160px 1fr 260px;
+      grid-template-columns: 170px 1fr 240px;
       gap: 8px;
       flex: 1;
+      padding: 8px;
       overflow: hidden;
     }
-    .left-panel, .right-panel {
+    .sidebar {
+      background: white;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
       display: flex;
       flex-direction: column;
       gap: 8px;
       overflow-y: auto;
-    }
-    .canvas-wrapper {
-      background: #ffffff;
-      border-radius: 6px;
-      border: 2px solid #0ea5e9;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 6px;
-      position: relative;
-      overflow: hidden;
-    }
-    canvas {
-      display: block;
-      cursor: crosshair;
-      max-width: 100%;
-      max-height: 100%;
-      background: #f8fafc;
+      padding: 8px;
     }
     .panel {
       background: #f8fafc;
       border: 1px solid #e2e8f0;
       border-radius: 6px;
-      padding: 10px;
+      padding: 8px;
       flex-shrink: 0;
     }
     .panel h3 {
       font-size: 12px;
-      margin: 0 0 8px 0;
+      margin: 0 0 6px 0;
       color: #0ea5e9;
       font-weight: 600;
-    }
-    .panel-item {
-      font-size: 12px;
-      margin-bottom: 6px;
     }
     button {
       padding: 6px 10px;
@@ -130,13 +97,8 @@
       width: 100%;
       margin-bottom: 4px;
     }
-    button:hover {
-      background: #0284c7;
-    }
-    button:disabled {
-      background: #cbd5e1;
-      cursor: not-allowed;
-    }
+    button:hover { background: #0284c7; }
+    button:disabled { background: #cbd5e1; cursor: not-allowed; }
     input, select {
       padding: 4px 6px;
       border: 1px solid #e2e8f0;
@@ -145,38 +107,25 @@
       width: 100%;
       margin-bottom: 4px;
     }
-    .stat-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 6px;
-      margin-bottom: 8px;
-    }
-    .stat-card {
+    .canvas-wrapper {
       background: #ffffff;
-      border: 1px solid #e2e8f0;
-      border-radius: 4px;
-      padding: 6px;
-      text-align: center;
-      font-size: 10px;
-    }
-    .stat-val {
-      font-size: 13px;
-      font-weight: 700;
-      color: #0ea5e9;
-    }
-    .stat-label {
-      color: #64748b;
-      font-size: 9px;
-      margin-top: 2px;
-    }
-    .mode-toggle {
+      border-radius: 8px;
+      border: 2px solid #0ea5e9;
       display: flex;
-      gap: 4px;
-      margin-bottom: 8px;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    canvas {
+      display: block;
+      cursor: crosshair;
+      background: white;
     }
     .mode-btn {
       flex: 1;
-      padding: 6px 8px;
+      padding: 5px;
       background: #f1f5f9;
       border: 1px solid #e2e8f0;
       border-radius: 4px;
@@ -190,31 +139,28 @@
       color: white;
       border-color: #0ea5e9;
     }
-    .overlay {
-      position: absolute;
-      top: 8px;
-      left: 8px;
-      background: rgba(0, 0, 0, 0.7);
-      color: #fff;
-      padding: 6px 10px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 600;
-      z-index: 10;
-    }
-    .log-area {
-      background: #ffffff;
+    .stat-card {
+      background: white;
       border: 1px solid #e2e8f0;
       border-radius: 4px;
-      padding: 6px;
-      font-size: 10px;
+      padding: 4px;
+      text-align: center;
+      font-size: 9px;
+    }
+    .stat-val {
+      font-size: 12px;
+      font-weight: 700;
+      color: #0ea5e9;
+    }
+    .log-area {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 4px;
+      padding: 4px;
+      font-size: 9px;
       font-family: monospace;
       max-height: 150px;
       overflow-y: auto;
-    }
-    .log-line {
-      padding: 2px 0;
-      border-bottom: 1px solid rgba(0,0,0,0.05);
     }
   </style>
 </head>
@@ -222,325 +168,214 @@
 
 <div class="container">
   <div class="header">
-    <h1 id="pageTitle">🛣️ 机器人路线规划 - REEMAN集成版</h1>
+    <h1>🛣️ 机器人路线规划 - REEMAN地图版</h1>
     <div class="header-right">
-      <div class="conn-status" id="connStatus">离线模式</div>
       <button class="lang-btn active" id="btnLangZh" onclick="setLanguage('zh')" style="width: auto;">中文</button>
       <button class="lang-btn" id="btnLangEn" onclick="setLanguage('en')" style="width: auto;">English</button>
     </div>
   </div>
 
-  <div class="content">
-    <!-- 左侧面板 -->
-    <div class="left-panel">
+  <div class="main">
+    <div class="sidebar">
       <div class="panel">
-        <h3 id="modeTitle">模式切换</h3>
-        <div class="mode-toggle">
-          <button class="mode-btn active" onclick="switchMode('view')" id="btnModeView">查看</button>
-          <button class="mode-btn" onclick="switchMode('point')" id="btnModePoint">点编辑</button>
-          <button class="mode-btn" onclick="switchMode('path')" id="btnModePath">路径</button>
+        <h3>模式</h3>
+        <div style="display: flex; gap: 4px;">
+          <button class="mode-btn active" onclick="switchMode('view')" style="flex: 1; padding: 5px;">查看</button>
+          <button class="mode-btn" onclick="switchMode('point')" style="flex: 1; padding: 5px;">点编辑</button>
+          <button class="mode-btn" onclick="switchMode('path')" style="flex: 1; padding: 5px;">路径</button>
         </div>
-      </div>
-
-      <div class="panel" id="mapPanel">
-        <h3 id="mapTitle">地图信息</h3>
-        <div class="stat-grid">
-          <div class="stat-card">
-            <div class="stat-label" id="mapWidthLabel">宽</div>
-            <div class="stat-val" id="mapWidth">--</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label" id="mapHeightLabel">高</div>
-            <div class="stat-val" id="mapHeight">--</div>
-          </div>
-        </div>
-        <div class="stat-grid">
-          <div class="stat-card">
-            <div class="stat-label" id="resLabel">分辨率</div>
-            <div class="stat-val" id="mapRes">--</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label" id="pointsLabel">点数</div>
-            <div class="stat-val" id="pointCount">0</div>
-          </div>
-        </div>
-        <button onclick="fetchMapFromREEMAN()" id="btnRefreshMap">刷新地图</button>
-        <button onclick="useOfflineMap()" id="btnOfflineMap">离线地图</button>
       </div>
 
       <div class="panel" id="pointPanel" style="display: none;">
-        <h3 id="pointEditTitle">点编辑</h3>
-        <div class="panel-item">
-          <label style="font-size: 10px; display: block; margin-bottom: 4px;">点类型：</label>
-          <select id="pointType" style="margin-bottom: 6px;">
-            <option value="patrol">轮巡点 (A,B,C...)</option>
-            <option value="call">呼叫点 (I,II,III...)</option>
-            <option value="robot">机器人 (1,2,3...)</option>
-          </select>
-        </div>
-        <button onclick="addPointMode()" id="btnAddPoint">+ 新增点</button>
+        <h3>点编辑</h3>
+        <select id="pointType" style="margin-bottom: 6px;">
+          <option value="patrol">轮巡点(A,B,C...)</option>
+          <option value="call">呼叫点(I,II,III...)</option>
+          <option value="robot">机器人(1,2,3...)</option>
+        </select>
+        <button onclick="startAddPoint()">+ 新增点</button>
       </div>
 
       <div class="panel" id="pathPanel" style="display: none;">
-        <h3 id="pathEditTitle">路径编辑</h3>
-        <button onclick="drawPathMode()" id="btnDrawPath">✏️ 绘制路径</button>
-        <button onclick="setPatrolRoute()" id="btnSetPatrol">🔄 设轮巡路线</button>
-        <button onclick="exportRoute()" id="btnExport">💾 导出路线</button>
+        <h3>路径编辑</h3>
+        <button onclick="startDrawPath()">✏️ 绘制路径</button>
+        <button onclick="exportRoute()">💾 导出路线</button>
       </div>
 
       <div class="panel">
-        <h3 id="debugTitle">调试</h3>
+        <h3>日志</h3>
         <div class="log-area" id="logArea"></div>
       </div>
     </div>
 
-    <!-- 中央画布 -->
     <div class="canvas-wrapper">
       <canvas id="mapCanvas"></canvas>
-      <div class="overlay" id="modeOverlay" style="display: none;">加载中...</div>
     </div>
 
-    <!-- 右侧面板 -->
-    <div class="right-panel">
+    <div class="sidebar">
       <div class="panel">
-        <h3 id="statsTitle">统计信息</h3>
-        <div class="stat-grid">
+        <h3>统计</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 6px;">
           <div class="stat-card">
-            <div class="stat-label" id="robotCountLabel">机器人</div>
+            <div style="font-size: 8px;">机器人</div>
             <div class="stat-val" id="robotCount">0</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label" id="pathCountLabel">路径段</div>
+            <div style="font-size: 8px;">路径</div>
             <div class="stat-val" id="pathCount">0</div>
           </div>
         </div>
-        <div class="panel-item">
-          <label style="font-size: 10px;">机器人数量：</label>
-          <input type="number" id="numRobots" min="1" max="20" value="3" onchange="updateRobotCount()">
-        </div>
+        <label style="font-size: 9px; display: block; margin-bottom: 2px;">机器人数量：</label>
+        <input type="number" id="numRobots" min="1" max="20" value="3" onchange="updateRobotCount()">
       </div>
 
       <div class="panel">
-        <h3 id="robotTitle">机器人状态</h3>
-        <div id="robotStatusList" style="font-size: 11px; line-height: 1.6;"></div>
+        <h3>机器人状态</h3>
+        <div id="robotStatusList" style="font-size: 10px; line-height: 1.6;"></div>
       </div>
 
       <div class="panel">
-        <h3 id="routeTitle">当前路线</h3>
-        <div id="routeInfo" style="font-size: 11px; color: #64748b;">无</div>
+        <h3>控制</h3>
+        <button onclick="startSimulation()" id="btnStart">▶️ 启动仿真</button>
+        <button onclick="stopSimulation()" id="btnStop" disabled>⏹️ 停止</button>
       </div>
     </div>
   </div>
 </div>
 
 <script>
-// ============================================================================
-// 国际化
-// ============================================================================
-let currentLanguage = localStorage.getItem('language') || 'zh';
+let currentMode = 'view';
+let mapData = null;
+let keyPoints = JSON.parse(localStorage.getItem('keyPoints') || '{}');
+let pathNetwork = JSON.parse(localStorage.getItem('pathNetwork') || '{}');
+let robots = {};
+let isRunning = false;
 
-const i18n = {
-  zh: {
-    pageTitle: '🛣️ 机器人路线规划 - REEMAN集成版',
-    modeTitle: '模式切换',
-    mapTitle: '地图信息',
-    mapWidthLabel: '宽(m)',
-    mapHeightLabel: '高(m)',
-    resLabel: '分辨率',
-    pointsLabel: '点数',
-    pointEditTitle: '点编辑',
-    pathEditTitle: '路径编辑',
-    debugTitle: '调试',
-    statsTitle: '统计信息',
-    robotCountLabel: '机器人',
-    pathCountLabel: '路径段',
-    robotTitle: '机器人状态',
-    routeTitle: '当前路线'
-  },
-  en: {
-    pageTitle: '🛣️ Robot Route Planning - REEMAN Integration',
-    modeTitle: 'Mode',
-    mapTitle: 'Map Info',
-    mapWidthLabel: 'Width (m)',
-    mapHeightLabel: 'Height (m)',
-    resLabel: 'Resolution',
-    pointsLabel: 'Points',
-    pointEditTitle: 'Edit Points',
-    pathEditTitle: 'Edit Paths',
-    debugTitle: 'Debug',
-    statsTitle: 'Stats',
-    robotCountLabel: 'Robots',
-    pathCountLabel: 'Path Segs',
-    robotTitle: 'Robot Status',
-    routeTitle: 'Current Route'
-  }
-};
-
-function t(key) {
-  return i18n[currentLanguage]?.[key] || i18n.zh[key] || key;
-}
-
-function setLanguage(lang) {
-  currentLanguage = lang;
-  localStorage.setItem('language', lang);
-  updateUI();
-  document.getElementById('btnLangZh').classList.toggle('active', lang === 'zh');
-  document.getElementById('btnLangEn').classList.toggle('active', lang === 'en');
-}
-
-function updateUI() {
-  document.getElementById('pageTitle').textContent = t('pageTitle');
-  document.getElementById('modeTitle').textContent = t('modeTitle');
-  document.getElementById('mapTitle').textContent = t('mapTitle');
-  document.getElementById('mapWidthLabel').textContent = t('mapWidthLabel');
-  document.getElementById('mapHeightLabel').textContent = t('mapHeightLabel');
-  document.getElementById('resLabel').textContent = t('resLabel');
-  document.getElementById('pointsLabel').textContent = t('pointsLabel');
-  document.getElementById('pointEditTitle').textContent = t('pointEditTitle');
-  document.getElementById('pathEditTitle').textContent = t('pathEditTitle');
-  document.getElementById('debugTitle').textContent = t('debugTitle');
-  document.getElementById('statsTitle').textContent = t('statsTitle');
-  document.getElementById('robotCountLabel').textContent = t('robotCountLabel');
-  document.getElementById('pathCountLabel').textContent = t('pathCountLabel');
-  document.getElementById('robotTitle').textContent = t('robotTitle');
-  document.getElementById('routeTitle').textContent = t('routeTitle');
-}
-
-// ============================================================================
-// 全局状态
-// ============================================================================
-let currentMode = 'view'; // 'view' | 'point' | 'path'
-let mapData = null;        // {width, height, resolution, origin, data}
-let keyPoints = {};        // {label: {x, y}}
-let pathNetwork = {};      // {key: [{x, y}, ...]}
-let patrolRoute = [];      // ['A-B', 'B-C', ...]
-let robots = {};           // {1: {...}, 2: {...}, ...}
-let isREEMANOnline = false;
-
-// Canvas
 const canvas = document.getElementById('mapCanvas');
 const ctx = canvas.getContext('2d');
 let mapZoom = 1, mapPanX = 0, mapPanY = 0;
 
-// ============================================================================
 // 模式切换
-// ============================================================================
 function switchMode(mode) {
   currentMode = mode;
   document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
   event.target.classList.add('active');
-
   document.getElementById('pointPanel').style.display = mode === 'point' ? 'flex' : 'none';
   document.getElementById('pathPanel').style.display = mode === 'path' ? 'flex' : 'none';
-
-  log(`[模式] 切换到: ${mode}`);
-  renderMap();
+  log(`[模式] ${mode}`);
+  render();
 }
 
-// ============================================================================
-// 地图获取
-// ============================================================================
-async function fetchMapFromREEMAN() {
-  try {
-    document.getElementById('modeOverlay').style.display = 'flex';
-    document.getElementById('modeOverlay').textContent = '从REEMAN获取地图...';
+// 初始化仿真地图
+function initMap() {
+  const W = 400, H = 300;
+  const data = new Uint8Array(W * H);
+  data.fill(0);
 
-    const r = await fetch('/api/map', {method: 'GET', signal: AbortSignal.timeout(3000)});
-    if (!r.ok) throw new Error('API返回: ' + r.status);
-
-    mapData = await r.json();
-    isREEMANOnline = true;
-    document.getElementById('connStatus').textContent = '在线 (REEMAN)';
-    document.getElementById('connStatus').className = 'conn-status online';
-    log('✅ 地图已从REEMAN加载');
-    renderMap();
-  } catch (e) {
-    log('❌ REEMAN连接失败: ' + e.message);
-    isREEMANOnline = false;
-    document.getElementById('connStatus').textContent = '离线模式';
-    document.getElementById('connStatus').className = 'conn-status';
-    useOfflineMap();
-  } finally {
-    document.getElementById('modeOverlay').style.display = 'none';
+  // 边界
+  for (let x = 0; x < W; x++) {
+    data[0 * W + x] = 100;
+    data[(H-1) * W + x] = 100;
   }
-}
+  for (let y = 0; y < H; y++) {
+    data[y * W + 0] = 100;
+    data[y * W + (W-1)] = 100;
+  }
 
-function useOfflineMap() {
-  // 模拟地图 (20m × 15m, 5cm分辨率)
+  // 模拟房间
+  for (let x = 80; x < 120; x++) {
+    for (let y = 50; y < 100; y++) {
+      data[y * W + x] = 100;
+    }
+  }
+  for (let x = 250; x < 290; x++) {
+    for (let y = 100; y < 200; y++) {
+      data[y * W + x] = 100;
+    }
+  }
+
   mapData = {
-    width: 400,   // 400格 × 0.05m = 20m
-    height: 300,  // 300格 × 0.05m = 15m
+    width: W, height: H,
     resolution: 0.05,
     origin: {x: -10, y: -7.5},
-    data: new Uint8Array(400 * 300).fill(0) // 全空白
+    data: data
   };
-  isREEMANOnline = false;
-  document.getElementById('connStatus').textContent = '离线模式';
-  document.getElementById('connStatus').className = 'conn-status';
-  log('📍 使用离线模拟地图 (20m×15m)');
 
-  // 初始化默认点
   if (Object.keys(keyPoints).length === 0) {
     keyPoints = {
       'A': {x: -8, y: -5},
       'B': {x: 8, y: -5},
       'C': {x: 0, y: 5},
       '1': {x: -9, y: -6},
-      '2': {x: 9, y: -6},
-      '3': {x: 0, y: 0}
+      '2': {x: 0, y: -6},
+      '3': {x: 9, y: -6}
     };
+    localStorage.setItem('keyPoints', JSON.stringify(keyPoints));
   }
-  renderMap();
+
+  log('✅ 地图已初始化 (20m×15m, 占用栅格)');
 }
 
-// ============================================================================
 // 坐标变换
-// ============================================================================
-function worldToCanvas(wx, wy, cw, ch) {
+function worldToCanvas(wx, wy) {
   const {width: W, height: H, resolution: res, origin} = mapData;
-  const cellW = cw / W;
-  const cellH = ch / H;
+  const cw = canvas.clientWidth, ch = canvas.clientHeight;
+  const cellW = cw / W, cellH = ch / H;
+
   const gx = (wx - origin.x) / res;
-  const gy = (H - (wy - origin.y) / res);
+  const gy = H - (wy - origin.y) / res;
+
   const cx = gx * cellW * mapZoom - mapPanX;
   const cy = gy * cellH * mapZoom - mapPanY;
+
   return [Math.round(cx), Math.round(cy)];
 }
 
-function canvasToWorld(cx, cy, cw, ch) {
+function canvasToWorld(cx, cy) {
   const {width: W, height: H, resolution: res, origin} = mapData;
-  const cellW = cw / W;
-  const cellH = ch / H;
+  const cw = canvas.clientWidth, ch = canvas.clientHeight;
+  const cellW = cw / W, cellH = ch / H;
+
   const gx = (cx + mapPanX) / mapZoom / cellW;
   const gy = (cy + mapPanY) / mapZoom / cellH;
+
   const wx = gx * res + origin.x;
   const wy = (H - gy) * res + origin.y;
+
   return [wx, wy];
 }
 
-// ============================================================================
-// 地图绘制
-// ============================================================================
-function renderMap() {
-  if (!mapData) return;
-
-  const cw = canvas.clientWidth;
-  const ch = canvas.clientHeight;
+// 渲染地图栅格
+function render() {
+  const cw = canvas.clientWidth, ch = canvas.clientHeight;
   canvas.width = cw;
   canvas.height = ch;
 
-  // 背景
-  ctx.fillStyle = '#f8fafc';
-  ctx.fillRect(0, 0, cw, ch);
-
-  // 网格
-  ctx.strokeStyle = '#e2e8f0';
-  ctx.lineWidth = 1;
-  const {width: W, height: H} = mapData;
+  const {width: W, height: H, data} = mapData;
   const cellW = (cw / W) * mapZoom;
   const cellH = (ch / H) * mapZoom;
 
-  for (let i = 0; i <= W; i++) {
+  // 绘制栅格数据（灰度图）
+  const imgData = ctx.createImageData(W, H);
+  const pix = imgData.data;
+  for (let i = 0; i < W * H; i++) {
+    const gray = 255 - Math.min(data[i] * 2.55, 255);
+    pix[i*4+0] = gray;
+    pix[i*4+1] = gray;
+    pix[i*4+2] = gray;
+    pix[i*4+3] = 255;
+  }
+
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = W;
+  tempCanvas.height = H;
+  tempCanvas.getContext('2d').putImageData(imgData, 0, 0);
+  ctx.drawImage(tempCanvas, 0, 0, W, H, -mapPanX, -mapPanY, W * cellW, H * cellH);
+
+  // 网格
+  ctx.strokeStyle = 'rgba(150, 150, 150, 0.2)';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i <= W; i += 20) {
     const x = i * cellW - mapPanX;
     if (x >= 0 && x < cw) {
       ctx.beginPath();
@@ -550,52 +385,33 @@ function renderMap() {
     }
   }
 
-  for (let i = 0; i <= H; i++) {
-    const y = i * cellH - mapPanY;
-    if (y >= 0 && y < ch) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(cw, y);
-      ctx.stroke();
-    }
-  }
-
   // 路径
-  if (currentMode !== 'point') {
-    ctx.strokeStyle = '#0ea5e9';
-    ctx.lineWidth = 2;
-    for (const [key, path] of Object.entries(pathNetwork)) {
-      if (path.length < 2) continue;
-      ctx.beginPath();
-      const [x0, y0] = worldToCanvas(path[0].x, path[0].y, cw, ch);
-      ctx.moveTo(x0, y0);
-      for (let i = 1; i < path.length; i++) {
-        const [x, y] = worldToCanvas(path[i].x, path[i].y, cw, ch);
-        ctx.lineTo(x, y);
-      }
-      ctx.stroke();
+  ctx.strokeStyle = '#0ea5e9';
+  ctx.lineWidth = 2;
+  for (const path of Object.values(pathNetwork)) {
+    if (path.length < 2) continue;
+    ctx.beginPath();
+    const [x0, y0] = worldToCanvas(path[0].x, path[0].y);
+    ctx.moveTo(x0, y0);
+    for (let i = 1; i < path.length; i++) {
+      const [x, y] = worldToCanvas(path[i].x, path[i].y);
+      ctx.lineTo(x, y);
     }
+    ctx.stroke();
   }
 
   // 点
-  const colors = {
-    patrol: '#10b981',
-    call: '#8b5cf6',
-    robot: '#ef4444'
-  };
-
+  const colors = {patrol: '#10b981', call: '#8b5cf6', robot: '#ef4444'};
   for (const [label, pt] of Object.entries(keyPoints)) {
-    const [cx, cy] = worldToCanvas(pt.x, pt.y, cw, ch);
+    const [cx, cy] = worldToCanvas(pt.x, pt.y);
     const type = isNaN(parseInt(label)) ? (label.match(/^[A-Z]/) ? 'patrol' : 'call') : 'robot';
     const color = colors[type];
 
-    // 圆
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(cx, cy, 8, 0, Math.PI * 2);
     ctx.fill();
 
-    // 标签
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 12px Arial';
     ctx.textAlign = 'center';
@@ -603,203 +419,217 @@ function renderMap() {
     ctx.fillText(label, cx, cy);
   }
 
-  // 统计
-  document.getElementById('mapWidth').textContent = mapData.width > 0 ? (mapData.width * mapData.resolution).toFixed(1) : '--';
-  document.getElementById('mapHeight').textContent = mapData.height > 0 ? (mapData.height * mapData.resolution).toFixed(1) : '--';
-  document.getElementById('mapRes').textContent = (mapData.resolution * 100).toFixed(0) + 'cm';
+  // 机器人
+  for (const [id, r] of Object.entries(robots)) {
+    const [cx, cy] = worldToCanvas(r.x, r.y);
+    ctx.fillStyle = r.color;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 10px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(id, cx, cy);
+  }
+
   document.getElementById('pointCount').textContent = Object.keys(keyPoints).length;
   document.getElementById('pathCount').textContent = Object.keys(pathNetwork).length;
 }
 
-// ============================================================================
 // 点编辑
-// ============================================================================
-function addPointMode() {
+function startAddPoint() {
   const type = document.getElementById('pointType').value;
-  log(`添加${type === 'patrol' ? '轮巡点' : type === 'call' ? '呼叫点' : '机器人'}...`);
+  log(`点击地图新增${type}点...`);
 
-  canvas.onclick = (e) => {
+  const handler = (e) => {
     const rect = canvas.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    const cy = e.clientY - rect.top;
-    const [wx, wy] = canvasToWorld(cx, cy, rect.width, rect.height);
+    const [wx, wy] = canvasToWorld(e.clientX - rect.left, e.clientY - rect.top);
 
     let label = '';
     if (type === 'patrol') {
       label = String.fromCharCode(65 + Object.keys(keyPoints).filter(l => /^[A-Z]/.test(l)).length);
     } else if (type === 'call') {
       const count = Object.keys(keyPoints).filter(l => /^[IVX]/.test(l)).length;
-      label = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][count] || 'X' + count;
+      label = ['I', 'II', 'III', 'IV', 'V', 'VI'][count] || 'X' + count;
     } else {
       label = String(Object.keys(keyPoints).filter(l => /^\d+$/.test(l)).length + 1);
     }
 
-    keyPoints[label] = {x: wx, y: wy};
-    log(`✅ 点${label} 添加在 (${wx.toFixed(2)}, ${wy.toFixed(2)})`);
-    canvas.onclick = null;
-    renderMap();
+    keyPoints[label] = {x: parseFloat(wx.toFixed(2)), y: parseFloat(wy.toFixed(2))};
+    localStorage.setItem('keyPoints', JSON.stringify(keyPoints));
+    log(`✅ 点${label} @ (${wx.toFixed(2)}, ${wy.toFixed(2)})`);
+
+    canvas.removeEventListener('click', handler);
+    render();
   };
+
+  canvas.addEventListener('click', handler);
 }
 
-// ============================================================================
-// 路径编辑
-// ============================================================================
+// 路径绘制
 let drawingPath = [];
-function drawPathMode() {
+function startDrawPath() {
   drawingPath = [];
-  log('开始绘制路径 (点击点连接)');
-  canvas.onclick = (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    const cy = e.clientY - rect.top;
-    const [wx, wy] = canvasToWorld(cx, cy, rect.width, rect.height);
+  log('点击点相连路径，右键完成...');
 
-    // 找最近的点
-    let closest = null;
-    let minDist = 0.5; // 0.5m
+  const clickHandler = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const [wx, wy] = canvasToWorld(e.clientX - rect.left, e.clientY - rect.top);
+
+    let closest = null, minDist = 0.5;
     for (const [label, pt] of Object.entries(keyPoints)) {
-      const d = Math.sqrt((pt.x - wx) ** 2 + (pt.y - wy) ** 2);
-      if (d < minDist) {
-        minDist = d;
-        closest = label;
-      }
+      const d = Math.sqrt((pt.x - wx)**2 + (pt.y - wy)**2);
+      if (d < minDist) { minDist = d; closest = label; }
     }
 
     if (closest) {
       drawingPath.push(closest);
       log(`路径: ${drawingPath.join(' → ')}`);
-
-      if (drawingPath.length >= 2 && e.detail > 1) { // 双击完成
-        const key = drawingPath.join('-');
-        const coords = [];
-        for (const label of drawingPath) {
-          coords.push(keyPoints[label]);
-        }
-        pathNetwork[key] = coords;
-        log(`✅ 路径"${key}"已保存`);
-        drawingPath = [];
-        canvas.onclick = null;
-        renderMap();
-      }
+      render();
     }
   };
+
+  const rightClickHandler = (e) => {
+    e.preventDefault();
+    if (drawingPath.length >= 2) {
+      const key = drawingPath.join('-');
+      pathNetwork[key] = drawingPath.map(l => keyPoints[l]);
+      localStorage.setItem('pathNetwork', JSON.stringify(pathNetwork));
+      log(`✅ 路径"${key}"已保存`);
+    }
+    drawingPath = [];
+    canvas.removeEventListener('click', clickHandler);
+    canvas.removeEventListener('contextmenu', rightClickHandler);
+    render();
+  };
+
+  canvas.addEventListener('click', clickHandler);
+  canvas.addEventListener('contextmenu', rightClickHandler);
 }
 
-// ============================================================================
-// 机器人管理
-// ============================================================================
+// 机器人
 function updateRobotCount() {
   const n = parseInt(document.getElementById('numRobots').value) || 3;
   robots = {};
+  const colors = ['#ef4444', '#3b82f6', '#06b6d4', '#f59e0b', '#8b5cf6'];
   for (let i = 1; i <= n; i++) {
     robots[i] = {
       x: keyPoints[String(i)]?.x ?? -9 + (i-1)*2,
       y: keyPoints[String(i)]?.y ?? -6,
-      speed: 1,
-      status: 'idle'
+      vx: (Math.random() - 0.5) * 0.2,
+      vy: (Math.random() - 0.5) * 0.2,
+      color: colors[i % colors.length]
     };
   }
   document.getElementById('robotCount').textContent = n;
   updateRobotStatus();
-  renderMap();
+  render();
 }
 
 function updateRobotStatus() {
   const html = Object.entries(robots)
-    .map(([id, r]) => `<div>机器人${id}: (${r.x.toFixed(1)}, ${r.y.toFixed(1)}) ${r.status}</div>`)
+    .map(([id, r]) => `<div>机器人${id}: (${r.x.toFixed(1)}, ${r.y.toFixed(1)})</div>`)
     .join('');
   document.getElementById('robotStatusList').innerHTML = html || '无';
 }
 
-// ============================================================================
-// 导出/导入
-// ============================================================================
-function exportRoute() {
-  const exported = {
-    keyPoints,
-    pathNetwork,
-    patrolRoute,
-    timestamp: new Date().toISOString(),
-    mapInfo: {
-      width: mapData.width,
-      height: mapData.height,
-      resolution: mapData.resolution,
-      origin: mapData.origin
+// 仿真
+function startSimulation() {
+  isRunning = true;
+  document.getElementById('btnStart').disabled = true;
+  document.getElementById('btnStop').disabled = false;
+  log('🎬 仿真运行中...');
+  simulate();
+}
+
+function stopSimulation() {
+  isRunning = false;
+  document.getElementById('btnStart').disabled = false;
+  document.getElementById('btnStop').disabled = true;
+  log('⏹️ 仿真停止');
+}
+
+function simulate() {
+  if (!isRunning) return;
+
+  for (const r of Object.values(robots)) {
+    r.x += r.vx;
+    r.y += r.vy;
+    r.x = Math.max(-9.8, Math.min(9.8, r.x));
+    r.y = Math.max(-7.4, Math.min(7.4, r.y));
+
+    if (Math.random() < 0.05) {
+      r.vx = (Math.random() - 0.5) * 0.2;
+      r.vy = (Math.random() - 0.5) * 0.2;
     }
+  }
+
+  updateRobotStatus();
+  render();
+  requestAnimationFrame(simulate);
+}
+
+// 导出
+function exportRoute() {
+  const data = {
+    keyPoints, pathNetwork,
+    mapInfo: { width: 20, height: 15, resolution: 0.05, origin: mapData.origin },
+    timestamp: new Date().toISOString()
   };
-  const json = JSON.stringify(exported, null, 2);
-  const blob = new Blob([json], {type: 'application/json'});
-  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}));
   a.download = `route_${Date.now()}.json`;
   a.click();
   log('💾 路线已导出');
 }
 
-// ============================================================================
-// 日志
-// ============================================================================
+function setLanguage(lang) {
+  document.getElementById('btnLangZh').classList.toggle('active', lang === 'zh');
+  document.getElementById('btnLangEn').classList.toggle('active', lang === 'en');
+}
+
 function log(msg) {
-  const logArea = document.getElementById('logArea');
+  const area = document.getElementById('logArea');
   const line = document.createElement('div');
-  line.className = 'log-line';
   line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-  logArea.appendChild(line);
-  logArea.scrollTop = logArea.scrollHeight;
-  while (logArea.children.length > 50) {
-    logArea.removeChild(logArea.firstChild);
-  }
+  area.appendChild(line);
+  area.scrollTop = area.scrollHeight;
+  if (area.children.length > 50) area.removeChild(area.firstChild);
 }
 
-function setPatrolRoute() {
-  log('设定轮巡路线...');
-}
-
-// ============================================================================
 // 初始化
-// ============================================================================
 window.addEventListener('load', () => {
-  updateUI();
-  document.getElementById('numRobots').value = 3;
+  initMap();
   updateRobotCount();
-  fetchMapFromREEMAN();
-  setInterval(() => {
-    if (isREEMANOnline) {
-      // 可定时刷新地图
+  render();
+
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    mapZoom = Math.max(0.5, Math.min(5, mapZoom * (1 - e.deltaY * 0.001)));
+    render();
+  });
+
+  let dragging = false, sx = 0, sy = 0;
+  canvas.addEventListener('mousedown', (e) => {
+    dragging = true;
+    sx = e.clientX;
+    sy = e.clientY;
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (dragging) {
+      mapPanX -= e.clientX - sx;
+      mapPanY -= e.clientY - sy;
+      sx = e.clientX;
+      sy = e.clientY;
+      render();
     }
-  }, 5000);
-  log('系统启动');
-});
+  });
+  document.addEventListener('mouseup', () => {
+    dragging = false;
+  });
 
-// Canvas缩放/平移
-canvas.addEventListener('wheel', (e) => {
-  e.preventDefault();
-  mapZoom *= (1 - e.deltaY * 0.001);
-  mapZoom = Math.max(0.5, Math.min(mapZoom, 5));
-  renderMap();
-});
-
-canvas.addEventListener('mousedown', (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const sx = e.clientX - rect.left;
-  const sy = e.clientY - rect.top;
-
-  const move = (e) => {
-    const dx = e.clientX - rect.left - sx;
-    const dy = e.clientY - rect.top - sy;
-    mapPanX -= dx;
-    mapPanY -= dy;
-    renderMap();
-  };
-
-  const up = () => {
-    document.removeEventListener('mousemove', move);
-    document.removeEventListener('mouseup', up);
-  };
-
-  document.addEventListener('mousemove', move);
-  document.addEventListener('mouseup', up);
+  log('系统就绪 (REEMAN地图仿真版)');
 });
 </script>
 
