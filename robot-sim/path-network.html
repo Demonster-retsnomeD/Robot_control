@@ -794,13 +794,17 @@ function findShortestPath(start, end) {
 }
 
 function getPathLength(points) {
+  if (!points || points.length < 2) return 1;  // 防止Infinity
+
   let len = 0;
   for (let i = 1; i < points.length; i++) {
+    if (!points[i] || !points[i-1]) continue;  // 跳过无效点
     const dx = points[i].x - points[i-1].x;
     const dy = points[i].y - points[i-1].y;
-    len += Math.sqrt(dx*dx + dy*dy);
+    const segLen = Math.sqrt(dx*dx + dy*dy);
+    if (!isNaN(segLen)) len += segLen;
   }
-  return len;
+  return len > 0 ? len : 1;  // 防止0或NaN
 }
 
 // 查找两个关键点之间的完整路径（支持伪标签）
@@ -1419,7 +1423,18 @@ function updateRobots(dt) {
   // 更新机器人位置
   for (const [id, robot] of Object.entries(robots)) {
     if (robot.status === 'moving' && robot.path) {
-      const speed = robot.speed / getPathLength(robot.path);
+      const pathLen = getPathLength(robot.path);
+      if (pathLen <= 0) {
+        console.warn(`[机器人${id}]路径长度=0，跳过`);
+        continue;
+      }
+
+      const speed = robot.speed / pathLen;
+      if (!isFinite(speed)) {
+        console.warn(`[机器人${id}]速度非有限值=${speed}，跳过`);
+        continue;
+      }
+
       robot.pathProgress += speed * dt;
 
       if (robot.pathProgress >= 1) {
