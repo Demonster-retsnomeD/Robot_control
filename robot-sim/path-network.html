@@ -1214,9 +1214,8 @@ function updateRobots(dt) {
         if (fullPath && fullPath.length > 1) {
           robot.patrolMode = false;
           robot.serviceTarget = pendingTarget;
-          robot.servicePath = [...robot.path];  // 深拷贝保存轮巡路径
           robot.path = fullPath;           // 设置去服务地点的路径
-          robot.pathProgress = getInitialProgress(robot, fullPath);
+          robot.pathProgress = 0;          // 从路径起点开始
           pendingRequests[pendingTarget] = false;
           console.log(`[机器人${id}]离开轮巡，前往${pendingTarget}`);
         }
@@ -1242,27 +1241,13 @@ function updateRobots(dt) {
             robot.pathProgress += speed * dt;
 
             if (robot.pathProgress >= 1) {
-              // 到达目标点
+              // 到达服务点，开始服务
               const endPos = robot.path[robot.path.length - 1];
               robot.x = endPos.x;
               robot.y = endPos.y;
-
-              // 检查：是前往服务点还是返回轮巡
-              if (!robot.serviceStart) {
-                // 第一次到达服务点，开始服务
-                robot.path = null;
-                robot.serviceStart = time;
-                console.log(`[机器人${id}]到达${robot.serviceTarget}，开始服务3s`);
-              } else {
-                // 返回轮巡路径时到达，完成返回
-                robot.patrolMode = true;
-                robot.serviceTarget = null;
-                robot.serviceStart = null;
-                robot.servicePath = null;
-                robot.path = null;
-                robot.pathProgress = 0;
-                console.log(`[机器人${id}]返回轮巡路径`);
-              }
+              robot.path = null;
+              robot.serviceStart = time;
+              console.log(`[机器人${id}]到达${robot.serviceTarget}，开始服务3s`);
             } else {
               const pos = getPositionOnPath(robot.path, robot.pathProgress);
               robot.x = pos.x;
@@ -1342,40 +1327,6 @@ function getPositionOnPath(path, progress) {
     current += segLen;
   }
   return path[path.length - 1];
-}
-
-// 计算机器人当前位置在路径上的进度（0-1）
-function getInitialProgress(robot, path) {
-  if (!path || path.length < 2) return 0;
-
-  let minDist = Infinity;
-  let bestProgress = 0;
-  const totalLen = getPathLength(path);
-
-  let current = 0;
-  for (let i = 1; i < path.length; i++) {
-    const p1 = path[i-1];
-    const p2 = path[i];
-    const dx = p2.x - p1.x;
-    const dy = p2.y - p1.y;
-    const segLen = Math.sqrt(dx*dx + dy*dy);
-
-    // 找路径上最近的点
-    const robotDx = robot.x - p1.x;
-    const robotDy = robot.y - p1.y;
-    const t = Math.max(0, Math.min(1, (robotDx*dx + robotDy*dy) / (segLen*segLen)));
-    const closestX = p1.x + t*dx;
-    const closestY = p1.y + t*dy;
-    const dist = Math.sqrt(Math.pow(robot.x - closestX, 2) + Math.pow(robot.y - closestY, 2));
-
-    if (dist < minDist) {
-      minDist = dist;
-      bestProgress = (current + t*segLen) / totalLen;
-    }
-    current += segLen;
-  }
-
-  return Math.max(0, Math.min(1, bestProgress));
 }
 
 function drawMap() {
