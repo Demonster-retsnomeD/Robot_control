@@ -207,8 +207,8 @@
           <label style="display: flex; align-items: center; gap: 4px;">
             数量:
             <button onclick="setRobotCount(Math.max(1, parseInt(document.getElementById('robotCount').value) - 1))" style="width: 28px; height: 28px; padding: 0; cursor: pointer; font-size: 12px;">−</button>
-            <input type="number" id="robotCount" value="3" min="1" max="5" style="width: 40px; text-align: center; font-size: 12px;" onchange="setRobotCount(this.value)">
-            <button onclick="setRobotCount(Math.min(5, parseInt(document.getElementById('robotCount').value) + 1))" style="width: 28px; height: 28px; padding: 0; cursor: pointer; font-size: 12px;">+</button>
+            <input type="number" id="robotCount" value="3" min="1" max="20" style="width: 40px; text-align: center; font-size: 12px;" onchange="setRobotCount(this.value)">
+            <button onclick="setRobotCount(Math.min(20, parseInt(document.getElementById('robotCount').value) + 1))" style="width: 28px; height: 28px; padding: 0; cursor: pointer; font-size: 12px;">+</button>
           </label>
         </div>
 
@@ -429,7 +429,7 @@ let pointCreationMode = null; // 'patrol' | 'call' | null
 let patrolRouteEditMode = false; // 轮巡路由编辑模式
 let patrolRoute = []; // 选中的轮巡路径段keys
 let robotCount = 3; // 机器人数量
-const defaultSpeeds = [5, 10, 3, 4, 6]; // 机器人默认速度列表
+const defaultSpeeds = [5, 10, 3, 4, 6, 7, 8, 9, 5, 6, 7, 8, 9, 10, 5, 6, 7, 8, 9, 10]; // 机器人默认速度列表（1-20个）
 
 const robots = {};
 
@@ -1440,7 +1440,7 @@ function initializeRobots() {
 
 function setRobotCount(count) {
   count = parseInt(count);
-  if (isNaN(count) || count < 1 || count > 5) {
+  if (isNaN(count) || count < 1 || count > 20) {
     count = 3;
   }
 
