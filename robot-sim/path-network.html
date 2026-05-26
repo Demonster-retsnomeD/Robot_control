@@ -637,43 +637,55 @@ function findShortestPath(start, end) {
     edges = {}; // 追踪边类型（真实或虚拟）
 
     for (const [key, path] of Object.entries(pathNetwork)) {
-    if (!path || path.length < 2) continue;
+      if (!path || path.length < 2) continue;
 
-    const startPt = path[0];
-    const endPt = path[path.length - 1];
-    const len = getPathLength(path);
+      // 遍历路径上的所有点，每个点都是节点
+      for (let i = 0; i < path.length; i++) {
+        const pt = path[i];
 
-    // 查找起点对应的关键点
-    let startLabel = null;
-    let endLabel = null;
+        // 创建点的标签：优先用关键点名称，否则用坐标（四舍五入）
+        let label = null;
+        for (const [kpLabel, kpPt] of Object.entries(keyPoints)) {
+          const d = Math.sqrt(Math.pow(pt.x - kpPt.x, 2) + Math.pow(pt.y - kpPt.y, 2));
+          if (d < 2.0) {
+            label = kpLabel;
+            break;
+          }
+        }
+        if (!label) {
+          label = `(${Math.round(pt.x)},${Math.round(pt.y)})`;
+        }
 
-    for (const [kpLabel, kpPt] of Object.entries(keyPoints)) {
-      if (!startLabel) {
-        const d1 = Math.sqrt(Math.pow(startPt.x - kpPt.x, 2) + Math.pow(startPt.y - kpPt.y, 2));
-        if (d1 < 2.0) startLabel = kpLabel;
-      }
-      if (!endLabel) {
-        const d2 = Math.sqrt(Math.pow(endPt.x - kpPt.x, 2) + Math.pow(endPt.y - kpPt.y, 2));
-        if (d2 < 2.0) endLabel = kpLabel;
-      }
-    }
+        // 添加节点
+        if (!graph[label]) graph[label] = [];
 
-    // 如果没找到对应的关键点，用坐标创建伪标签
-    if (!startLabel) startLabel = `(${startPt.x.toFixed(0)},${startPt.y.toFixed(0)})`;
-    if (!endLabel) endLabel = `(${endPt.x.toFixed(0)},${endPt.y.toFixed(0)})`;
+        // 与前一个点连接
+        if (i > 0) {
+          const prevPt = path[i-1];
+          let prevLabel = null;
+          for (const [kpLabel, kpPt] of Object.entries(keyPoints)) {
+            const d = Math.sqrt(Math.pow(prevPt.x - kpPt.x, 2) + Math.pow(prevPt.y - kpPt.y, 2));
+            if (d < 2.0) {
+              prevLabel = kpLabel;
+              break;
+            }
+          }
+          if (!prevLabel) {
+            prevLabel = `(${Math.round(prevPt.x)},${Math.round(prevPt.y)})`;
+          }
 
-      // 添加真实边（双向）
-      if (startLabel && endLabel && startLabel !== endLabel) {
-        if (!graph[startLabel]) graph[startLabel] = [];
-        graph[startLabel].push(endLabel);
-        pathLengths[`${startLabel}-${endLabel}`] = len;
-        edges[`${startLabel}-${endLabel}`] = 'real';
+          // 双向边
+          if (!graph[prevLabel]) graph[prevLabel] = [];
+          if (!graph[prevLabel].includes(label)) graph[prevLabel].push(label);
+          if (!graph[label].includes(prevLabel)) graph[label].push(prevLabel);
 
-        // 反向也添加
-        if (!graph[endLabel]) graph[endLabel] = [];
-        graph[endLabel].push(startLabel);
-        pathLengths[`${endLabel}-${startLabel}`] = len;
-        edges[`${endLabel}-${startLabel}`] = 'real';
+          // 计算距离
+          const segDist = Math.sqrt(Math.pow(pt.x - prevPt.x, 2) + Math.pow(pt.y - prevPt.y, 2));
+          pathLengths[`${prevLabel}-${label}`] = segDist;
+          pathLengths[`${label}-${prevLabel}`] = segDist;
+          edges[`${prevLabel}-${label}`] = 'real';
+          edges[`${label}-${prevLabel}`] = 'real';
+        }
       }
     }
 
