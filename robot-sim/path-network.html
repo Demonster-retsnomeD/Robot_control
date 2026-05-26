@@ -853,22 +853,36 @@ function findPathBetweenPoints(startLabel, endLabel) {
     }
 
     // **方案2：查找包含start和end的路径（子路径）**
+    // 用与图构建相同的逻辑为路径上的点生成标签，然后精确匹配
     console.log(`    [子路径搜索] 查找包含${startLabel}和${endLabel}的路径...`);
     for (const [key, path] of Object.entries(pathNetwork)) {
       if (!path || path.length < 2) continue;
 
-      // 在路径上查找start和end的位置
-      let startIdx = -1;
-      let endIdx = -1;
-
+      // 为路径上的所有点生成标签（与图构建逻辑一致）
+      const pointLabels = [];
       for (let i = 0; i < path.length; i++) {
         const pt = path[i];
-        const distToStart = Math.sqrt(Math.pow(pt.x - startPt.x, 2) + Math.pow(pt.y - startPt.y, 2));
-        const distToEnd = Math.sqrt(Math.pow(pt.x - endPt.x, 2) + Math.pow(pt.y - endPt.y, 2));
+        let label = null;
 
-        if (distToStart < 2.0) startIdx = i;
-        if (distToEnd < 2.0) endIdx = i;
+        // 先检查是否接近关键点
+        for (const [kpLabel, kpPt] of Object.entries(keyPoints)) {
+          const d = Math.sqrt(Math.pow(pt.x - kpPt.x, 2) + Math.pow(pt.y - kpPt.y, 2));
+          if (d < 2.0) {
+            label = kpLabel;
+            break;
+          }
+        }
+
+        // 否则生成伪标签
+        if (!label) {
+          label = `(${Math.round(pt.x)},${Math.round(pt.y)})`;
+        }
+        pointLabels.push(label);
       }
+
+      // 查找startLabel和endLabel在点标签列表中的索引
+      const startIdx = pointLabels.indexOf(startLabel);
+      const endIdx = pointLabels.indexOf(endLabel);
 
       // 如果都找到了，提取子路径
       if (startIdx !== -1 && endIdx !== -1) {
