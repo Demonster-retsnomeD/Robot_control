@@ -829,8 +829,7 @@ function findPathBetweenPoints(startLabel, endLabel) {
     }
     if (!startPt || !endPt) return [];
 
-    // 扫描pathNetwork查找起点=startLabel、终点=endLabel的路径
-    let found = false;
+    // **方案1：查找完整的start→end路径**
     for (const [key, path] of Object.entries(pathNetwork)) {
       if (!path || path.length < 2) continue;
 
@@ -840,8 +839,7 @@ function findPathBetweenPoints(startLabel, endLabel) {
       const distEnd = Math.sqrt(Math.pow(pathEnd.x - endPt.x, 2) + Math.pow(pathEnd.y - endPt.y, 2));
 
       if (distStart < 0.5 && distEnd < 0.5) {
-        console.log(`    [找到] 正向路径"${key}"（${path.length}个点）`);
-        found = true;
+        console.log(`    [找到] 完整路径"${key}"（${path.length}个点）`);
         return path;
       }
 
@@ -849,15 +847,44 @@ function findPathBetweenPoints(startLabel, endLabel) {
       const distEndReverse = Math.sqrt(Math.pow(pathStart.x - endPt.x, 2) + Math.pow(pathStart.y - endPt.y, 2));
       const distStartReverse = Math.sqrt(Math.pow(pathEnd.x - startPt.x, 2) + Math.pow(pathEnd.y - startPt.y, 2));
       if (distEndReverse < 0.5 && distStartReverse < 0.5) {
-        console.log(`    [找到] 反向路径"${key}"（${path.length}个点）`);
-        found = true;
+        console.log(`    [找到] 完整路径（反向）"${key}"（${path.length}个点）`);
         return [...path].reverse();
       }
     }
 
-    if (!found) {
-      console.warn(`    [未找到] ${startLabel}→${endLabel}的路径`);
+    // **方案2：查找包含start和end的路径（子路径）**
+    console.log(`    [子路径搜索] 查找包含${startLabel}和${endLabel}的路径...`);
+    for (const [key, path] of Object.entries(pathNetwork)) {
+      if (!path || path.length < 2) continue;
+
+      // 在路径上查找start和end的位置
+      let startIdx = -1;
+      let endIdx = -1;
+
+      for (let i = 0; i < path.length; i++) {
+        const pt = path[i];
+        const distToStart = Math.sqrt(Math.pow(pt.x - startPt.x, 2) + Math.pow(pt.y - startPt.y, 2));
+        const distToEnd = Math.sqrt(Math.pow(pt.x - endPt.x, 2) + Math.pow(pt.y - endPt.y, 2));
+
+        if (distToStart < 2.0) startIdx = i;
+        if (distToEnd < 2.0) endIdx = i;
+      }
+
+      // 如果都找到了，提取子路径
+      if (startIdx !== -1 && endIdx !== -1) {
+        if (startIdx < endIdx) {
+          const subPath = path.slice(startIdx, endIdx + 1);
+          console.log(`    [找到] 子路径"${key}"[${startIdx}:${endIdx+1}]（${subPath.length}个点）`);
+          return subPath;
+        } else if (startIdx > endIdx) {
+          const subPath = path.slice(endIdx, startIdx + 1).reverse();
+          console.log(`    [找到] 子路径（反向）"${key}"[${endIdx}:${startIdx+1}]（${subPath.length}个点）`);
+          return subPath;
+        }
+      }
     }
+
+    console.warn(`    [未找到] ${startLabel}→${endLabel}的路径（完整或子路径）`);
     return [];
   } catch (err) {
     console.error(`[错误] findPathBetweenPoints(${startLabel}, ${endLabel}):`, err.message);
