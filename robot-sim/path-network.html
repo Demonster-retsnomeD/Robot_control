@@ -1269,6 +1269,14 @@ function updateRobots(dt) {
           // 默认往返：反向并继续
           robot.path.reverse();
           robot.pathProgress = 0;
+        } else if (robot.isReturnPath) {
+          // 返回路径完成 — 启动往返
+          robot.isReturnPath = false;
+          robot.path = null;
+          robot.pathProgress = 0;
+          robot.status = 'idle';
+          console.log(`[机器人${id}]返回完成，恢复往返`);
+          startDefaultShuttle(robot);
         } else {
           // 任务到达，开始服务 — 保存路径用于反向
           robot.status = 'serving';
@@ -1291,16 +1299,26 @@ function updateRobots(dt) {
     if (robot.status === 'serving' && robot.currentTask) {
       const serviceElapsed = time - robot.currentTask.arrivalTime;
       if (serviceElapsed >= robot.currentTask.serviceTime) {
-        // 服务完成，直接从当前位置启动往返
+        // 服务完成，反向原路返回
         robot.currentTask.status = 'completed';
         completedTasks++;
         robot.currentTask = null;
-        robot.taskPath = null;
-        robot.path = null;
-        robot.pathProgress = 0;
-        robot.status = 'idle';
-        console.log(`[机器人${id}]服务完成，恢复往返`);
-        startDefaultShuttle(robot);
+        robot.status = 'moving';
+
+        if (robot.taskPath && robot.taskPath.length > 1) {
+          // 反向来时路径回到主路线
+          robot.path = robot.taskPath;
+          robot.taskPath = null;
+          robot.path.reverse();
+          robot.pathProgress = getInitialProgress(robot, robot.path);
+          robot.isDefaultShuttle = false;
+          robot.isReturnPath = true;
+          console.log(`[机器人${id}]服务完成，反向原路（${robot.path.length}点）`);
+        } else {
+          // fallback
+          robot.status = 'idle';
+          startDefaultShuttle(robot);
+        }
       }
     }
   }
