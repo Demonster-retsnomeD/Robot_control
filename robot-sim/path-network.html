@@ -1447,6 +1447,14 @@ function updateRobots(dt) {
           // 默认往返：反向并继续
           robot.path.reverse();
           robot.pathProgress = 0;
+        } else if (robot.isReturnPath) {
+          // 返回路径完成 — 启动默认往返
+          robot.isReturnPath = false;
+          robot.path = null;
+          robot.pathProgress = 0;
+          robot.status = 'idle';
+          console.log(`[机器人${id}]返回完成，恢复默认往返`);
+          startDefaultShuttle(robot);
         } else {
           // 任务到达，开始服务 — 保存路径用于反向
           robot.status = 'serving';
@@ -1481,7 +1489,8 @@ function updateRobots(dt) {
           robot.taskPath = null;
           robot.path.reverse();
           robot.pathProgress = getInitialProgress(robot, robot.path);  // 计算初始进度，避免瞬移
-          robot.isDefaultShuttle = false;  // 仍是任务路径反向
+          robot.isDefaultShuttle = false;
+          robot.isReturnPath = true;  // 标记为返回路径，完成后启动默认往返
 
           // 立即更新坐标到反向路径上的位置，防止下一帧才更新
           const pos = getPositionOnPath(robot.path, robot.pathProgress);
