@@ -812,7 +812,7 @@ function findPathBetweenPoints(startLabel, endLabel) {
       const distEnd = Math.sqrt(Math.pow(pathEnd.x - endPt.x, 2) + Math.pow(pathEnd.y - endPt.y, 2));
 
       if (distStart < 0.5 && distEnd < 0.5) {
-        return path;
+        return [...path];  // 必须返回副本
       }
 
       // 检查反向
@@ -854,14 +854,14 @@ function findPathBetweenPoints(startLabel, endLabel) {
       const startIdx = pointLabels.indexOf(startLabel);
       const endIdx = pointLabels.indexOf(endLabel);
 
-      // 如果都找到了，提取子路径
+      // 如果都找到了，提取子路径（必须返回副本）
       if (startIdx !== -1 && endIdx !== -1) {
         if (startIdx < endIdx) {
           const subPath = path.slice(startIdx, endIdx + 1);
-          return subPath;
+          return [...subPath];  // 返回副本
         } else if (startIdx > endIdx) {
           const subPath = path.slice(endIdx, startIdx + 1).reverse();
-          return subPath;
+          return [...subPath];  // 返回副本
         }
       }
     }
