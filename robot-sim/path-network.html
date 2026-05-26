@@ -987,8 +987,20 @@ function startDefaultShuttle(robot) {
   robot.path = [...path];
 
   // 计算当前位置对应的pathProgress（0-1）
-  // 简单估算：closestIdx / (path.length - 1)
-  const estimatedProgress = (path.length > 1) ? closestIdx / (path.length - 1) : 0;
+  // 基于累积路径长度而非点数比例
+  let cumulativeLen = 0;
+  let distToRobotPos = 0;
+  for (let i = 1; i < path.length; i++) {
+    const dx = path[i].x - path[i-1].x;
+    const dy = path[i].y - path[i-1].y;
+    const segLen = Math.sqrt(dx*dx + dy*dy);
+    if (i <= closestIdx) {
+      distToRobotPos += segLen;
+    }
+    cumulativeLen += segLen;
+  }
+  const pathLen = getPathLength(path);
+  const estimatedProgress = pathLen > 0 ? distToRobotPos / pathLen : 0;
 
   if (distToA < distToB) {
     // 离A近 → 反向走（将路径反序）
@@ -1177,11 +1189,10 @@ function updateRobots(dt) {
 
             if (robot.pathProgress >= 1) {
               // 到达端点，反向
+              // ⚠️ 反序路径，pathProgress必须也反序，否则会瞬移到路径另一端
               robot.path.reverse();
-              robot.pathProgress = 0;
-              const endPos = robot.path[robot.path.length - 1];
-              robot.x = endPos.x;
-              robot.y = endPos.y;
+              robot.pathProgress = 0;  // 反序后从新起点开始
+              // 让下一帧getPositionOnPath重新计算位置，不要直接修改robot.x/y
             } else {
               const pos = getPositionOnPath(robot.path, robot.pathProgress);
               robot.x = pos.x;
@@ -1241,11 +1252,8 @@ function updateRobots(dt) {
             // 从最近点到目标的完整路径
             let fullPath = [];
 
-            // 如果robot不在最近点，先添加robot位置
-            const distToNearest = Math.sqrt(Math.pow(robot.x - nearestPoint.x, 2) + Math.pow(robot.y - nearestPoint.y, 2));
-            if (distToNearest > 0.1) {
-              fullPath.push({ x: robot.x, y: robot.y });
-            }
+            // 必须先添加robot当前位置作为起点，确保pathProgress=0时不瞬移
+            fullPath.push({ x: robot.x, y: robot.y });
 
             // 然后添加从nearestLabel到target的路径
             const routePath = getFullPath(nodeRoute);
@@ -1270,7 +1278,7 @@ function updateRobots(dt) {
               robot.patrolMode = false;
               robot.serviceTarget = pendingTarget;
               robot.path = fullPath;
-              robot.pathProgress = 0;
+              robot.pathProgress = 0;  // 现在fullPath[0]=robot当前位置，所以pathProgress=0不会瞬移
               pendingRequests[pendingTarget] = false;
               console.log(`[机器人${id}]✅分配成功，路径${fullPath.length}个点`);
             } else {
@@ -1349,8 +1357,17 @@ function updateRobots(dt) {
               // 计算返回路径：从serviceTarget回到轮巡起点(A)
               const returnRoute = findShortestPath(robot.serviceTarget, 'A');
               if (returnRoute && returnRoute.length > 0) {
-                robot.path = getFullPath(returnRoute, { x: robot.x, y: robot.y });
-                robot.pathProgress = 0;
+                let returnPath = [];
+                // 必须先添加robot当前位置，避免pathProgress=0时瞬移
+                returnPath.push({ x: robot.x, y: robot.y });
+                const routePath = getFullPath(returnRoute);
+                if (routePath && routePath.length > 0) {
+                  returnPath.push(...routePath);
+                }
+                if (returnPath.length > 1) {
+                  robot.path = returnPath;
+                  robot.pathProgress = 0;
+                }
               }
 
               console.log(`[机器人${id}]${robot.serviceTarget}服务完成，开始返回轮巡（${robot.path ? robot.path.length : 0}个点）`);
@@ -1361,16 +1378,23 @@ function updateRobots(dt) {
           // 返回途中有新呼叫，立即转身去服务
           if (hasNewServiceCall && robot.path) {
             // 停止返回，重新前往服务地点
-            const returnRoute = findShortestPath(robot.serviceTarget, robot.serviceTarget); // 实际上是计算新路径
             robot.returning = false;
             robot.serviceStart = time;
 
             // 从当前位置重新计算到service point的路径
-            const nearestNode = robot.serviceTarget; // 已经在service point附近了
-            const newRoute = findShortestPath(nearestNode, robot.serviceTarget);
+            const newRoute = findShortestPath(robot.serviceTarget, robot.serviceTarget);
             if (newRoute && newRoute.length > 0) {
-              robot.path = getFullPath(newRoute, { x: robot.x, y: robot.y });
-              robot.pathProgress = 0;
+              let newPath = [];
+              // 必须先添加robot当前位置
+              newPath.push({ x: robot.x, y: robot.y });
+              const routePath = getFullPath(newRoute);
+              if (routePath && routePath.length > 0) {
+                newPath.push(...routePath);
+              }
+              if (newPath.length > 1) {
+                robot.path = newPath;
+                robot.pathProgress = 0;
+              }
             }
 
             pendingRequests[robot.serviceTarget] = false;
