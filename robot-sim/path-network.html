@@ -183,6 +183,22 @@
 
     <div class="sidebar">
       <div class="panel">
+        <h3>📐 点位配置</h3>
+        <div style="font-size: 12px; margin-bottom: 8px;">
+          <label>机器人: <input type="number" id="numRobots" value="3" min="1" max="5" style="width: 50px;"> 个</label>
+        </div>
+        <div style="font-size: 12px; margin-bottom: 8px;">
+          <label>轮巡点: <input type="number" id="numPatrol" value="5" min="2" max="10" style="width: 50px;"> 个</label>
+        </div>
+        <div style="font-size: 12px; margin-bottom: 8px;">
+          <label>呼叫点: <input type="number" id="numCall" value="3" min="1" max="10" style="width: 50px;"> 个</label>
+        </div>
+        <button id="btnPointEdit" class="btn-edit" onclick="togglePointEditMode()" style="background: #06b6d4; margin-top: 8px;">✏️ 编辑点位</button>
+        <button id="btnPointSave" class="btn-edit" onclick="savePointConfigUI()" style="background: #10b981; margin-top: 4px; display: none;">💾 保存点位</button>
+        <div id="pointConfigDisplay" style="font-size: 11px; color: #64748b; margin-top: 8px;">未配置</div>
+      </div>
+
+      <div class="panel">
         <h3>⚙️ 控制</h3>
         <button id="btnEdit" class="btn-edit" onclick="toggleEditMode()">✏️ 编辑路径</button>
         <button id="btnDelete" class="btn-edit" style="background: #ef4444;" onclick="toggleDeleteMode()" disabled>🗑️ 删除线段</button>
@@ -241,18 +257,14 @@ const SCALE = 10;
 
 const map = { width: 700, height: 700 };
 
-// 关键点
-const keyPoints = {
-  A: { x: 10, y: 35, label: 'A', color: '#10b981' },
-  B: { x: 60, y: 35, label: 'B', color: '#10b981' },
-  C: { x: 30, y: 20, label: 'C', color: '#8b5cf6' },
-  D: { x: 50, y: 50, label: 'D', color: '#8b5cf6' },
-  E: { x: 20, y: 55, label: 'E', color: '#8b5cf6' }
-};
+// 关键点（动态生成）
+let keyPoints = {};
+let pointConfig = null;
 
 // 路径网络：{ 'A-B': [{x, y}, {x, y}], ... }
 let pathNetwork = {};
 let editMode = false;
+let pointEditMode = false;
 let deleteMode = false;
 let currentEditPath = [];
 let selectedStartPoint = null;
@@ -263,12 +275,97 @@ let mousePos = { x: 0, y: 0 };
 let hoveredPoint = null;
 let hoveredIntermediatePoint = null;
 let hoveredPathSegment = null; // { pathKey, segmentIndex }
+let draggedPointLabel = null;
 
-const robots = {
-  1: { x: 10, y: 35, speed: 5, color: '#ef4444', patrolMode: true, path: null, pathProgress: 0, serviceTarget: null, serviceStart: null, returning: false },
-  2: { x: 60, y: 35, speed: 10, color: '#3b82f6', patrolMode: true, path: null, pathProgress: 0, serviceTarget: null, serviceStart: null, returning: false },
-  3: { x: 10, y: 35, speed: 3, color: '#06b6d4', patrolMode: true, path: null, pathProgress: 0, serviceTarget: null, serviceStart: null, returning: false }
-};
+const robots = {};
+
+// 点位配置相关函数
+function toRoman(num) {
+  const romanNumerals = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+  return romanNumerals[num] || 'X+' + (num - 10);
+}
+
+function fromRoman(str) {
+  const romanMap = {I:1, II:2, III:3, IV:4, V:5, VI:6, VII:7, VIII:8, IX:9, X:10};
+  return romanMap[str] || 0;
+}
+
+function initializeKeyPoints(numRobots = 3, numPatrolPoints = 5, numCallPoints = 3) {
+  const newKeyPoints = {};
+  let xOffset = 50;
+  const xStep = 250;
+  const yBase = 350;
+  const ySpacing = 60;
+
+  // 机器人：蓝色，左侧
+  for (let i = 1; i <= numRobots; i++) {
+    const y = yBase - (numRobots - 1) * ySpacing / 2 + (i - 1) * ySpacing;
+    newKeyPoints[String(i)] = {
+      x: xOffset,
+      y: Math.max(50, Math.min(y, 650)),
+      label: String(i),
+      color: '#3b82f6',
+      type: 'robot'
+    };
+  }
+
+  // 轮巡点位：绿色，中间
+  xOffset += xStep;
+  for (let i = 0; i < numPatrolPoints; i++) {
+    const label = String.fromCharCode(65 + i); // A, B, C, ...
+    const y = yBase - (numPatrolPoints - 1) * ySpacing / 2 + i * ySpacing;
+    newKeyPoints[label] = {
+      x: xOffset,
+      y: Math.max(50, Math.min(y, 650)),
+      label: label,
+      color: '#10b981',
+      type: 'patrol'
+    };
+  }
+
+  // 呼叫点位：紫色，右侧
+  xOffset += xStep;
+  for (let i = 1; i <= numCallPoints; i++) {
+    const label = toRoman(i);
+    const y = yBase - (numCallPoints - 1) * ySpacing / 2 + (i - 1) * ySpacing;
+    newKeyPoints[label] = {
+      x: xOffset,
+      y: Math.max(50, Math.min(y, 650)),
+      label: label,
+      color: '#8b5cf6',
+      type: 'call'
+    };
+  }
+
+  pointConfig = { numRobots, numPatrolPoints, numCallPoints };
+  return newKeyPoints;
+}
+
+function loadPointConfig() {
+  const saved = localStorage.getItem('pointConfig');
+  if (saved) {
+    try {
+      pointConfig = JSON.parse(saved);
+      const savedKeys = localStorage.getItem('keyPoints');
+      if (savedKeys) {
+        keyPoints = JSON.parse(savedKeys);
+        console.log(`[点位] 从localStorage加载，${pointConfig.numRobots}机+${pointConfig.numPatrolPoints}轮+${pointConfig.numCallPoints}呼`);
+        return;
+      }
+    } catch (e) {
+      console.warn('[点位] localStorage解析失败，使用默认配置');
+    }
+  }
+  // 默认配置
+  keyPoints = initializeKeyPoints(3, 5, 3);
+  console.log('[点位] 使用默认配置：3机+5轮+3呼');
+}
+
+function savePointConfig() {
+  localStorage.setItem('pointConfig', JSON.stringify(pointConfig));
+  localStorage.setItem('keyPoints', JSON.stringify(keyPoints));
+  console.log('[点位] 已保存到localStorage');
+}
 
 // 每个地点的状态机
 // { 'C': { state: 'idle', assignedRobotId: null, hasPending: false }, ... }
@@ -278,7 +375,8 @@ let callStates = {};
 function initializeCallStates() {
   callStates = {};
   for (const key of Object.keys(keyPoints)) {
-    if (key !== 'A' && key !== 'B') {  // 只有C、D、E等是呼叫点
+    const pt = keyPoints[key];
+    if (pt.type === 'call') {  // 只有call类型的点位是呼叫点
       callStates[key] = {
         state: 'idle',            // idle/pending/assigned/completed
         assignedRobotId: null,    // 分配的机器人ID，null表示未分配
@@ -366,8 +464,6 @@ function distanceToLineSegment(px, py, x1, y1, x2, y2) {
 
 // 鼠标移动 — 检测悬停的点和线段
 canvas.addEventListener('mousemove', (e) => {
-  if (!editMode && !deleteMode) return;
-
   const rect = canvas.getBoundingClientRect();
   // 计算canvas显示大小与实际大小的缩放比例
   const scaleX = canvas.width / rect.width;
@@ -376,6 +472,26 @@ canvas.addEventListener('mousemove', (e) => {
   const y = (e.clientY - rect.top) * scaleY;
   mousePos.x = x / SCALE;
   mousePos.y = y / SCALE;
+
+  // 点位编辑模式：拖动点位
+  if (pointEditMode) {
+    if (draggedPointLabel) {
+      keyPoints[draggedPointLabel].x = mousePos.x;
+      keyPoints[draggedPointLabel].y = mousePos.y;
+    }
+    canvas.style.cursor = 'default';
+    // 检测悬停点
+    for (const [label, pt] of Object.entries(keyPoints)) {
+      const dist = Math.sqrt(Math.pow(mousePos.x - pt.x, 2) + Math.pow(mousePos.y - pt.y, 2));
+      if (dist < 2.0) {
+        canvas.style.cursor = 'grab';
+        break;
+      }
+    }
+    return;
+  }
+
+  if (!editMode && !deleteMode) return;
 
   hoveredPoint = null;
   hoveredIntermediatePoint = null;
@@ -430,9 +546,40 @@ canvas.addEventListener('mousemove', (e) => {
   }
 });
 
+// 鼠标按下 — 开始拖动点位
+canvas.addEventListener('mousedown', (e) => {
+  if (!pointEditMode) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top) * scaleY;
+  const mx = x / SCALE;
+  const my = y / SCALE;
+
+  // 检查点击到哪个点
+  for (const [label, pt] of Object.entries(keyPoints)) {
+    const dist = Math.sqrt(Math.pow(mx - pt.x, 2) + Math.pow(my - pt.y, 2));
+    if (dist < 2.0) {
+      draggedPointLabel = label;
+      canvas.style.cursor = 'grabbing';
+      break;
+    }
+  }
+});
+
+// 鼠标释放 — 结束拖动点位
+canvas.addEventListener('mouseup', (e) => {
+  if (!pointEditMode) return;
+  draggedPointLabel = null;
+  canvas.style.cursor = 'default';
+});
+
 // 鼠标点击
 canvas.addEventListener('click', (e) => {
-  if (!editMode && !deleteMode) return;
+  if (!editMode && !deleteMode && !pointEditMode) return;
+  if (pointEditMode) return;  // 点位编辑模式不处理点击
 
   // 删除模式：点击线段分割路径
   if (deleteMode && hoveredPathSegment) {
@@ -626,6 +773,60 @@ function toggleDeleteMode() {
   document.getElementById('btnDelete').textContent = deleteMode ? '🚫 删除中' : '🗑️ 删除线段';
 }
 
+function togglePointEditMode() {
+  pointEditMode = !pointEditMode;
+  editMode = false;
+  deleteMode = false;
+
+  const btnPointEdit = document.getElementById('btnPointEdit');
+  const btnPointSave = document.getElementById('btnPointSave');
+  const btnEdit = document.getElementById('btnEdit');
+  const btnStart = document.getElementById('btnStart');
+
+  if (pointEditMode) {
+    btnPointEdit.textContent = '✏️ 编辑中...';
+    btnPointEdit.style.background = '#ef4444';
+    btnPointSave.style.display = 'inline-block';
+    btnEdit.disabled = true;
+    btnStart.disabled = true;
+    console.log('[点位] 进入编辑模式');
+  } else {
+    btnPointEdit.textContent = '✏️ 编辑点位';
+    btnPointEdit.style.background = '#06b6d4';
+    btnPointSave.style.display = 'none';
+    btnEdit.disabled = false;
+    btnStart.disabled = false;
+    console.log('[点位] 退出编辑模式');
+  }
+}
+
+function savePointConfigUI() {
+  const num1 = parseInt(document.getElementById('numRobots').value) || 3;
+  const num2 = parseInt(document.getElementById('numPatrol').value) || 5;
+  const num3 = parseInt(document.getElementById('numCall').value) || 3;
+
+  keyPoints = initializeKeyPoints(num1, num2, num3);
+  savePointConfig();
+  initializeRobots();
+  initializeCallStates();
+  pointEditMode = false;
+
+  document.getElementById('btnPointEdit').textContent = '✏️ 编辑点位';
+  document.getElementById('btnPointEdit').style.background = '#06b6d4';
+  document.getElementById('btnPointSave').style.display = 'none';
+  document.getElementById('btnEdit').disabled = false;
+  document.getElementById('btnStart').disabled = false;
+
+  updatePointConfigDisplay();
+  console.log(`[点位] 已保存：${num1}机+${num2}轮+${num3}呼`);
+}
+
+function updatePointConfigDisplay() {
+  if (pointConfig) {
+    document.getElementById('pointConfigDisplay').textContent = `${pointConfig.numRobots}机 · ${pointConfig.numPatrolPoints}轮 · ${pointConfig.numCallPoints}呼`;
+  }
+}
+
 function toggleSimulation() {
   isRunning = !isRunning;
   document.getElementById('btnStart').textContent = isRunning ? '⏸️ 暂停' : '▶️ 开始';
@@ -636,11 +837,32 @@ function toggleSimulation() {
   }
 }
 
+function initializeRobots() {
+  // 根据keyPoints中的robot类型点位初始化机器人
+  for (const [label, pt] of Object.entries(keyPoints)) {
+    if (pt.type === 'robot') {
+      const robotId = parseInt(label);
+      const speeds = [5, 10, 3, 4, 6];  // 默认速度列表
+      robots[robotId] = {
+        x: pt.x,
+        y: pt.y,
+        speed: speeds[robotId - 1] || 5,
+        color: '#ef4444',  // 运动时的红色
+        patrolMode: true,
+        path: null,
+        pathProgress: 0,
+        serviceTarget: null,
+        serviceStart: null,
+        returning: false
+      };
+    }
+  }
+  console.log(`[机器人] 已初始化${Object.keys(robots).length}个机器人`);
+}
+
 function resetRobots() {
-  // 重置所有机器人到初始位置
-  robots[1] = { x: 10, y: 35, speed: 5, color: '#ef4444', patrolMode: true, path: null, pathProgress: 0, serviceTarget: null, serviceStart: null, returning: false };
-  robots[2] = { x: 60, y: 35, speed: 10, color: '#3b82f6', patrolMode: true, path: null, pathProgress: 0, serviceTarget: null, serviceStart: null, returning: false };
-  robots[3] = { x: 10, y: 35, speed: 3, color: '#06b6d4', patrolMode: true, path: null, pathProgress: 0, serviceTarget: null, serviceStart: null, returning: false };
+  // 重置所有机器人到当前keyPoints位置
+  initializeRobots();
 
   // 清空呼叫点状态机
   initializeCallStates();
@@ -1489,9 +1711,50 @@ function getPositionOnPath(path, progress) {
   return path[path.length - 1];
 }
 
+function drawPoints() {
+  // 只在点位编辑模式下显示可交互的点
+  for (const [label, pt] of Object.entries(keyPoints)) {
+    const isHovered = draggedPointLabel === label;
+    const radius = isHovered ? 20 : 15;
+    const x = pt.x * SCALE;
+    const y = pt.y * SCALE;
+
+    // 绘制点
+    ctx.fillStyle = pt.color;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 绘制标签
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, x, y);
+
+    // 绘制类型
+    ctx.fillStyle = '#000000';
+    ctx.font = '10px Arial';
+    ctx.fillText(pt.type === 'robot' ? '🤖' : (pt.type === 'patrol' ? '📍' : '📞'), x, y + radius + 12);
+  }
+
+  // 显示配置信息
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 14px Arial';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText('⬇ 拖动点位调整位置 | 💾 保存点位时生效', 10, 10);
+}
+
 function drawMap() {
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, map.width, map.height);
+
+  // 点位编辑模式：只显示点位
+  if (pointEditMode) {
+    drawPoints();
+    return;
+  }
 
   // 调试：显示编辑状态和鼠标位置
   if (editMode) {
@@ -1674,7 +1937,10 @@ function animate() {
   requestAnimationFrame(animate);
 }
 
+loadPointConfig();
+initializeRobots();
 loadPaths();
+updatePointConfigDisplay();
 drawMap();
 // 初始化：删除按钮初始隐藏
 const btnDelete = document.getElementById('btnDelete');
