@@ -1047,9 +1047,10 @@ function startDefaultShuttle(robot) {
   const path = getDefaultABPath();
   if (!path || path.length < 2) return;
 
-  // 找机器人在A→B路径上最近的点
   const pointA = path[0];
   const pointB = path[path.length - 1];
+
+  // 找机器人在A→B路径上最近的点
   let closestIdx = 0;
   let minDist = Infinity;
 
@@ -1066,20 +1067,26 @@ function startDefaultShuttle(robot) {
   const distToA = Math.sqrt(Math.pow(robot.x - pointA.x, 2) + Math.pow(robot.y - pointA.y, 2));
   const distToB = Math.sqrt(Math.pow(robot.x - pointB.x, 2) + Math.pow(robot.y - pointB.y, 2));
 
-  // 选择方向：离哪个端点近就朝向哪个方向
+  // 保持完整的A→B路径，通过pathProgress控制起始位置
+  robot.path = [...path];
+
+  // 计算当前位置对应的pathProgress（0-1）
+  // 简单估算：closestIdx / (path.length - 1)
+  const estimatedProgress = (path.length > 1) ? closestIdx / (path.length - 1) : 0;
+
   if (distToA < distToB) {
-    // 离A近 → 反向走回A
-    robot.path = [...path].slice(0, closestIdx + 1).reverse();
+    // 离A近 → 反向走（将路径反序）
+    robot.path.reverse();
+    robot.pathProgress = 1 - estimatedProgress;  // 反向后的progress
   } else {
-    // 离B近 → 正向走到B
-    robot.path = [...path].slice(closestIdx);
+    // 离B近 → 正向走
+    robot.pathProgress = estimatedProgress;
   }
 
-  robot.pathProgress = 0;
   robot.status = 'moving';
   robot.isDefaultShuttle = true;
 
-  console.log(`[默认往返] 机器人从(${robot.x.toFixed(0)},${robot.y.toFixed(0)})开始，往返点数=${robot.path.length}`);
+  console.log(`[默认往返] 机器人从(${robot.x.toFixed(0)},${robot.y.toFixed(0)})开始，path=${robot.path.length}点，progress=${robot.pathProgress.toFixed(2)}`);
 }
 
 // 获取机器人实时位置标签（支持路径中间位置）
