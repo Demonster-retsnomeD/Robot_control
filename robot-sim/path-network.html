@@ -203,6 +203,19 @@
       </div>
 
       <div class="panel">
+        <h3>🔄 轮巡路由配置</h3>
+        <button id="btnPatrolEdit" class="btn-edit" onclick="togglePatrolRouteEditMode()" style="background: #f59e0b;">✏️ 配置轮巡</button>
+        <button id="btnPatrolSave" class="btn-edit" onclick="savePatrolRoute()" style="background: #10b981; margin-top: 4px; display: none;">💾 保存路由</button>
+
+        <div id="patrolRoutePanel" style="display: none; margin-top: 12px; border-top: 1px solid #e2e8f0; padding-top: 8px;">
+          <h4 style="font-size: 12px; margin-bottom: 8px;">选择轮巡路径段</h4>
+          <div id="patrolRouteList" style="max-height: 200px; overflow-y: auto; font-size: 11px;"></div>
+        </div>
+
+        <div id="patrolRouteDisplay" style="font-size: 11px; color: #64748b; margin-top: 8px;">未配置</div>
+      </div>
+
+      <div class="panel">
         <h3>⚙️ 控制</h3>
         <button id="btnEdit" class="btn-edit" onclick="toggleEditMode()">✏️ 编辑路径</button>
         <button id="btnDelete" class="btn-edit" style="background: #ef4444;" onclick="toggleDeleteMode()" disabled>🗑️ 删除线段</button>
@@ -280,6 +293,8 @@ let hoveredPathSegment = null; // { pathKey, segmentIndex }
 let draggedPointLabel = null;
 let selectedPointLabel = null; // 当前选中的点位（仅在点位编辑模式）
 let pointCreationMode = null; // 'patrol' | 'call' | null
+let patrolRouteEditMode = false; // 轮巡路由编辑模式
+let patrolRoute = []; // 选中的轮巡路径段keys
 
 const robots = {};
 
@@ -763,9 +778,13 @@ function resetEditPath() {
 function toggleEditMode() {
   editMode = !editMode;
   deleteMode = false;
+  patrolRouteEditMode = false;
+
+  const btnPatrolEdit = document.getElementById('btnPatrolEdit');
+  const patrolPanel = document.getElementById('patrolRoutePanel');
 
   if (editMode) {
-    // 进入编辑模式：保存机器人状态
+    // 进入编辑模式：保存机器人状态，禁用轮巡配置
     robotStateBeforeEdit = {};
     for (const [id, robot] of Object.entries(robots)) {
       robotStateBeforeEdit[id] = {
@@ -779,8 +798,10 @@ function toggleEditMode() {
         returning: robot.returning
       };
     }
+    btnPatrolEdit.disabled = true;
+    btnPatrolEdit.style.opacity = '0.5';
   } else {
-    // 离开编辑模式：恢复机器人状态
+    // 离开编辑模式：恢复机器人状态，启用轮巡配置
     if (robotStateBeforeEdit) {
       for (const [id, state] of Object.entries(robotStateBeforeEdit)) {
         robots[id].x = state.x;
@@ -795,6 +816,9 @@ function toggleEditMode() {
       robotStateBeforeEdit = null;
     }
     resetEditPath();
+    btnPatrolEdit.disabled = false;
+    btnPatrolEdit.style.opacity = '1';
+    patrolPanel.style.display = 'none';
   }
 
   document.getElementById('btnEdit').textContent = editMode ? '✅ 完成编辑' : '✏️ 编辑路径';
@@ -805,7 +829,7 @@ function toggleEditMode() {
   btnDelete.disabled = !editMode;
   btnDelete.textContent = '🗑️ 删除线段';
   document.getElementById('editOverlay').classList.toggle('active');
-  document.getElementById('btnStart').disabled = editMode || Object.keys(pathNetwork).length === 0;
+  document.getElementById('btnStart').disabled = editMode || Object.keys(pathNetwork).length === 0 || patrolRoute.length === 0;
 }
 
 function toggleDeleteMode() {
@@ -955,7 +979,195 @@ function updateCallButtons() {
   }
 }
 
+function togglePatrolRouteEditMode() {
+  patrolRouteEditMode = !patrolRouteEditMode;
+  const btnEdit = document.getElementById('btnPatrolEdit');
+  const btnSave = document.getElementById('btnPatrolSave');
+  const panel = document.getElementById('patrolRoutePanel');
+
+  if (patrolRouteEditMode) {
+    btnEdit.textContent = '✏️ 配置中...';
+    btnEdit.style.background = '#ef4444';
+    btnSave.style.display = 'inline-block';
+    panel.style.display = 'block';
+    updatePatrolRouteList();
+    console.log('[轮巡] 进入路由配置模式');
+  } else {
+    btnEdit.textContent = '✏️ 配置轮巡';
+    btnEdit.style.background = '#f59e0b';
+    btnSave.style.display = 'none';
+    panel.style.display = 'none';
+    console.log('[轮巡] 退出路由配置模式');
+  }
+}
+
+function updatePatrolRouteList() {
+  const listDiv = document.getElementById('patrolRouteList');
+  listDiv.innerHTML = '';
+
+  if (Object.keys(pathNetwork).length === 0) {
+    listDiv.innerHTML = '<div style="padding: 8px; color: #64748b; font-size: 11px;">无路径，请先编辑路径</div>';
+    return;
+  }
+
+  for (const [pathKey, path] of Object.entries(pathNetwork)) {
+    if (!path || path.length < 2) continue;
+
+    const isSelected = patrolRoute.includes(pathKey);
+    const item = document.createElement('div');
+    item.style.padding = '8px';
+    item.style.marginBottom = '4px';
+    item.style.borderRadius = '4px';
+    item.style.background = isSelected ? '#dbeafe' : '#f1f5f9';
+    item.style.border = `1px solid ${isSelected ? '#0ea5e9' : '#e2e8f0'}`;
+    item.style.cursor = 'pointer';
+    item.style.display = 'flex';
+    item.style.alignItems = 'center';
+    item.style.gap = '8px';
+    item.onclick = () => togglePatrolPathSelection(pathKey);
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = isSelected;
+    checkbox.style.cursor = 'pointer';
+
+    const label = document.createElement('span');
+    label.innerHTML = `<strong>${pathKey}</strong> (${path.length}点)`;
+    label.style.cursor = 'pointer';
+
+    item.appendChild(checkbox);
+    item.appendChild(label);
+    listDiv.appendChild(item);
+  }
+}
+
+function togglePatrolPathSelection(pathKey) {
+  const idx = patrolRoute.indexOf(pathKey);
+  if (idx === -1) {
+    patrolRoute.push(pathKey);
+  } else {
+    patrolRoute.splice(idx, 1);
+  }
+  updatePatrolRouteList();
+}
+
+function savePatrolRoute() {
+  if (patrolRoute.length === 0) {
+    alert('至少需要选择1条路径段');
+    return;
+  }
+
+  // 验证选中的路径是否连接
+  const issue = validatePatrolRoute();
+  if (issue) {
+    alert(`路由配置问题：${issue}\n\n请确保选中的路径段首尾相连`);
+    return;
+  }
+
+  localStorage.setItem('patrolRoute', JSON.stringify(patrolRoute));
+  patrolRouteEditMode = false;
+
+  document.getElementById('btnPatrolEdit').textContent = '✏️ 配置轮巡';
+  document.getElementById('btnPatrolEdit').style.background = '#f59e0b';
+  document.getElementById('btnPatrolSave').style.display = 'none';
+  document.getElementById('patrolRoutePanel').style.display = 'none';
+
+  updatePatrolRouteDisplay();
+  console.log(`[轮巡] 已保存路由：${patrolRoute.join(' → ')}`);
+}
+
+function loadPatrolRoute() {
+  const saved = localStorage.getItem('patrolRoute');
+  if (saved) {
+    try {
+      patrolRoute = JSON.parse(saved);
+      console.log(`[轮巡] 加载路由：${patrolRoute.join(' → ')}`);
+      updatePatrolRouteDisplay();
+      return;
+    } catch (e) {
+      console.warn('[轮巡] 路由加载失败');
+    }
+  }
+  patrolRoute = [];
+}
+
+function updatePatrolRouteDisplay() {
+  if (patrolRoute.length > 0) {
+    document.getElementById('patrolRouteDisplay').textContent = `轮巡路线：${patrolRoute.join(' → ')}`;
+  } else {
+    document.getElementById('patrolRouteDisplay').textContent = '未配置';
+  }
+}
+
+function validatePatrolRoute() {
+  if (patrolRoute.length === 0) return '无路径段';
+
+  // 检查选中的路径是否连接
+  for (let i = 0; i < patrolRoute.length - 1; i++) {
+    const current = pathNetwork[patrolRoute[i]];
+    const next = pathNetwork[patrolRoute[i + 1]];
+    if (!current || !next) return `路径段"${patrolRoute[i]}"或"${patrolRoute[i+1]}"不存在`;
+
+    const currentEnd = current[current.length - 1];
+    const nextStart = next[0];
+    const dist = Math.sqrt(Math.pow(currentEnd.x - nextStart.x, 2) + Math.pow(currentEnd.y - nextStart.y, 2));
+    if (dist > 2.0) {
+      return `路径段"${patrolRoute[i]}"和"${patrolRoute[i+1]}"未连接（距离${dist.toFixed(1)}）`;
+    }
+  }
+
+  return null; // 验证通过
+}
+
+function buildPatrolRoutePath() {
+  // 拼接选中路径段为完整轮巡路线
+  if (patrolRoute.length === 0) return null;
+
+  let fullPath = [];
+  for (let i = 0; i < patrolRoute.length; i++) {
+    const segment = pathNetwork[patrolRoute[i]];
+    if (!segment) return null;
+
+    if (i === 0) {
+      fullPath.push(...segment);
+    } else {
+      fullPath.push(...segment.slice(1));
+    }
+  }
+
+  return fullPath.length > 1 ? fullPath : null;
+}
+
+function getPatrolRoutePath() {
+  // 如果有自定义路由，用它；否则用第一条A-B路径（兼容旧逻辑）
+  if (patrolRoute.length > 0) {
+    return buildPatrolRoutePath();
+  }
+
+  // fallback：查找 A-B 路径
+  if (pathNetwork['A-B']) {
+    return [...pathNetwork['A-B']];
+  }
+
+  // 再找一条A开头的路径
+  for (const [key, path] of Object.entries(pathNetwork)) {
+    if (path.length > 1) {
+      const startPt = path[0];
+      if (keyPoints['A'] && Math.sqrt(Math.pow(startPt.x - keyPoints['A'].x, 2) + Math.pow(startPt.y - keyPoints['A'].y, 2)) < 0.5) {
+        return [...path];
+      }
+    }
+  }
+
+  return null;
+}
+
 function toggleSimulation() {
+  if (!isRunning && (Object.keys(pathNetwork).length === 0 || patrolRoute.length === 0)) {
+    alert('需要先编辑路径和配置轮巡路由');
+    return;
+  }
+
   isRunning = !isRunning;
   document.getElementById('btnStart').textContent = isRunning ? '⏸️ 暂停' : '▶️ 开始';
 
@@ -1334,26 +1546,11 @@ function generateRequest(label) {
 }
 
 function getDefaultABPath() {
-  // 1. 查找标准格式 "A-B"
-  if (pathNetwork['A-B']) {
-    return [...pathNetwork['A-B']];  // 返回副本，避免多机器人修改原始路径
+  // 用新的轮巡路由系统
+  const route = getPatrolRoutePath();
+  if (route) {
+    return [...route];  // 返回副本
   }
-
-  // 2. 扫描所有路径，找起点A、终点B的路径
-  for (const [key, path] of Object.entries(pathNetwork)) {
-    if (path.length > 1) {
-      const startPt = path[0];
-      const endPt = path[path.length - 1];
-      const distToA = Math.sqrt(Math.pow(startPt.x - keyPoints.A.x, 2) + Math.pow(startPt.y - keyPoints.A.y, 2));
-      const distToB = Math.sqrt(Math.pow(endPt.x - keyPoints.B.x, 2) + Math.pow(endPt.y - keyPoints.B.y, 2));
-
-      if (distToA < 0.5 && distToB < 0.5) {
-        return [...path];  // 返回副本，避免多机器人修改原始路径
-      }
-    }
-  }
-
-  // 无A-B路径，不能启动轮巡
   return null;
 }
 
@@ -2090,8 +2287,10 @@ function animate() {
 loadPointConfig();
 initializeRobots();
 loadPaths();
+loadPatrolRoute();
 updatePointConfigDisplay();
 updateCallButtons();
+updatePatrolRouteDisplay();
 drawMap();
 // 初始化：删除按钮初始隐藏
 const btnDelete = document.getElementById('btnDelete');
