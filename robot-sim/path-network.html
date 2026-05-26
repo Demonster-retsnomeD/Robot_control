@@ -973,6 +973,7 @@ function getRobotCurrentPosition(robot) {
   let closestPointOnPath = null;
   let minDistToPath = Infinity;
   let pathStartLabel = null;
+  let pathKey_found = null;
 
   for (const [pathKey, pathPoints] of Object.entries(pathNetwork)) {
     if (!pathPoints || pathPoints.length < 2) continue;
@@ -986,6 +987,7 @@ function getRobotCurrentPosition(robot) {
         minDistToPath = dist;
         closestPath = pathPoints;
         closestPointOnPath = { pt, index: i, dist };
+        pathKey_found = pathKey;
 
         // 获取路径的起点标签
         const startPt = pathPoints[0];
@@ -1004,6 +1006,7 @@ function getRobotCurrentPosition(robot) {
   }
 
   if (closestPath) {
+    console.log(`    [位置检测] 机器人${robot === robots[1] ? '1' : robot === robots[2] ? '2' : '3'}在路径"${pathKey_found}"上，起点=${pathStartLabel}，距离=${minDistToPath.toFixed(1)}`);
     return {
       label: pathStartLabel,
       type: 'path',
@@ -1059,6 +1062,19 @@ function getDistanceBetweenLabels(startLabel, endLabel) {
   return 0; // 未找到路径
 }
 
+// 诊断：打印所有机器人当前位置
+function diagnosticRobotPositions() {
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`[诊断] 所有机器人当前位置`);
+  for (const [id, robot] of Object.entries(robots)) {
+    const posInfo = getRobotCurrentPosition(robot);
+    const posType = posInfo.type === 'keypoint' ? '关键点' : '路径上';
+    const dist = posInfo.dist ? posInfo.dist.toFixed(1) : 'N/A';
+    console.log(`  机器人${id}: (${robot.x.toFixed(1)},${robot.y.toFixed(1)}) [${posType}:${posInfo.label}] 距离=${dist}`);
+  }
+  console.log(`${'='.repeat(60)}\n`);
+}
+
 function assignTask(task) {
   try {
     // 获取目标点坐标
@@ -1067,6 +1083,9 @@ function assignTask(task) {
       console.error(`[错误] 目标${task.target}不是有效关键点`);
       return;
     }
+
+    // 诊断：显示当前所有机器人位置
+    diagnosticRobotPositions();
 
     let bestRobot = null;
     let bestDist = Infinity;
@@ -1084,22 +1103,24 @@ function assignTask(task) {
       }
 
       try {
+        // 获取机器人当前位置（优先级：先检测）
+        const posInfo = getRobotCurrentPosition(robot);
+        const currentPosLabel = posInfo.label;
+        const posType = posInfo.type === 'keypoint' ? '关键点' : '路径上';
+
         // 计算机器人到目标的直线距离
         const dx = targetPt.x - robot.x;
         const dy = targetPt.y - robot.y;
         const directDist = Math.sqrt(dx * dx + dy * dy);
 
-        console.log(`  机器人${id} (${robot.x.toFixed(1)},${robot.y.toFixed(1)}) → ${task.target}: 直线距离=${directDist.toFixed(1)}`);
+        console.log(`  机器人${id} (${robot.x.toFixed(1)},${robot.y.toFixed(1)}) [${posType}:${currentPosLabel}] → ${task.target}: 直线距离=${directDist.toFixed(1)}`);
 
         if (directDist < bestDist) {
           bestDist = directDist;
           bestRobot = parseInt(id);
+          bestRobotPos = currentPosLabel;
 
-          // 获取机器人当前位置标签
-          const posInfo = getRobotCurrentPosition(robot);
-          bestRobotPos = posInfo.label;
-
-          console.log(`  ✓ 机器人${id}：目前最优（距离${directDist.toFixed(1)}）, 位置=${bestRobotPos}`);
+          console.log(`  ✓ 机器人${id}：目前最优（距离${directDist.toFixed(1)}）`);
         }
       } catch (err) {
         console.error(`[错误] 机器人${id}评估失败:`, err.message);
