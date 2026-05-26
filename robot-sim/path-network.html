@@ -191,12 +191,18 @@
 <body>
 
 <div class="container">
-  <h1>🛣️ 机器人路径网络规划</h1>
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+    <h1 id="pageTitle" style="margin: 0;">🛣️ 机器人路径网络规划</h1>
+    <div style="display: flex; gap: 6px;">
+      <button onclick="setLanguage('zh')" id="btnLangZh" style="padding: 6px 12px; background: #0ea5e9; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;">中文</button>
+      <button onclick="setLanguage('en')" id="btnLangEn" style="padding: 6px 12px; background: #cbd5e1; color: #0f172a; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;">English</button>
+    </div>
+  </div>
 
   <div class="content">
     <div class="left-panel">
       <div class="panel">
-        <h3>🤖 机器人设置</h3>
+        <h3 id="lbl_robot_settings">🤖 机器人设置</h3>
         <div style="font-size: 12px; margin-bottom: 12px; padding: 8px; background: #f1f5f9; border-radius: 4px;">
           <label style="display: flex; align-items: center; gap: 4px;">
             数量:
@@ -282,6 +288,117 @@
 </div>
 
 <script>
+// 国际化系统
+let currentLanguage = localStorage.getItem('language') || 'zh';
+
+const i18n = {
+  'zh': {
+    'title': '🛣️ 机器人路径网络规划',
+    'robot_settings': '🤖 机器人设置',
+    'quantity': '数量',
+    'speed': '速度 (m/s)',
+    'call': '📞 呼叫',
+    'point_edit': '📐 点位编辑',
+    'edit_points': '✏️ 编辑点位',
+    'save_points': '💾 保存完成',
+    'create_mode': '创建模式',
+    'patrol_point': '📍 轮巡点',
+    'call_point': '📞 呼叫点',
+    'click_blank': '点击地图上的空白区域创建新点',
+    'existing_points': '📍 已有点位',
+    'not_edited': '未编辑',
+    'patrol_route': '🔄 轮巡路由配置',
+    'configure_patrol': '✏️ 配置轮巡',
+    'save_route': '💾 保存路由',
+    'select_routes': '选择轮巡路径段',
+    'route_not_configured': '未配置',
+    'control': '⚙️ 控制',
+    'edit_path': '✏️ 编辑路径',
+    'edit_done': '✅ 完成编辑',
+    'delete_segment': '🗑️ 删除线段',
+    'deleting': '🚫 删除中',
+    'start': '▶️ 开始',
+    'pause': '⏸️ 暂停',
+    'reset': '🔄 重置',
+    'saved_paths': '📂 已保存路径',
+    'no_path': '无路径',
+    'task_queue': '📋 任务队列',
+    'robot_status': '⚙️ 机器人',
+    'no_calls': '无呼叫点',
+    'need_config': '需要先编辑路径和配置轮巡路由',
+  },
+  'en': {
+    'title': '🛣️ Robot Path Network Planning',
+    'robot_settings': '🤖 Robot Settings',
+    'quantity': 'Qty',
+    'speed': 'Speed (m/s)',
+    'call': '📞 Call',
+    'point_edit': '📐 Point Edit',
+    'edit_points': '✏️ Edit Points',
+    'save_points': '💾 Save Done',
+    'create_mode': 'Create Mode',
+    'patrol_point': '📍 Patrol',
+    'call_point': '📞 Call Point',
+    'click_blank': 'Click blank area on map to create point',
+    'existing_points': '📍 Existing Points',
+    'not_edited': 'Not Configured',
+    'patrol_route': '🔄 Patrol Route',
+    'configure_patrol': '✏️ Configure',
+    'save_route': '💾 Save Route',
+    'select_routes': 'Select Route Segments',
+    'route_not_configured': 'Not Configured',
+    'control': '⚙️ Control',
+    'edit_path': '✏️ Edit Path',
+    'edit_done': '✅ Done',
+    'delete_segment': '🗑️ Delete',
+    'deleting': '🚫 Deleting',
+    'start': '▶️ Start',
+    'pause': '⏸️ Pause',
+    'reset': '🔄 Reset',
+    'saved_paths': '📂 Saved Paths',
+    'no_path': 'No Paths',
+    'task_queue': '📋 Queue',
+    'robot_status': '⚙️ Robots',
+    'no_calls': 'No Calls',
+    'need_config': 'Need paths and patrol route configured',
+  }
+};
+
+function t(key) {
+  return i18n[currentLanguage][key] || key;
+}
+
+function setLanguage(lang) {
+  currentLanguage = lang;
+  localStorage.setItem('language', lang);
+  updateLanguageUI();
+}
+
+function updateLanguageUI() {
+  document.getElementById('pageTitle').textContent = t('title');
+  document.getElementById('btnLangZh').style.background = currentLanguage === 'zh' ? '#0ea5e9' : '#cbd5e1';
+  document.getElementById('btnLangZh').style.color = currentLanguage === 'zh' ? 'white' : '#0f172a';
+  document.getElementById('btnLangEn').style.background = currentLanguage === 'en' ? '#0ea5e9' : '#cbd5e1';
+  document.getElementById('btnLangEn').style.color = currentLanguage === 'en' ? 'white' : '#0f172a';
+
+  // 更新主要标签
+  const labels = {
+    'lbl_robot_settings': 'robot_settings',
+    'btnPointEdit': 'edit_points',
+    'btnPointSave': 'save_points',
+    'btnPatrolEdit': 'configure_patrol',
+    'btnPatrolSave': 'save_route',
+    'btnEdit': editMode ? 'edit_done' : 'edit_path',
+    'btnDelete': deleteMode ? 'deleting' : 'delete_segment',
+    'btnStart': isRunning ? 'pause' : 'start',
+  };
+
+  for (const [id, key] of Object.entries(labels)) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = t(key);
+  }
+}
+
 const canvas = document.getElementById('map');
 const ctx = canvas.getContext('2d');
 const SCALE = 10;
@@ -2453,6 +2570,7 @@ updatePointConfigDisplay();
 updateCallButtons();
 updatePatrolRouteDisplay();
 updateSpeedSettings();
+updateLanguageUI();
 drawMap();
 // 初始化：删除按钮初始隐藏
 const btnDelete = document.getElementById('btnDelete');
