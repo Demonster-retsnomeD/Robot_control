@@ -1,0 +1,2584 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>机器人路径网络规划</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 0;
+      margin: 0;
+    }
+    .container {
+      background: #ffffff;
+      padding: 16px;
+      width: 100%;
+      height: 100vh;
+      box-shadow: none;
+      border: none;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    h1 {
+      margin: 0 0 12px 0;
+      text-align: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+    .content {
+      display: grid;
+      grid-template-columns: 180px 1fr 280px;
+      gap: 12px;
+      flex: 1;
+      overflow: hidden;
+    }
+    .left-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow-y: auto;
+    }
+    .canvas-wrapper {
+      background: #ffffff;
+      border-radius: 6px;
+      border: 2px solid #0ea5e9;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      cursor: crosshair;
+      max-width: 100%;
+      max-height: 100%;
+    }
+    .overlay {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      background: rgba(0, 0, 0, 0.7);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      display: none;
+      z-index: 10;
+    }
+    .overlay.active {
+      display: block;
+    }
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow-y: auto;
+    }
+    .panel {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 12px;
+      flex-shrink: 0;
+    }
+    .panel h3 {
+      font-size: 13px;
+      margin: 0 0 8px 0;
+      color: #0ea5e9;
+    }
+    button {
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+      margin-bottom: 6px;
+    }
+    .btn-primary {
+      background: #0ea5e9;
+      color: #fff;
+    }
+    .btn-primary:hover { background: #0284c7; }
+    .btn-primary:disabled {
+      background: #cbd5e1;
+      cursor: not-allowed;
+    }
+    .btn-edit {
+      background: #8b5cf6;
+      color: #fff;
+    }
+    .btn-edit:hover { background: #7c3aed; }
+    .btn-edit.active {
+      background: #dc2626;
+    }
+    .btn-small {
+      padding: 6px 12px;
+      font-size: 12px;
+      margin: 4px 0;
+    }
+    .select-box {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .path-list {
+      max-height: 150px;
+      overflow-y: auto;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px;
+    }
+    .path-item {
+      font-size: 12px;
+      padding: 6px;
+      background: #f0fdf4;
+      border: 1px solid #10b981;
+      border-radius: 4px;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .path-item .delete {
+      cursor: pointer;
+      color: #ef4444;
+      font-weight: 600;
+    }
+    .queue-item {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 12px;
+      margin-bottom: 8px;
+      border-left: 3px solid #0ea5e9;
+    }
+    .queue-item.assigned {
+      border-left-color: #10b981;
+      background: #f0fdf4;
+    }
+    .robot-status {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 11px;
+      line-height: 1.5;
+      font-family: 'Courier New', monospace;
+      margin-bottom: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+    <h1 id="pageTitle" style="margin: 0;">🛣️ 机器人路径网络规划</h1>
+    <div style="display: flex; gap: 6px;">
+      <button onclick="setLanguage('zh')" id="btnLangZh" style="padding: 6px 12px; background: #0ea5e9; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;">中文</button>
+      <button onclick="setLanguage('en')" id="btnLangEn" style="padding: 6px 12px; background: #cbd5e1; color: #0f172a; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;">English</button>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="left-panel">
+      <div class="panel">
+        <h3 id="lbl_robot_settings">🤖 机器人设置</h3>
+        <div style="font-size: 12px; margin-bottom: 12px; padding: 8px; background: #f1f5f9; border-radius: 4px;">
+          <label style="display: flex; align-items: center; gap: 4px;">
+            数量:
+            <button onclick="setRobotCount(Math.max(1, parseInt(document.getElementById('robotCount').value) - 1))" style="width: 28px; height: 28px; padding: 0; cursor: pointer; font-size: 12px;">−</button>
+            <input type="number" id="robotCount" value="3" min="1" max="20" style="width: 40px; text-align: center; font-size: 12px;" onchange="setRobotCount(this.value)">
+            <button onclick="setRobotCount(Math.min(20, parseInt(document.getElementById('robotCount').value) + 1))" style="width: 28px; height: 28px; padding: 0; cursor: pointer; font-size: 12px;">+</button>
+          </label>
+        </div>
+
+        <div style="font-size: 11px; margin-bottom: 6px; color: #0f172a; font-weight: 600;">速度 (m/s)</div>
+        <div id="speedSettingsContainer" style="font-size: 11px;"></div>
+      </div>
+
+      <div class="panel">
+        <h3>📞 呼叫</h3>
+        <div id="callButtonsContainer" style="display: grid; grid-template-columns: 1fr; gap: 6px;"></div>
+      </div>
+    </div>
+
+    <div class="canvas-wrapper">
+      <div class="overlay" id="editOverlay">✏️ 编辑模式 - 选择起点，点击添加路径</div>
+      <canvas id="map" width="700" height="700"></canvas>
+    </div>
+
+    <div class="sidebar">
+      <div class="panel">
+        <h3>📐 点位编辑</h3>
+        <button id="btnPointEdit" class="btn-edit" onclick="togglePointEditMode()" style="background: #06b6d4; margin-top: 0;">✏️ 编辑点位</button>
+        <button id="btnPointSave" class="btn-edit" onclick="savePointConfigUI()" style="background: #10b981; margin-top: 4px; display: none;">💾 保存完成</button>
+
+        <div id="pointEditPanel" style="display: none; margin-top: 12px; padding: 12px; border: 2px dashed #0ea5e9; border-radius: 6px;">
+          <div style="font-size: 12px; color: #0ea5e9; margin-bottom: 8px; font-weight: bold;">创建模式: <span id="modeIndicator">—</span></div>
+          <button class="btn-primary" onclick="activateCreationMode('patrol')" style="background: #10b981;">📍 轮巡点</button>
+          <button class="btn-primary" onclick="activateCreationMode('call')" style="background: #8b5cf6;">📞 呼叫点</button>
+          <div style="font-size: 11px; color: #64748b; margin-top: 8px;">点击地图上的空白区域创建新点</div>
+        </div>
+
+        <div id="pointListPanel" style="display: none; margin-top: 12px; border-top: 1px solid #e2e8f0; padding-top: 8px;">
+          <h4 style="font-size: 12px; margin-bottom: 8px;">📍 已有点位</h4>
+          <div id="pointList" style="max-height: 200px; overflow-y: auto; font-size: 11px;"></div>
+        </div>
+
+        <div id="pointConfigDisplay" style="font-size: 11px; color: #64748b; margin-top: 8px;">未编辑</div>
+      </div>
+
+      <div class="panel">
+        <h3>🔄 轮巡路由配置</h3>
+        <button id="btnPatrolEdit" class="btn-edit" onclick="togglePatrolRouteEditMode()" style="background: #f59e0b;">✏️ 配置轮巡</button>
+        <button id="btnPatrolSave" class="btn-edit" onclick="savePatrolRoute()" style="background: #10b981; margin-top: 4px; display: none;">💾 保存路由</button>
+
+        <div id="patrolRoutePanel" style="display: none; margin-top: 12px; border-top: 1px solid #e2e8f0; padding-top: 8px;">
+          <h4 style="font-size: 12px; margin-bottom: 8px;">选择轮巡路径段</h4>
+          <div id="patrolRouteList" style="max-height: 200px; overflow-y: auto; font-size: 11px;"></div>
+        </div>
+
+        <div id="patrolRouteDisplay" style="font-size: 11px; color: #64748b; margin-top: 8px;">未配置</div>
+      </div>
+
+      <div class="panel">
+        <h3>⚙️ 控制</h3>
+        <button id="btnEdit" class="btn-edit" onclick="toggleEditMode()">✏️ 编辑路径</button>
+        <button id="btnDelete" class="btn-edit" style="background: #ef4444;" onclick="toggleDeleteMode()" disabled>🗑️ 删除线段</button>
+        <button id="btnStart" class="btn-primary" onclick="toggleSimulation()" disabled>▶️ 开始</button>
+        <button class="btn-primary" onclick="resetRobots()" style="background: #06b6d4; margin-top: 8px;">🔄 重置</button>
+      </div>
+
+      <div class="panel">
+        <h3>📂 已保存路径</h3>
+        <div id="pathList" class="path-list">无路径</div>
+      </div>
+
+      <div class="panel">
+        <h3>📋 任务队列</h3>
+        <div id="queue" style="max-height: 100px; overflow-y: auto;"></div>
+      </div>
+
+      <div class="panel">
+        <h3>🤖 机器人</h3>
+        <div id="robots" style="max-height: 100px; overflow-y: auto;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 国际化系统
+let currentLanguage = localStorage.getItem('language') || 'zh';
+
+const i18n = {
+  'zh': {
+    'title': '🛣️ 机器人路径网络规划',
+    'robot_settings': '🤖 机器人设置',
+    'quantity': '数量',
+    'speed': '速度 (m/s)',
+    'call': '📞 呼叫',
+    'point_edit': '📐 点位编辑',
+    'edit_points': '✏️ 编辑点位',
+    'save_points': '💾 保存完成',
+    'create_mode': '创建模式',
+    'patrol_point': '📍 轮巡点',
+    'call_point': '📞 呼叫点',
+    'click_blank': '点击地图上的空白区域创建新点',
+    'existing_points': '📍 已有点位',
+    'not_edited': '未编辑',
+    'patrol_route': '🔄 轮巡路由配置',
+    'configure_patrol': '✏️ 配置轮巡',
+    'save_route': '💾 保存路由',
+    'select_routes': '选择轮巡路径段',
+    'route_not_configured': '未配置',
+    'control': '⚙️ 控制',
+    'edit_path': '✏️ 编辑路径',
+    'edit_done': '✅ 完成编辑',
+    'delete_segment': '🗑️ 删除线段',
+    'deleting': '🚫 删除中',
+    'start': '▶️ 开始',
+    'pause': '⏸️ 暂停',
+    'reset': '🔄 重置',
+    'saved_paths': '📂 已保存路径',
+    'no_path': '无路径',
+    'task_queue': '📋 任务队列',
+    'robot_status': '⚙️ 机器人',
+    'no_calls': '无呼叫点',
+    'need_config': '需要先编辑路径和配置轮巡路由',
+  },
+  'en': {
+    'title': '🛣️ Robot Path Network Planning',
+    'robot_settings': '🤖 Robot Settings',
+    'quantity': 'Qty',
+    'speed': 'Speed (m/s)',
+    'call': '📞 Call',
+    'point_edit': '📐 Point Edit',
+    'edit_points': '✏️ Edit Points',
+    'save_points': '💾 Save Done',
+    'create_mode': 'Create Mode',
+    'patrol_point': '📍 Patrol',
+    'call_point': '📞 Call Point',
+    'click_blank': 'Click blank area on map to create point',
+    'existing_points': '📍 Existing Points',
+    'not_edited': 'Not Configured',
+    'patrol_route': '🔄 Patrol Route',
+    'configure_patrol': '✏️ Configure',
+    'save_route': '💾 Save Route',
+    'select_routes': 'Select Route Segments',
+    'route_not_configured': 'Not Configured',
+    'control': '⚙️ Control',
+    'edit_path': '✏️ Edit Path',
+    'edit_done': '✅ Done',
+    'delete_segment': '🗑️ Delete',
+    'deleting': '🚫 Deleting',
+    'start': '▶️ Start',
+    'pause': '⏸️ Pause',
+    'reset': '🔄 Reset',
+    'saved_paths': '📂 Saved Paths',
+    'no_path': 'No Paths',
+    'task_queue': '📋 Queue',
+    'robot_status': '⚙️ Robots',
+    'no_calls': 'No Calls',
+    'need_config': 'Need paths and patrol route configured',
+  }
+};
+
+function t(key) {
+  return i18n[currentLanguage][key] || key;
+}
+
+function setLanguage(lang) {
+  currentLanguage = lang;
+  localStorage.setItem('language', lang);
+  updateLanguageUI();
+}
+
+function updateLanguageUI() {
+  document.getElementById('pageTitle').textContent = t('title');
+  document.getElementById('btnLangZh').style.background = currentLanguage === 'zh' ? '#0ea5e9' : '#cbd5e1';
+  document.getElementById('btnLangZh').style.color = currentLanguage === 'zh' ? 'white' : '#0f172a';
+  document.getElementById('btnLangEn').style.background = currentLanguage === 'en' ? '#0ea5e9' : '#cbd5e1';
+  document.getElementById('btnLangEn').style.color = currentLanguage === 'en' ? 'white' : '#0f172a';
+
+  // 更新主要标签
+  const labels = {
+    'lbl_robot_settings': 'robot_settings',
+    'btnPointEdit': 'edit_points',
+    'btnPointSave': 'save_points',
+    'btnPatrolEdit': 'configure_patrol',
+    'btnPatrolSave': 'save_route',
+    'btnEdit': editMode ? 'edit_done' : 'edit_path',
+    'btnDelete': deleteMode ? 'deleting' : 'delete_segment',
+    'btnStart': isRunning ? 'pause' : 'start',
+  };
+
+  for (const [id, key] of Object.entries(labels)) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = t(key);
+  }
+}
+
+const canvas = document.getElementById('map');
+const ctx = canvas.getContext('2d');
+const SCALE = 10;
+
+const map = { width: 700, height: 700 };
+
+// 关键点（动态生成）
+let keyPoints = {};
+let pointConfig = null;
+
+// 路径网络：{ 'A-B': [{x, y}, {x, y}], ... }
+let pathNetwork = {};
+let editMode = false;
+let pointEditMode = false;
+let deleteMode = false;
+let currentEditPath = [];
+let selectedStartPoint = null;
+let isRunning = false;
+let time = 0;
+let isDrawing = false;
+let mousePos = { x: 0, y: 0 };
+let hoveredPoint = null;
+let hoveredIntermediatePoint = null;
+let hoveredPathSegment = null; // { pathKey, segmentIndex }
+let draggedPointLabel = null;
+let selectedPointLabel = null; // 当前选中的点位（仅在点位编辑模式）
+let pointCreationMode = null; // 'patrol' | 'call' | null
+let patrolRouteEditMode = false; // 轮巡路由编辑模式
+let patrolRoute = []; // 选中的轮巡路径段keys
+let robotCount = 3; // 机器人数量
+const defaultSpeeds = [5, 10, 3, 4, 6, 7, 8, 9, 5, 6, 7, 8, 9, 10, 5, 6, 7, 8, 9, 10]; // 机器人默认速度列表（1-20个）
+
+const robots = {};
+
+// 点位配置相关函数
+function toRoman(num) {
+  const romanNumerals = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+  return romanNumerals[num] || 'X+' + (num - 10);
+}
+
+function fromRoman(str) {
+  const romanMap = {I:1, II:2, III:3, IV:4, V:5, VI:6, VII:7, VIII:8, IX:9, X:10};
+  return romanMap[str] || 0;
+}
+
+function getNextPatrolLabel() {
+  // 找到最大的字母标签
+  let maxIdx = -1;
+  for (const label of Object.keys(keyPoints)) {
+    if (/^[A-Z]$/.test(label)) {
+      maxIdx = Math.max(maxIdx, label.charCodeAt(0) - 65);
+    }
+  }
+  return String.fromCharCode(65 + maxIdx + 1);
+}
+
+function getNextCallLabel() {
+  // 找到最大的罗马数字
+  let maxNum = 0;
+  for (const label of Object.keys(keyPoints)) {
+    const pt = keyPoints[label];
+    if (pt.type === 'call') {
+      const num = fromRoman(label);
+      maxNum = Math.max(maxNum, num);
+    }
+  }
+  return toRoman(maxNum + 1);
+}
+
+function createPoint(type, x, y) {
+  let label;
+  if (type === 'patrol') {
+    label = getNextPatrolLabel();
+  } else if (type === 'call') {
+    label = getNextCallLabel();
+  } else {
+    return;
+  }
+
+  const colors = { patrol: '#10b981', call: '#8b5cf6', robot: '#3b82f6' };
+  keyPoints[label] = {
+    x: Math.round(x * 100) / 100,
+    y: Math.round(y * 100) / 100,
+    label: label,
+    color: colors[type],
+    type: type
+  };
+
+  console.log(`[点位] 创建${type}点位 ${label} (${keyPoints[label].x}, ${keyPoints[label].y})`);
+  updatePointList();
+}
+
+function deletePoint(label) {
+  if (label in keyPoints) {
+    const pt = keyPoints[label];
+    delete keyPoints[label];
+
+    // 删除所有与该点相关的路径
+    const keysToDelete = [];
+    for (const [pathKey, path] of Object.entries(pathNetwork)) {
+      if (!path || path.length < 2) continue;
+      const startPt = path[0];
+      const endPt = path[path.length - 1];
+
+      // 检查路径的起点或终点是否是被删除的点
+      const distToStart = Math.sqrt(Math.pow(startPt.x - pt.x, 2) + Math.pow(startPt.y - pt.y, 2));
+      const distToEnd = Math.sqrt(Math.pow(endPt.x - pt.x, 2) + Math.pow(endPt.y - pt.y, 2));
+
+      if (distToStart < 2.0 || distToEnd < 2.0) {
+        keysToDelete.push(pathKey);
+      }
+    }
+
+    // 删除受影响的路径
+    for (const key of keysToDelete) {
+      delete pathNetwork[key];
+      console.log(`[点位] 删除相关路径 ${key}`);
+    }
+
+    relabelPoints();
+    savePaths();
+    updatePointList();
+    updatePathList();
+  }
+}
+
+function relabelPoints() {
+  // 收集所有点按类型分组
+  const patrolPoints = [];
+  const callPoints = [];
+  const robotPoints = [];
+
+  for (const [label, pt] of Object.entries(keyPoints)) {
+    if (pt.type === 'patrol') {
+      patrolPoints.push(pt);
+    } else if (pt.type === 'call') {
+      callPoints.push(pt);
+    } else if (pt.type === 'robot') {
+      robotPoints.push(pt);
+    }
+  }
+
+  // 清空keyPoints并重新标签化
+  keyPoints = {};
+
+  // 轮巡点：A, B, C, ...
+  for (let i = 0; i < patrolPoints.length; i++) {
+    const pt = patrolPoints[i];
+    const newLabel = String.fromCharCode(65 + i);
+    keyPoints[newLabel] = { ...pt, label: newLabel };
+  }
+
+  // 呼叫点：I, II, III, ...
+  for (let i = 0; i < callPoints.length; i++) {
+    const pt = callPoints[i];
+    const newLabel = toRoman(i + 1);
+    keyPoints[newLabel] = { ...pt, label: newLabel };
+  }
+
+  // 机器人：1, 2, 3, ...
+  for (let i = 0; i < robotPoints.length; i++) {
+    const pt = robotPoints[i];
+    const newLabel = String(i + 1);
+    keyPoints[newLabel] = { ...pt, label: newLabel };
+  }
+
+  console.log(`[点位] 重新标签化完成`);
+}
+
+function activateCreationMode(type) {
+  pointCreationMode = type;
+  const modeText = type === 'patrol' ? '📍 轮巡点' : '📞 呼叫点';
+  document.getElementById('modeIndicator').textContent = modeText;
+  console.log(`[点位] 激活创建模式: ${type}`);
+}
+
+function loadPointConfig() {
+  const savedKeys = localStorage.getItem('keyPoints');
+  if (savedKeys) {
+    try {
+      keyPoints = JSON.parse(savedKeys);
+      console.log(`[点位] 从localStorage加载，共${Object.keys(keyPoints).length}个点位`);
+      return;
+    } catch (e) {
+      console.warn('[点位] localStorage解析失败');
+    }
+  }
+  // 空配置，等待用户创建
+  keyPoints = {};
+  console.log('[点位] 未加载任何点位，等待用户创建');
+}
+
+function savePointConfig() {
+  localStorage.setItem('keyPoints', JSON.stringify(keyPoints));
+  console.log('[点位] 已保存到localStorage');
+}
+
+// 每个地点的状态机
+// { 'C': { state: 'idle', assignedRobotId: null, hasPending: false }, ... }
+// state: 'idle' → 'pending' → 'assigned' → 'completed' → 'idle'
+let callStates = {};
+
+function initializeCallStates() {
+  callStates = {};
+  for (const key of Object.keys(keyPoints)) {
+    const pt = keyPoints[key];
+    if (pt.type === 'call') {  // 只有call类型的点位是呼叫点
+      callStates[key] = {
+        state: 'idle',            // idle/pending/assigned/completed
+        assignedRobotId: null,    // 分配的机器人ID，null表示未分配
+        hasPending: false         // 是否有待处理呼叫
+      };
+    }
+  }
+}
+
+let robotStateBeforeEdit = null; // 编辑前保存机器人状态
+let cachedGraph = null; // 缓存的路径图
+let cachedPathLengths = null;
+let cachedEdges = null;
+
+// 加载路径网络
+function loadPaths() {
+  const saved = localStorage.getItem('pathNetwork');
+  if (saved) pathNetwork = JSON.parse(saved);
+  updatePathList();
+}
+
+// 保存路径网络，并清缓存
+function savePaths() {
+  localStorage.setItem('pathNetwork', JSON.stringify(pathNetwork));
+  cachedGraph = null; // 清缓存
+}
+
+
+function updateCurrentPath() {
+  const el = document.getElementById('currentPath');
+  // 元素已删除，跳过更新
+  if (!el) return;
+
+  if (!selectedStartPoint) {
+    el.textContent = '点击任意点开始绘制';
+    el.style.color = '#64748b';
+  } else {
+    el.innerHTML = `<strong>${selectedStartPoint}</strong> → 已添加 ${currentEditPath.length - 1} 个中间点<br/>点击目标点完成`;
+    el.style.color = '#0ea5e9';
+  }
+}
+
+function updatePathList() {
+  const el = document.getElementById('pathList');
+  if (Object.keys(pathNetwork).length === 0) {
+    el.innerHTML = '无路径';
+  } else {
+    el.innerHTML = Object.keys(pathNetwork).map(key => `
+      <div class="path-item" style="cursor: pointer;" ondblclick="deletePath('${key}')">
+        <span>${key}</span>
+        <span class="delete" onclick="deletePath('${key}'); event.stopPropagation();" title="双击删除或点击✕">✕</span>
+      </div>
+    `).join('');
+  }
+}
+
+function deletePath(key) {
+  delete pathNetwork[key];
+  savePaths();
+  updatePathList();
+}
+
+// 点到线段的距离
+function distanceToLineSegment(px, py, x1, y1, x2, y2) {
+  const A = px - x1;
+  const B = py - y1;
+  const C = x2 - x1;
+  const D = y2 - y1;
+  const dot = A * C + B * D;
+  const lenSq = C * C + D * D;
+  let param = -1;
+  if (lenSq !== 0) param = dot / lenSq;
+  let xx, yy;
+  if (param < 0) {
+    xx = x1;
+    yy = y1;
+  } else if (param > 1) {
+    xx = x2;
+    yy = y2;
+  } else {
+    xx = x1 + param * C;
+    yy = y1 + param * D;
+  }
+  const dx = px - xx;
+  const dy = py - yy;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+// 鼠标移动 — 检测悬停的点和线段
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  // 计算canvas显示大小与实际大小的缩放比例
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top) * scaleY;
+  mousePos.x = x / SCALE;
+  mousePos.y = y / SCALE;
+
+  // 点位编辑模式：拖动点位
+  if (pointEditMode) {
+    if (draggedPointLabel) {
+      keyPoints[draggedPointLabel].x = mousePos.x;
+      keyPoints[draggedPointLabel].y = mousePos.y;
+    }
+    canvas.style.cursor = 'default';
+    // 检测悬停点
+    for (const [label, pt] of Object.entries(keyPoints)) {
+      const dist = Math.sqrt(Math.pow(mousePos.x - pt.x, 2) + Math.pow(mousePos.y - pt.y, 2));
+      if (dist < 2.0) {
+        canvas.style.cursor = 'grab';
+        break;
+      }
+    }
+    return;
+  }
+
+  if (!editMode && !deleteMode) return;
+
+  hoveredPoint = null;
+  hoveredIntermediatePoint = null;
+
+  // 先检查关键点
+  for (const [key, pt] of Object.entries(keyPoints)) {
+    const dist = Math.sqrt(Math.pow(mousePos.x - pt.x, 2) + Math.pow(mousePos.y - pt.y, 2));
+    if (dist < 5.0) {
+      hoveredPoint = key;
+      return;
+    }
+  }
+
+  // 再检查编辑中路径的转折点
+  if (currentEditPath.length > 1) {
+    for (let i = 1; i < currentEditPath.length; i++) {
+      const pt = currentEditPath[i];
+      const dist = Math.sqrt(Math.pow(mousePos.x - pt.x, 2) + Math.pow(mousePos.y - pt.y, 2));
+      if (dist < 5.0) {
+        hoveredIntermediatePoint = { point: pt, index: i, source: 'current' };
+        return;
+      }
+    }
+  }
+
+  // 检查已保存路径的转折点
+  for (const [pathKey, path] of Object.entries(pathNetwork)) {
+    for (let i = 1; i < path.length - 1; i++) {
+      const pt = path[i];
+      const dist = Math.sqrt(Math.pow(mousePos.x - pt.x, 2) + Math.pow(mousePos.y - pt.y, 2));
+      if (dist < 5.0) {
+        hoveredIntermediatePoint = { point: pt, index: i, pathKey: pathKey, source: 'saved' };
+        return;
+      }
+    }
+  }
+
+  // 删除模式：检测悬停的线段
+  hoveredPathSegment = null;
+  if (deleteMode) {
+    for (const [pathKey, pathPoints] of Object.entries(pathNetwork)) {
+      for (let i = 1; i < pathPoints.length; i++) {
+        const dist = distanceToLineSegment(mousePos.x, mousePos.y,
+          pathPoints[i-1].x, pathPoints[i-1].y,
+          pathPoints[i].x, pathPoints[i].y);
+        if (dist < 2.0) {
+          hoveredPathSegment = { pathKey, segmentIndex: i };
+          return;
+        }
+      }
+    }
+  }
+});
+
+// 鼠标按下 — 开始拖动点位
+canvas.addEventListener('mousedown', (e) => {
+  if (!pointEditMode) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top) * scaleY;
+  const mx = x / SCALE;
+  const my = y / SCALE;
+
+  // 检查点击到哪个点，但只允许拖动已选中的点
+  for (const [label, pt] of Object.entries(keyPoints)) {
+    const dist = Math.sqrt(Math.pow(mx - pt.x, 2) + Math.pow(my - pt.y, 2));
+    if (dist < 2.0) {
+      // 只有点击到已选中的点时，才设置拖动状态
+      if (label === selectedPointLabel) {
+        draggedPointLabel = label;
+        canvas.style.cursor = 'grabbing';
+      }
+      break;
+    }
+  }
+});
+
+// 鼠标释放 — 结束拖动点位
+canvas.addEventListener('mouseup', (e) => {
+  if (!pointEditMode) return;
+  draggedPointLabel = null;
+  canvas.style.cursor = 'default';
+});
+
+// 鼠标点击
+canvas.addEventListener('click', (e) => {
+  if (!editMode && !deleteMode && !pointEditMode) return;
+
+  // 点位编辑模式：创建新点或不处理
+  if (pointEditMode) {
+    if (pointCreationMode) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
+      const px = x / SCALE;
+      const py = y / SCALE;
+
+      // 检查是否点击到已有的点
+      let hitPoint = false;
+      for (const [key, pt] of Object.entries(keyPoints)) {
+        const dist = Math.sqrt(Math.pow(px - pt.x, 2) + Math.pow(py - pt.y, 2));
+        if (dist < 2.0) {
+          hitPoint = true;
+          break;
+        }
+      }
+
+      // 点击到空白区域才创建新点
+      if (!hitPoint) {
+        createPoint(pointCreationMode, px, py);
+      }
+    }
+    return;
+  }
+
+  // 删除模式：点击线段分割路径
+  if (deleteMode && hoveredPathSegment) {
+    const { pathKey, segmentIndex } = hoveredPathSegment;
+    const path = pathNetwork[pathKey];
+
+    if (confirm(`删除线段 ${pathKey} 的第${segmentIndex}段?`)) {
+      // 分割成两条路径
+      const path1 = path.slice(0, segmentIndex);
+      const path2 = path.slice(segmentIndex);
+
+      // 删除原路径
+      delete pathNetwork[pathKey];
+
+      // 保存两条新路径（如果都有足够的点）
+      if (path1.length > 1) {
+        pathNetwork[`${pathKey}_前_${Date.now()}`] = path1;
+      }
+      if (path2.length > 1) {
+        pathNetwork[`${pathKey}_后_${Date.now()}`] = path2;
+      }
+
+      savePaths();
+      updatePathList();
+      hoveredPathSegment = null;
+    }
+    return;
+  }
+
+  if (!editMode) return;
+
+  const rect = canvas.getBoundingClientRect();
+  // 计算canvas显示大小与实际大小的缩放比例
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top) * scaleY;
+  const px = x / SCALE;
+  const py = y / SCALE;
+
+  // 检测是否点击到已有的点（关键点）
+  let hitPoint = null;
+  for (const [key, pt] of Object.entries(keyPoints)) {
+    const dist = Math.sqrt(Math.pow(px - pt.x, 2) + Math.pow(py - pt.y, 2));
+    if (dist < 5.0) {
+      hitPoint = key;
+      break;
+    }
+  }
+
+  // 检测是否点击到当前编辑路径中的点（起点除外）
+  let hitIntermediatePoint = null;
+  if (!hitPoint && selectedStartPoint && currentEditPath.length > 1) {
+    for (let i = 1; i < currentEditPath.length; i++) {
+      const pt = currentEditPath[i];
+      const dist = Math.sqrt(Math.pow(px - pt.x, 2) + Math.pow(py - pt.y, 2));
+      if (dist < 5.0) {
+        hitIntermediatePoint = { point: pt, index: i, source: 'current' };
+        break;
+      }
+    }
+  }
+
+  // 检测是否点击到已保存路径中的点
+  if (!hitPoint && !hitIntermediatePoint) {
+    for (const [pathKey, pathPoints] of Object.entries(pathNetwork)) {
+      for (let i = 0; i < pathPoints.length; i++) {
+        const pt = pathPoints[i];
+        const dist = Math.sqrt(Math.pow(px - pt.x, 2) + Math.pow(py - pt.y, 2));
+        if (dist < 5.0) {
+          hitIntermediatePoint = { point: pt, index: i, pathKey: pathKey, source: 'saved' };
+          break;
+        }
+      }
+      if (hitIntermediatePoint) break;
+    }
+  }
+
+  if (hitPoint) {
+    if (!selectedStartPoint) {
+      // 第一个点，设为起点
+      selectedStartPoint = hitPoint;
+      currentEditPath = [keyPoints[hitPoint]];
+      isDrawing = true;
+      updateCurrentPath();
+    } else {
+      // 后续的关键点，作为终点，保存完整路径（不拆分）
+      const fullPath = [...currentEditPath, keyPoints[hitPoint]];
+
+      const key = `${selectedStartPoint}-${hitPoint}`;
+      pathNetwork[key] = fullPath;
+
+      savePaths();
+      updatePathList();
+      currentEditPath = [];
+      selectedStartPoint = null;
+      updateCurrentPath();
+      isDrawing = false;
+    }
+  } else if (hitIntermediatePoint) {
+    // 点击中间点
+    if (!selectedStartPoint) {
+      // 作为起点，从这个点开始新路径
+      selectedStartPoint = hitIntermediatePoint.source === 'saved' ?
+        `保存点(${hitIntermediatePoint.point.x},${hitIntermediatePoint.point.y})` :
+        `中点(${hitIntermediatePoint.point.x},${hitIntermediatePoint.point.y})`;
+      currentEditPath = [hitIntermediatePoint.point];
+      isDrawing = true;
+      updateCurrentPath();
+    } else {
+      // 作为终点，保存路径
+      const finalPath = [...currentEditPath, hitIntermediatePoint.point];
+      const startLabel = selectedStartPoint.includes('保存点') ? '保存' : selectedStartPoint.substring(0, 2);
+      const endPt = hitIntermediatePoint.point;
+      const key = `${startLabel}→(${endPt.x.toFixed(0)},${endPt.y.toFixed(0)})_${Date.now()}`;
+      pathNetwork[key] = finalPath;
+      savePaths();
+      updatePathList();
+      currentEditPath = [];
+      selectedStartPoint = null;
+      updateCurrentPath();
+      isDrawing = false;
+    }
+  } else {
+    // 空白处点击，添加中间点
+    if (selectedStartPoint && isDrawing) {
+      currentEditPath.push({ x: px, y: py });
+      updateCurrentPath();
+    }
+  }
+});
+
+function resetEditPath() {
+  currentEditPath = [];
+  selectedStartPoint = null;
+  isDrawing = false;
+  updateCurrentPath();
+}
+
+function toggleEditMode() {
+  editMode = !editMode;
+  deleteMode = false;
+  patrolRouteEditMode = false;
+
+  const btnPatrolEdit = document.getElementById('btnPatrolEdit');
+  const patrolPanel = document.getElementById('patrolRoutePanel');
+
+  if (editMode) {
+    // 进入编辑模式：保存机器人状态，禁用轮巡配置
+    robotStateBeforeEdit = {};
+    for (const [id, robot] of Object.entries(robots)) {
+      robotStateBeforeEdit[id] = {
+        x: robot.x,
+        y: robot.y,
+        patrolMode: robot.patrolMode,
+        path: robot.path ? [...robot.path] : null,
+        pathProgress: robot.pathProgress,
+        serviceTarget: robot.serviceTarget,
+        serviceStart: robot.serviceStart,
+        returning: robot.returning
+      };
+    }
+    btnPatrolEdit.disabled = true;
+    btnPatrolEdit.style.opacity = '0.5';
+  } else {
+    // 离开编辑模式：恢复机器人状态，启用轮巡配置
+    if (robotStateBeforeEdit) {
+      for (const [id, state] of Object.entries(robotStateBeforeEdit)) {
+        robots[id].x = state.x;
+        robots[id].y = state.y;
+        robots[id].patrolMode = state.patrolMode;
+        robots[id].path = state.path;
+        robots[id].pathProgress = state.pathProgress;
+        robots[id].serviceTarget = state.serviceTarget;
+        robots[id].serviceStart = state.serviceStart;
+        robots[id].returning = state.returning;
+      }
+      robotStateBeforeEdit = null;
+    }
+    resetEditPath();
+    btnPatrolEdit.disabled = false;
+    btnPatrolEdit.style.opacity = '1';
+    patrolPanel.style.display = 'none';
+  }
+
+  document.getElementById('btnEdit').textContent = editMode ? '✅ 完成编辑' : '✏️ 编辑路径';
+  document.getElementById('btnEdit').classList.toggle('active');
+  const btnDelete = document.getElementById('btnDelete');
+  btnDelete.classList.remove('active');
+  btnDelete.style.display = editMode ? 'block' : 'none';
+  btnDelete.disabled = !editMode;
+  btnDelete.textContent = '🗑️ 删除线段';
+  document.getElementById('editOverlay').classList.toggle('active');
+  document.getElementById('btnStart').disabled = editMode || Object.keys(pathNetwork).length === 0 || patrolRoute.length === 0;
+}
+
+function toggleDeleteMode() {
+  deleteMode = !deleteMode;
+  document.getElementById('btnDelete').classList.toggle('active');
+  document.getElementById('btnDelete').textContent = deleteMode ? '🚫 删除中' : '🗑️ 删除线段';
+}
+
+function togglePointEditMode() {
+  pointEditMode = !pointEditMode;
+  editMode = false;
+  deleteMode = false;
+  pointCreationMode = null;
+
+  const btnPointEdit = document.getElementById('btnPointEdit');
+  const btnPointSave = document.getElementById('btnPointSave');
+  const btnEdit = document.getElementById('btnEdit');
+  const btnStart = document.getElementById('btnStart');
+  const pointEditPanel = document.getElementById('pointEditPanel');
+  const pointListPanel = document.getElementById('pointListPanel');
+  const modeIndicator = document.getElementById('modeIndicator');
+
+  if (pointEditMode) {
+    btnPointEdit.textContent = '✏️ 编辑中...';
+    btnPointEdit.style.background = '#ef4444';
+    btnPointSave.style.display = 'inline-block';
+    btnEdit.disabled = true;
+    btnStart.disabled = true;
+    pointEditPanel.style.display = 'block';
+    pointListPanel.style.display = 'block';
+    modeIndicator.textContent = '—';
+    updatePointList();
+    console.log('[点位] 进入编辑模式');
+  } else {
+    btnPointEdit.textContent = '✏️ 编辑点位';
+    btnPointEdit.style.background = '#06b6d4';
+    btnPointSave.style.display = 'none';
+    btnEdit.disabled = false;
+    btnStart.disabled = Object.keys(pathNetwork).length === 0;
+    pointEditPanel.style.display = 'none';
+    pointListPanel.style.display = 'none';
+    console.log('[点位] 退出编辑模式');
+  }
+}
+
+function savePointConfigUI() {
+  // 检查是否有轮巡点
+  const hasPatrol = Object.values(keyPoints).some(pt => pt.type === 'patrol');
+  if (!hasPatrol) {
+    alert('至少需要创建1个轮巡点');
+    return;
+  }
+
+  savePointConfig();
+  initializeRobots();
+  initializeCallStates();
+  pointEditMode = false;
+  pointCreationMode = null;
+
+  document.getElementById('btnPointEdit').textContent = '✏️ 编辑点位';
+  document.getElementById('btnPointEdit').style.background = '#06b6d4';
+  document.getElementById('btnPointSave').style.display = 'none';
+  document.getElementById('btnEdit').disabled = false;
+  document.getElementById('btnStart').disabled = false;
+  document.getElementById('pointEditPanel').style.display = 'none';
+  document.getElementById('pointListPanel').style.display = 'none';
+
+  updatePointConfigDisplay();
+  updateCallButtons();
+  const patrolCount = Object.values(keyPoints).filter(p => p.type === 'patrol').length;
+  const callCount = Object.values(keyPoints).filter(p => p.type === 'call').length;
+  console.log(`[点位] 已保存：${patrolCount}轮+${callCount}呼，3个机器人就位`);
+}
+
+function updatePointConfigDisplay() {
+  const patrolCount = Object.values(keyPoints).filter(p => p.type === 'patrol').length;
+  const callCount = Object.values(keyPoints).filter(p => p.type === 'call').length;
+  if (patrolCount > 0 || callCount > 0) {
+    document.getElementById('pointConfigDisplay').textContent = `${patrolCount}轮 · ${callCount}呼 · 3🤖`;
+  } else {
+    document.getElementById('pointConfigDisplay').textContent = '未编辑';
+  }
+}
+
+function updatePointList() {
+  const listDiv = document.getElementById('pointList');
+  listDiv.innerHTML = '';
+
+  if (Object.keys(keyPoints).length === 0) {
+    listDiv.innerHTML = '<div style="padding: 8px; color: #64748b; font-size: 11px;">无点位，点击上方按钮创建</div>';
+    return;
+  }
+
+  const typeIcons = { robot: '🤖', patrol: '📍', call: '📞' };
+  const typeNames = { robot: '机器人', patrol: '轮巡点', call: '呼叫点' };
+
+  for (const [label, pt] of Object.entries(keyPoints)) {
+    const item = document.createElement('div');
+    item.style.padding = '6px 8px';
+    item.style.marginBottom = '4px';
+    item.style.borderRadius = '4px';
+    item.style.background = '#f1f5f9';
+    item.style.border = '1px solid #e2e8f0';
+    item.style.display = 'flex';
+    item.style.justifyContent = 'space-between';
+    item.style.alignItems = 'center';
+    item.style.fontSize = '11px';
+
+    const typeIcon = typeIcons[pt.type] || '?';
+    const typeName = typeNames[pt.type] || '?';
+    const info = document.createElement('span');
+    info.innerHTML = `${typeIcon} <strong>${label}</strong> (${pt.x.toFixed(0)},${pt.y.toFixed(0)})`;
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = '✕';
+    deleteBtn.style.background = 'transparent';
+    deleteBtn.style.border = 'none';
+    deleteBtn.style.color = '#ef4444';
+    deleteBtn.style.cursor = 'pointer';
+    deleteBtn.style.fontSize = '12px';
+    deleteBtn.style.fontWeight = 'bold';
+    deleteBtn.style.padding = '0 4px';
+    deleteBtn.onclick = () => deletePoint(label);
+
+    item.appendChild(info);
+    item.appendChild(deleteBtn);
+    listDiv.appendChild(item);
+  }
+}
+
+function updateCallButtons() {
+  const container = document.getElementById('callButtonsContainer');
+  container.innerHTML = '';
+
+  const colors = ['#8b5cf6', '#f59e0b', '#06b6d4', '#ec4899', '#14b8a6'];
+  const callPoints = Object.entries(keyPoints).filter(([_, pt]) => pt.type === 'call');
+
+  if (callPoints.length === 0) {
+    container.innerHTML = '<div style="font-size: 11px; color: #64748b;">无呼叫点</div>';
+    return;
+  }
+
+  for (const [label, pt] of callPoints) {
+    const color = colors[Object.keys(keyPoints).indexOf(label) % colors.length];
+    const btn = document.createElement('button');
+    btn.className = 'btn-primary';
+    btn.style.background = color;
+    btn.style.marginBottom = '4px';
+    btn.style.padding = '6px 8px';
+    btn.style.fontSize = '12px';
+    btn.onclick = () => generateRequest(label);
+    btn.textContent = `📞 ${label}`;
+    container.appendChild(btn);
+  }
+}
+
+function togglePatrolRouteEditMode() {
+  patrolRouteEditMode = !patrolRouteEditMode;
+  const btnEdit = document.getElementById('btnPatrolEdit');
+  const btnSave = document.getElementById('btnPatrolSave');
+  const panel = document.getElementById('patrolRoutePanel');
+
+  if (patrolRouteEditMode) {
+    btnEdit.textContent = '✏️ 配置中...';
+    btnEdit.style.background = '#ef4444';
+    btnSave.style.display = 'inline-block';
+    panel.style.display = 'block';
+    updatePatrolRouteList();
+    console.log('[轮巡] 进入路由配置模式');
+  } else {
+    btnEdit.textContent = '✏️ 配置轮巡';
+    btnEdit.style.background = '#f59e0b';
+    btnSave.style.display = 'none';
+    panel.style.display = 'none';
+    console.log('[轮巡] 退出路由配置模式');
+  }
+}
+
+function updatePatrolRouteList() {
+  const listDiv = document.getElementById('patrolRouteList');
+  listDiv.innerHTML = '';
+
+  if (Object.keys(pathNetwork).length === 0) {
+    listDiv.innerHTML = '<div style="padding: 8px; color: #64748b; font-size: 11px;">无路径，请先编辑路径</div>';
+    return;
+  }
+
+  for (const [pathKey, path] of Object.entries(pathNetwork)) {
+    if (!path || path.length < 2) continue;
+
+    const isSelected = patrolRoute.includes(pathKey);
+    const item = document.createElement('div');
+    item.style.padding = '8px';
+    item.style.marginBottom = '4px';
+    item.style.borderRadius = '4px';
+    item.style.background = isSelected ? '#dbeafe' : '#f1f5f9';
+    item.style.border = `1px solid ${isSelected ? '#0ea5e9' : '#e2e8f0'}`;
+    item.style.cursor = 'pointer';
+    item.style.display = 'flex';
+    item.style.alignItems = 'center';
+    item.style.gap = '8px';
+    item.onclick = () => togglePatrolPathSelection(pathKey);
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = isSelected;
+    checkbox.style.cursor = 'pointer';
+
+    const label = document.createElement('span');
+    label.innerHTML = `<strong>${pathKey}</strong> (${path.length}点)`;
+    label.style.cursor = 'pointer';
+
+    item.appendChild(checkbox);
+    item.appendChild(label);
+    listDiv.appendChild(item);
+  }
+}
+
+function togglePatrolPathSelection(pathKey) {
+  const idx = patrolRoute.indexOf(pathKey);
+  if (idx === -1) {
+    patrolRoute.push(pathKey);
+  } else {
+    patrolRoute.splice(idx, 1);
+  }
+  updatePatrolRouteList();
+}
+
+function savePatrolRoute() {
+  if (patrolRoute.length === 0) {
+    alert('至少需要选择1条路径段');
+    return;
+  }
+
+  // 验证选中的路径是否连接
+  const issue = validatePatrolRoute();
+  if (issue) {
+    alert(`路由配置问题：${issue}\n\n请确保选中的路径段首尾相连`);
+    return;
+  }
+
+  localStorage.setItem('patrolRoute', JSON.stringify(patrolRoute));
+  patrolRouteEditMode = false;
+
+  document.getElementById('btnPatrolEdit').textContent = '✏️ 配置轮巡';
+  document.getElementById('btnPatrolEdit').style.background = '#f59e0b';
+  document.getElementById('btnPatrolSave').style.display = 'none';
+  document.getElementById('patrolRoutePanel').style.display = 'none';
+
+  updatePatrolRouteDisplay();
+  console.log(`[轮巡] 已保存路由：${patrolRoute.join(' → ')}`);
+}
+
+function loadPatrolRoute() {
+  const saved = localStorage.getItem('patrolRoute');
+  if (saved) {
+    try {
+      const loaded = JSON.parse(saved);
+      // 验证加载的路由中的路径是否仍然存在
+      const valid = loaded.filter(key => key in pathNetwork);
+      if (valid.length === loaded.length) {
+        patrolRoute = loaded;
+        console.log(`[轮巡] 加载路由：${patrolRoute.join(' → ')}`);
+      } else {
+        // 路径不完整，清空并提示
+        patrolRoute = [];
+        console.warn(`[轮巡] 加载的路由不完整（${valid.length}/${loaded.length}），已清空`);
+      }
+      updatePatrolRouteDisplay();
+      return;
+    } catch (e) {
+      console.warn('[轮巡] 路由加载失败');
+    }
+  }
+  patrolRoute = [];
+}
+
+function updatePatrolRouteDisplay() {
+  if (patrolRoute.length > 0) {
+    document.getElementById('patrolRouteDisplay').textContent = `轮巡路线：${patrolRoute.join(' → ')}`;
+  } else {
+    document.getElementById('patrolRouteDisplay').textContent = '未配置';
+  }
+}
+
+function validatePatrolRoute() {
+  if (patrolRoute.length === 0) return '无路径段';
+
+  // 检查选中的路径是否连接
+  for (let i = 0; i < patrolRoute.length - 1; i++) {
+    const current = pathNetwork[patrolRoute[i]];
+    const next = pathNetwork[patrolRoute[i + 1]];
+    if (!current || !next) return `路径段"${patrolRoute[i]}"或"${patrolRoute[i+1]}"不存在`;
+
+    const currentEnd = current[current.length - 1];
+    const nextStart = next[0];
+    const dist = Math.sqrt(Math.pow(currentEnd.x - nextStart.x, 2) + Math.pow(currentEnd.y - nextStart.y, 2));
+    if (dist > 2.0) {
+      return `路径段"${patrolRoute[i]}"和"${patrolRoute[i+1]}"未连接（距离${dist.toFixed(1)}）`;
+    }
+  }
+
+  return null; // 验证通过
+}
+
+function buildPatrolRoutePath() {
+  // 拼接选中路径段为完整轮巡路线
+  if (patrolRoute.length === 0) return null;
+
+  let fullPath = [];
+  for (let i = 0; i < patrolRoute.length; i++) {
+    const segment = pathNetwork[patrolRoute[i]];
+    if (!segment) return null;
+
+    if (i === 0) {
+      fullPath.push(...segment);
+    } else {
+      fullPath.push(...segment.slice(1));
+    }
+  }
+
+  return fullPath.length > 1 ? fullPath : null;
+}
+
+function getPatrolRoutePath() {
+  // 如果有自定义路由，用它；否则用第一条A-B路径（兼容旧逻辑）
+  if (patrolRoute.length > 0) {
+    return buildPatrolRoutePath();
+  }
+
+  // fallback：查找 A-B 路径
+  if (pathNetwork['A-B']) {
+    return [...pathNetwork['A-B']];
+  }
+
+  // 再找一条A开头的路径
+  for (const [key, path] of Object.entries(pathNetwork)) {
+    if (path.length > 1) {
+      const startPt = path[0];
+      if (keyPoints['A'] && Math.sqrt(Math.pow(startPt.x - keyPoints['A'].x, 2) + Math.pow(startPt.y - keyPoints['A'].y, 2)) < 0.5) {
+        return [...path];
+      }
+    }
+  }
+
+  return null;
+}
+
+function toggleSimulation() {
+  if (!isRunning && (Object.keys(pathNetwork).length === 0 || patrolRoute.length === 0)) {
+    alert('需要先编辑路径和配置轮巡路由');
+    return;
+  }
+
+  isRunning = !isRunning;
+  document.getElementById('btnStart').textContent = isRunning ? '⏸️ 暂停' : '▶️ 开始';
+
+  // 启动时初始化呼叫点状态机
+  if (isRunning) {
+    initializeCallStates();
+  }
+}
+
+function initializeRobots() {
+  // 找第一个轮巡点作为所有机器人的起始位置
+  let startPt = null;
+  for (const [label, pt] of Object.entries(keyPoints)) {
+    if (pt.type === 'patrol') {
+      startPt = pt;
+      break;
+    }
+  }
+
+  if (!startPt) {
+    console.warn('[机器人] 未找到轮巡点，机器人无法初始化');
+    return;
+  }
+
+  // 清空旧机器人
+  for (const id in robots) delete robots[id];
+
+  // 初始化指定数量的机器人
+  for (let i = 1; i <= robotCount; i++) {
+    robots[i] = {
+      x: startPt.x,
+      y: startPt.y,
+      speed: defaultSpeeds[i - 1] || 5,
+      color: '#ef4444',
+      patrolMode: true,
+      path: null,
+      pathProgress: 0,
+      serviceTarget: null,
+      serviceStart: null,
+      returning: false
+    };
+  }
+
+  updateSpeedSettings();
+  console.log(`[机器人] 已初始化${robotCount}个机器人于${startPt.label}(${startPt.x}, ${startPt.y})`);
+}
+
+function setRobotCount(count) {
+  count = parseInt(count);
+  if (isNaN(count) || count < 1 || count > 20) {
+    count = 3;
+  }
+
+  robotCount = count;
+  document.getElementById('robotCount').value = robotCount;
+
+  initializeRobots();
+  console.log(`[机器人] 数量已改为${robotCount}`);
+}
+
+function updateSpeedSettings() {
+  const container = document.getElementById('speedSettingsContainer');
+  container.innerHTML = '';
+
+  for (let i = 1; i <= robotCount; i++) {
+    const robot = robots[i];
+    const speed = robot ? robot.speed : defaultSpeeds[i - 1] || 5;
+
+    const div = document.createElement('div');
+    div.style.fontSize = '11px';
+    div.style.marginBottom = '6px';
+    div.style.display = 'flex';
+    div.style.alignItems = 'center';
+    div.style.gap = '4px';
+
+    const label = document.createElement('label');
+    label.textContent = `R${i}:`;
+    label.style.minWidth = '25px';
+
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.value = speed;
+    input.min = '1';
+    input.max = '20';
+    input.step = '1';
+    input.style.width = '45px';
+    input.style.fontSize = '11px';
+    input.onchange = () => setRobotSpeed(i, input.value);
+
+    div.appendChild(label);
+    div.appendChild(input);
+    container.appendChild(div);
+  }
+}
+
+function resetRobots() {
+  // 重置所有机器人到当前keyPoints位置
+  initializeRobots();
+
+  // 清空呼叫点状态机
+  initializeCallStates();
+  isRunning = false;
+
+  // 重置UI
+  document.getElementById('btnStart').textContent = '▶️ 开始';
+  updateSpeedSettings();
+}
+
+// Dijkstra 找最短路径 — 支持虚拟连接（直线补全），使用缓存
+function findShortestPath(start, end) {
+  // 如果缓存存在，使用缓存；否则构建新图
+  let graph, pathLengths, edges;
+  let cacheUsed = false;
+
+  if (cachedGraph) {
+    graph = cachedGraph;
+    pathLengths = cachedPathLengths;
+    edges = cachedEdges;
+    cacheUsed = true;
+  } else {
+    // 构建图：从路径网络提取关键点连接
+    graph = {};
+    pathLengths = {};
+    edges = {}; // 追踪边类型（真实或虚拟）
+
+    for (const [key, path] of Object.entries(pathNetwork)) {
+      if (!path || path.length < 2) continue;
+
+      // 遍历路径上的所有点，每个点都是节点
+      for (let i = 0; i < path.length; i++) {
+        const pt = path[i];
+
+        // 创建点的标签：优先用关键点名称，否则用坐标（四舍五入）
+        let label = null;
+        for (const [kpLabel, kpPt] of Object.entries(keyPoints)) {
+          const d = Math.sqrt(Math.pow(pt.x - kpPt.x, 2) + Math.pow(pt.y - kpPt.y, 2));
+          if (d < 2.0) {
+            label = kpLabel;
+            break;
+          }
+        }
+        if (!label) {
+          label = `(${Math.round(pt.x)},${Math.round(pt.y)})`;
+        }
+
+        // 添加节点
+        if (!graph[label]) graph[label] = [];
+
+        // 与前一个点连接
+        if (i > 0) {
+          const prevPt = path[i-1];
+          let prevLabel = null;
+          for (const [kpLabel, kpPt] of Object.entries(keyPoints)) {
+            const d = Math.sqrt(Math.pow(prevPt.x - kpPt.x, 2) + Math.pow(prevPt.y - kpPt.y, 2));
+            if (d < 2.0) {
+              prevLabel = kpLabel;
+              break;
+            }
+          }
+          if (!prevLabel) {
+            prevLabel = `(${Math.round(prevPt.x)},${Math.round(prevPt.y)})`;
+          }
+
+          // 双向边
+          if (!graph[prevLabel]) graph[prevLabel] = [];
+          if (!graph[prevLabel].includes(label)) graph[prevLabel].push(label);
+          if (!graph[label].includes(prevLabel)) graph[label].push(prevLabel);
+
+          // 计算距离
+          const segDist = Math.sqrt(Math.pow(pt.x - prevPt.x, 2) + Math.pow(pt.y - prevPt.y, 2));
+          pathLengths[`${prevLabel}-${label}`] = segDist;
+          pathLengths[`${label}-${prevLabel}`] = segDist;
+          edges[`${prevLabel}-${label}`] = 'real';
+          edges[`${label}-${prevLabel}`] = 'real';
+        }
+      }
+    }
+
+    // 不添加虚拟边——只用真实路径（这样更清晰，用户知道缺什么）
+
+    // 缓存图
+    cachedGraph = graph;
+    cachedPathLengths = pathLengths;
+    cachedEdges = edges;
+  }
+
+
+  // 确保start在图中
+  if (!graph[start]) graph[start] = [];
+
+  // Dijkstra算法（改进循环条件，防止死循环）
+  const dist = { [start]: 0 };
+  const visited = new Set();
+  const parent = {};
+  const graphNodes = Object.keys(graph);
+  let maxIterations = graphNodes.length * 2;
+  let iterations = 0;
+
+  while (visited.size < graphNodes.length && iterations < maxIterations) {
+    iterations++;
+    let u = null;
+    let minDist = Infinity;
+
+    for (const node in dist) {
+      if (!visited.has(node) && dist[node] < minDist) {
+        u = node;
+        minDist = dist[node];
+      }
+    }
+
+    if (!u) break; // 无可访问的未访问节点
+    if (u === end) break; // 到达目标
+    visited.add(u);
+
+    for (const v of (graph[u] || [])) {
+      const len = pathLengths[`${u}-${v}`] || 1;
+      if (!dist[v] || dist[u] + len < dist[v]) {
+        dist[v] = dist[u] + len;
+        parent[v] = u;
+      }
+    }
+  }
+
+  // 检查是否真的到达了目标
+  if (!dist[end] || dist[end] === Infinity) {
+    return [];
+  }
+
+  // 重建路径（检测循环）
+  const path = [];
+  const seen = new Set();
+  let current = end;
+  let pathIterations = 0;
+
+  while (current && pathIterations < graphNodes.length + 2) {
+    pathIterations++;
+
+    if (seen.has(current)) {
+      // 检测到循环，中断
+      break;
+    }
+
+    seen.add(current);
+    path.unshift(current);
+    current = parent[current];
+  }
+
+
+  // 检查是否用了虚拟边
+  if (path.length > 1) {
+    let usedVirtual = false;
+    for (let i = 0; i < path.length - 1; i++) {
+      const edgeKey = `${path[i]}-${path[i+1]}`;
+      if (cachedEdges && cachedEdges[edgeKey] === 'virtual') {
+        usedVirtual = true;
+        break;
+      }
+    }
+  }
+
+  return path;
+}
+
+function getPathLength(points) {
+  if (!points || points.length < 2) return 1;  // 防止Infinity
+
+  let len = 0;
+  for (let i = 1; i < points.length; i++) {
+    if (!points[i] || !points[i-1]) continue;  // 跳过无效点
+    const dx = points[i].x - points[i-1].x;
+    const dy = points[i].y - points[i-1].y;
+    const segLen = Math.sqrt(dx*dx + dy*dy);
+    if (!isNaN(segLen)) len += segLen;
+  }
+  return len > 0 ? len : 1;  // 防止0或NaN
+}
+
+// 查找两个关键点之间的完整路径（支持伪标签）
+function findPathBetweenPoints(startLabel, endLabel) {
+  try {
+    let startPt = keyPoints[startLabel];
+    let endPt = keyPoints[endLabel];
+
+    // 如果标签是伪标签（格式：(x,y)），解析坐标
+    if (!startPt && startLabel.match(/^\(\d+,\d+\)$/)) {
+      const coords = startLabel.slice(1, -1).split(',');
+      startPt = { x: parseInt(coords[0]), y: parseInt(coords[1]) };
+    }
+    if (!endPt && endLabel.match(/^\(\d+,\d+\)$/)) {
+      const coords = endLabel.slice(1, -1).split(',');
+      endPt = { x: parseInt(coords[0]), y: parseInt(coords[1]) };
+    }
+    if (!startPt || !endPt) return [];
+
+    // **方案1：查找完整的start→end路径**
+    for (const [key, path] of Object.entries(pathNetwork)) {
+      if (!path || path.length < 2) continue;
+
+      const pathStart = path[0];
+      const pathEnd = path[path.length - 1];
+      const distStart = Math.sqrt(Math.pow(pathStart.x - startPt.x, 2) + Math.pow(pathStart.y - startPt.y, 2));
+      const distEnd = Math.sqrt(Math.pow(pathEnd.x - endPt.x, 2) + Math.pow(pathEnd.y - endPt.y, 2));
+
+      if (distStart < 0.5 && distEnd < 0.5) {
+        return [...path];  // 必须返回副本
+      }
+
+      // 检查反向
+      const distEndReverse = Math.sqrt(Math.pow(pathStart.x - endPt.x, 2) + Math.pow(pathStart.y - endPt.y, 2));
+      const distStartReverse = Math.sqrt(Math.pow(pathEnd.x - startPt.x, 2) + Math.pow(pathEnd.y - startPt.y, 2));
+      if (distEndReverse < 0.5 && distStartReverse < 0.5) {
+        return [...path].reverse();
+      }
+    }
+
+    // **方案2：查找包含start和end的路径（子路径）**
+    // 用与图构建相同的逻辑为路径上的点生成标签，然后精确匹配
+    for (const [key, path] of Object.entries(pathNetwork)) {
+      if (!path || path.length < 2) continue;
+
+      // 为路径上的所有点生成标签（与图构建逻辑一致）
+      const pointLabels = [];
+      for (let i = 0; i < path.length; i++) {
+        const pt = path[i];
+        let label = null;
+
+        // 先检查是否接近关键点
+        for (const [kpLabel, kpPt] of Object.entries(keyPoints)) {
+          const d = Math.sqrt(Math.pow(pt.x - kpPt.x, 2) + Math.pow(pt.y - kpPt.y, 2));
+          if (d < 2.0) {
+            label = kpLabel;
+            break;
+          }
+        }
+
+        // 否则生成伪标签
+        if (!label) {
+          label = `(${Math.round(pt.x)},${Math.round(pt.y)})`;
+        }
+        pointLabels.push(label);
+      }
+
+      // 查找startLabel和endLabel在点标签列表中的索引
+      const startIdx = pointLabels.indexOf(startLabel);
+      const endIdx = pointLabels.indexOf(endLabel);
+
+      // 如果都找到了，提取子路径（必须返回副本）
+      if (startIdx !== -1 && endIdx !== -1) {
+        if (startIdx < endIdx) {
+          const subPath = path.slice(startIdx, endIdx + 1);
+          return [...subPath];  // 返回副本
+        } else if (startIdx > endIdx) {
+          const subPath = path.slice(endIdx, startIdx + 1).reverse();
+          return [...subPath];  // 返回副本
+        }
+      }
+    }
+
+    return [];
+  } catch (err) {
+    return [];
+  }
+}
+
+function getFullPath(nodes) {
+  try {
+    if (!nodes || nodes.length === 0) {
+      return [];
+    }
+
+    const fullPath = [];
+
+    for (let i = 0; i < nodes.length - 1; i++) {
+      const start = nodes[i];
+      const end = nodes[i + 1];
+      const pathSegment = findPathBetweenPoints(start, end);
+
+      if (pathSegment && pathSegment.length > 0) {
+        if (i === 0) {
+          fullPath.push(...pathSegment);
+        } else {
+          fullPath.push(...pathSegment.slice(1));
+        }
+      } else {
+        return [];
+      }
+    }
+    return fullPath;
+  } catch (err) {
+    return [];
+  }
+}
+
+function setRobotSpeed(robotId, speed) {
+  const speedValue = parseFloat(speed);
+  if (isNaN(speedValue) || speedValue < 1 || speedValue > 20) {
+    alert('速度应该在1-20之间');
+    return;
+  }
+  if (robots[robotId]) {
+    robots[robotId].speed = speedValue;
+    console.log(`[机器人${robotId}]速度设置为 ${speedValue} m/s`);
+  }
+}
+
+function generateRequest(label) {
+  if (!isRunning) {
+    alert('请先启动仿真');
+    return;
+  }
+
+  if (!callStates[label]) {
+    callStates[label] = { state: 'idle', assignedRobotId: null, hasPending: false };
+  }
+
+  const state = callStates[label];
+
+  // 状态机逻辑
+  if (state.state === 'assigned' && state.assignedRobotId !== null) {
+    // 已有机器人前往：继续用同一机器人
+    state.hasPending = true;
+    console.log(`[呼叫${label}] 已分配给机器人${state.assignedRobotId}，再次呼叫继续使用该机器人`);
+  } else {
+    // idle、pending或completed：重新选择最近的机器人
+    state.state = 'pending';
+    state.assignedRobotId = null;  // 重置，让分配逻辑选择最近的
+    state.hasPending = true;
+    console.log(`[呼叫${label}] 新呼叫，等待分配最近的机器人`);
+  }
+}
+
+function getDefaultABPath() {
+  // 用新的轮巡路由系统
+  const route = getPatrolRoutePath();
+  if (route) {
+    return [...route];  // 返回副本
+  }
+  return null;
+}
+
+function startDefaultShuttle(robot) {
+  const path = getDefaultABPath();
+  if (!path || path.length < 2) return;
+
+  const pointA = path[0];
+  const pointB = path[path.length - 1];
+
+  // 找机器人在A→B路径上最近的点
+  let closestIdx = 0;
+  let minDist = Infinity;
+
+  for (let i = 0; i < path.length; i++) {
+    const pt = path[i];
+    const dist = Math.sqrt(Math.pow(robot.x - pt.x, 2) + Math.pow(robot.y - pt.y, 2));
+    if (dist < minDist) {
+      minDist = dist;
+      closestIdx = i;
+    }
+  }
+
+  // 计算机器人到A和B的距离
+  const distToA = Math.sqrt(Math.pow(robot.x - pointA.x, 2) + Math.pow(robot.y - pointA.y, 2));
+  const distToB = Math.sqrt(Math.pow(robot.x - pointB.x, 2) + Math.pow(robot.y - pointB.y, 2));
+
+  // 保持完整的A→B路径，通过pathProgress控制起始位置
+  robot.path = [...path];
+
+  // 计算当前位置对应的pathProgress（0-1）
+  // 简单估算：closestIdx / (path.length - 1)
+  const estimatedProgress = (path.length > 1) ? closestIdx / (path.length - 1) : 0;
+
+  if (distToA < distToB) {
+    // 离A近 → 反向走（将路径反序）
+    robot.path.reverse();
+    robot.pathProgress = 1 - estimatedProgress;  // 反向后的progress
+  } else {
+    // 离B近 → 正向走
+    robot.pathProgress = estimatedProgress;
+  }
+}
+
+// 获取机器人实时位置标签（支持路径中间位置）
+function getRobotCurrentPosition(robot) {
+  // 1. 检测是否接近关键点
+  let closestKeyPoint = null;
+  let minDistToKeyPoint = Infinity;
+
+  for (const [key, pt] of Object.entries(keyPoints)) {
+    const dist = Math.sqrt(Math.pow(robot.x - pt.x, 2) + Math.pow(robot.y - pt.y, 2));
+    if (dist < minDistToKeyPoint) {
+      minDistToKeyPoint = dist;
+      closestKeyPoint = key;
+    }
+  }
+
+  // 如果非常接近关键点（<3），直接返回
+  if (minDistToKeyPoint < 3) {
+    return { label: closestKeyPoint, type: 'keypoint', dist: minDistToKeyPoint };
+  }
+
+  // 2. 检测机器人在哪条路径上的具体位置
+  let closestPath = null;
+  let closestPointOnPath = null;
+  let minDistToPath = Infinity;
+  let pathKey_found = null;
+  let pathStartLabel = null;
+  let pathEndLabel = null;
+
+  for (const [pathKey, pathPoints] of Object.entries(pathNetwork)) {
+    if (!pathPoints || pathPoints.length < 2) continue;
+
+    // 找路径上最近的点
+    for (let i = 0; i < pathPoints.length; i++) {
+      const pt = pathPoints[i];
+      const dist = Math.sqrt(Math.pow(robot.x - pt.x, 2) + Math.pow(robot.y - pt.y, 2));
+
+      if (dist < minDistToPath) {
+        minDistToPath = dist;
+        closestPath = pathPoints;
+        closestPointOnPath = { pt, index: i, dist };
+        pathKey_found = pathKey;
+
+        // 获取路径的起点和终点标签
+        const startPt = pathPoints[0];
+        const endPt = pathPoints[pathPoints.length - 1];
+
+        // 尝试匹配关键点
+        for (const [key, kpt] of Object.entries(keyPoints)) {
+          if (!pathStartLabel) {
+            const d = Math.sqrt(Math.pow(startPt.x - kpt.x, 2) + Math.pow(startPt.y - kpt.y, 2));
+            if (d < 2.0) pathStartLabel = key;
+          }
+          if (!pathEndLabel) {
+            const d = Math.sqrt(Math.pow(endPt.x - kpt.x, 2) + Math.pow(endPt.y - kpt.y, 2));
+            if (d < 2.0) pathEndLabel = key;
+          }
+        }
+
+        // 如果无法匹配，用坐标作为伪标签
+        if (!pathStartLabel) pathStartLabel = `(${startPt.x.toFixed(0)},${startPt.y.toFixed(0)})`;
+        if (!pathEndLabel) pathEndLabel = `(${endPt.x.toFixed(0)},${endPt.y.toFixed(0)})`;
+      }
+    }
+  }
+
+  if (closestPath) {
+    const pointIndex = closestPointOnPath.index;
+    const pointLabel = `(${closestPointOnPath.pt.x.toFixed(0)},${closestPointOnPath.pt.y.toFixed(0)})`;
+
+    // 计算从当前点继续走到终点的距离（正向）
+    let distToEnd = 0;
+    for (let i = pointIndex; i < closestPath.length - 1; i++) {
+      const dx = closestPath[i+1].x - closestPath[i].x;
+      const dy = closestPath[i+1].y - closestPath[i].y;
+      distToEnd += Math.sqrt(dx*dx + dy*dy);
+    }
+
+    // 计算从当前点反向走到起点的距离
+    let distToStart = 0;
+    for (let i = pointIndex; i > 0; i--) {
+      const dx = closestPath[i-1].x - closestPath[i].x;
+      const dy = closestPath[i-1].y - closestPath[i].y;
+      distToStart += Math.sqrt(dx*dx + dy*dy);
+    }
+
+    return {
+      label: pathStartLabel,          // 用于Dijkstra的起点
+      endLabel: pathEndLabel,         // 路径的终点标签
+      type: 'path',
+      dist: minDistToPath,
+      pathKey: pathKey_found,
+      pathPoints: closestPath,
+      pointIndex: pointIndex,         // 在路径上的位置
+      distToEnd: distToEnd,           // 继续走到终点的距离
+      distToStart: distToStart        // 反向走到起点的距离
+    };
+  }
+
+  // 3. 默认返回最近的关键点
+  return { label: closestKeyPoint, type: 'keypoint', dist: minDistToKeyPoint };
+}
+
+// 获取两个标签之间的路径距离（支持伪标签）
+function getDistanceBetweenLabels(startLabel, endLabel) {
+  // 先直接查找简单格式的路径
+  let segment = pathNetwork[`${startLabel}-${endLabel}`];
+  if (segment) return getPathLength(segment);
+
+  // 反向查找
+  segment = pathNetwork[`${endLabel}-${startLabel}`];
+  if (segment) return getPathLength(segment);
+
+  // 扫描所有路径，找匹配的
+  for (const [key, path] of Object.entries(pathNetwork)) {
+    if (!path || path.length < 2) continue;
+    const startPt = path[0];
+    const endPt = path[path.length - 1];
+
+    // 检查是否匹配 startLabel -> endLabel
+    let pathStart = null;
+    let pathEnd = null;
+
+    for (const [kpLabel, kpPt] of Object.entries(keyPoints)) {
+      if (!pathStart && Math.sqrt(Math.pow(startPt.x - kpPt.x, 2) + Math.pow(startPt.y - kpPt.y, 2)) < 2.0) {
+        pathStart = kpLabel;
+      }
+      if (!pathEnd && Math.sqrt(Math.pow(endPt.x - kpPt.x, 2) + Math.pow(endPt.y - kpPt.y, 2)) < 2.0) {
+        pathEnd = kpLabel;
+      }
+    }
+
+    // 如果没有找到，用坐标创建伪标签
+    if (!pathStart) pathStart = `(${startPt.x.toFixed(0)},${startPt.y.toFixed(0)})`;
+    if (!pathEnd) pathEnd = `(${endPt.x.toFixed(0)},${endPt.y.toFixed(0)})`;
+
+    if ((pathStart === startLabel && pathEnd === endLabel) ||
+        (pathStart === endLabel && pathEnd === startLabel)) {
+      return getPathLength(path);
+    }
+  }
+
+  return 0; // 未找到路径
+}
+
+// 诊断：打印所有机器人当前位置
+function diagnosticRobotPositions() {
+  // 不输出日志
+}
+
+function updateRobots(dt) {
+  for (const [id, robot] of Object.entries(robots)) {
+    // 检查是否有呼叫请求（未分配的或已分配给本机器人的）
+    let pendingTarget = null;
+    for (const [label, state] of Object.entries(callStates)) {
+      if (state.hasPending) {
+        // 如果已分配给其他机器人，跳过
+        if (state.assignedRobotId !== null && state.assignedRobotId !== parseInt(id)) {
+          continue;
+        }
+        pendingTarget = label;
+        break;
+      }
+    }
+
+    // 状态机
+    if (robot.patrolMode) {
+      // ========== 轮巡模式 ==========
+      // A↔B固定往返
+      if (!robot.path) {
+        startDefaultShuttle(robot);
+      }
+
+      // 沿路径运动
+      if (robot.path) {
+        const pathLen = getPathLength(robot.path);
+        if (pathLen > 0) {
+          const speed = robot.speed / pathLen;
+          if (isFinite(speed)) {
+            robot.pathProgress += speed * dt;
+
+            if (robot.pathProgress >= 1) {
+              // 到达端点，反向
+              // ⚠️ 反序路径，pathProgress必须也反序，否则会瞬移到路径另一端
+              robot.path.reverse();
+              robot.pathProgress = 0;  // 反序后从新起点开始
+              // 让下一帧getPositionOnPath重新计算位置，不要直接修改robot.x/y
+            } else {
+              const pos = getPositionOnPath(robot.path, robot.pathProgress);
+              robot.x = pos.x;
+              robot.y = pos.y;
+            }
+          }
+        }
+      }
+
+      // 有呼叫时切换到服务模式
+      if (pendingTarget) {
+        // 找最近的路径点，从该点沿路径网络走到目标
+        let nearestPoint = null;
+        let nearestLabel = null;
+        let minDistToPath = Infinity;
+
+        // 1. 检查是否接近关键点
+        for (const [key, pt] of Object.entries(keyPoints)) {
+          const dist = Math.sqrt(Math.pow(robot.x - pt.x, 2) + Math.pow(robot.y - pt.y, 2));
+          if (dist < minDistToPath) {
+            minDistToPath = dist;
+            nearestPoint = pt;
+            nearestLabel = key;
+          }
+        }
+
+        // 2. 检查是否在某条路径上
+        if (minDistToPath > 3) {
+          for (const [pathKey, pathPoints] of Object.entries(pathNetwork)) {
+            if (!pathPoints || pathPoints.length < 2) continue;
+            for (let i = 0; i < pathPoints.length; i++) {
+              const pt = pathPoints[i];
+              const dist = Math.sqrt(Math.pow(robot.x - pt.x, 2) + Math.pow(robot.y - pt.y, 2));
+              if (dist < minDistToPath) {
+                minDistToPath = dist;
+                nearestPoint = pt;
+                // 为该点生成标签
+                let label = null;
+                for (const [key, kpt] of Object.entries(keyPoints)) {
+                  const d = Math.sqrt(Math.pow(pt.x - kpt.x, 2) + Math.pow(pt.y - kpt.y, 2));
+                  if (d < 2.0) {
+                    label = key;
+                    break;
+                  }
+                }
+                nearestLabel = label || `(${Math.round(pt.x)},${Math.round(pt.y)})`;
+              }
+            }
+          }
+        }
+
+        if (nearestLabel) {
+          const nodeRoute = findShortestPath(nearestLabel, pendingTarget);
+          console.log(`[机器人${id}]任务分配:nearestLabel=${nearestLabel}, target=${pendingTarget}, nodeRoute=${JSON.stringify(nodeRoute)}`);
+
+          if (nodeRoute && nodeRoute.length > 0) {
+            // 从最近点到目标的完整路径
+            let fullPath = [];
+
+            // 必须先添加robot当前位置作为起点，确保pathProgress=0时不瞬移
+            fullPath.push({ x: robot.x, y: robot.y });
+
+            // 然后添加从nearestLabel到target的路径
+            const routePath = getFullPath(nodeRoute);
+            console.log(`[机器人${id}]routePath长度=${routePath.length}, nodeRoute=${JSON.stringify(nodeRoute)}, fullPath长度=${fullPath.length}`);
+
+            if (routePath && routePath.length > 0) {
+              // 确保routePath从nearestLabel开始（跳过之前的节点）
+              let startIdx = 0;
+              for (let i = 0; i < routePath.length; i++) {
+                const pt = routePath[i];
+                const dist = Math.sqrt(Math.pow(pt.x - nearestPoint.x, 2) + Math.pow(pt.y - nearestPoint.y, 2));
+                if (dist < 2.0) {
+                  startIdx = i;
+                  break;
+                }
+              }
+              console.log(`[机器人${id}]routePath起点移动到index=${startIdx}`);
+              fullPath.push(...routePath.slice(startIdx));
+            }
+
+            if (fullPath.length > 1) {
+              robot.patrolMode = false;
+              robot.serviceTarget = pendingTarget;
+              robot.path = fullPath;
+              robot.pathProgress = 0;  // 现在fullPath[0]=robot当前位置，所以pathProgress=0不会瞬移
+
+              // 更新呼叫点状态
+              callStates[pendingTarget].state = 'assigned';
+              callStates[pendingTarget].assignedRobotId = parseInt(id);
+              callStates[pendingTarget].hasPending = false;
+
+              console.log(`[机器人${id}]✅分配成功，路径${fullPath.length}个点，呼叫点${pendingTarget}状态→assigned`);
+            } else {
+              console.log(`[机器人${id}]❌分配失败，fullPath长度=${fullPath.length}`);
+            }
+          } else {
+            console.log(`[机器人${id}]❌nodeRoute为空或长度为0`);
+          }
+        }
+      }
+
+    } else {
+      // ========== 服务模式 ==========
+      if (!robot.serviceTarget) {
+        // 异常：无服务目标，返回轮巡
+        robot.patrolMode = true;
+        return;
+      }
+
+      // 检查是否有对服务目标的新呼叫
+      const hasNewServiceCall = callStates[robot.serviceTarget] && callStates[robot.serviceTarget].hasPending;
+
+      // 沿路径运动
+      if (robot.path) {
+        const pathLen = getPathLength(robot.path);
+        if (pathLen > 0) {
+          const speed = robot.speed / pathLen;
+          if (isFinite(speed)) {
+            robot.pathProgress += speed * dt;
+
+            if (robot.pathProgress >= 1) {
+              // 到达终点
+              const endPos = robot.path[robot.path.length - 1];
+              robot.x = endPos.x;
+              robot.y = endPos.y;
+              robot.path = null;
+              robot.pathProgress = 0;
+
+              if (robot.returning) {
+                // 返回轮巡路径完成
+                const serviceTarget = robot.serviceTarget;
+                robot.patrolMode = true;
+                robot.serviceTarget = null;
+                robot.serviceStart = null;
+                robot.returning = false;
+
+                // 更新呼叫点状态：服务完全结束，回到idle
+                if (callStates[serviceTarget]) {
+                  callStates[serviceTarget].state = 'idle';
+                  callStates[serviceTarget].assignedRobotId = null;
+                  callStates[serviceTarget].hasPending = false;
+                }
+
+                console.log(`[机器人${id}]返回轮巡主路完成，呼叫点${serviceTarget}状态→idle`);
+              } else {
+                // 到达服务点，开始服务
+                robot.serviceStart = time;
+                console.log(`[机器人${id}]到达${robot.serviceTarget}，开始服务3s`);
+              }
+            } else {
+              const pos = getPositionOnPath(robot.path, robot.pathProgress);
+              robot.x = pos.x;
+              robot.y = pos.y;
+            }
+          }
+        }
+      }
+
+      // 服务阶段或返回阶段
+      if (robot.serviceStart !== null && !robot.path) {
+        if (!robot.returning) {
+          // === 服务状态 ===
+          const serviceElapsed = time - robot.serviceStart;
+          if (serviceElapsed >= 3) {
+            if (hasNewServiceCall) {
+              // 有新呼叫，继续服务3秒
+              if (callStates[robot.serviceTarget]) {
+                callStates[robot.serviceTarget].hasPending = false;  // 清除pending标记
+              }
+              robot.serviceStart = time;
+              console.log(`[机器人${id}]${robot.serviceTarget}有新呼叫，延长服务3s`);
+            } else {
+              // 无新呼叫，进入返回状态（沿路径回到轮巡主路）
+              robot.returning = true;
+              robot.serviceStart = time;
+
+              // 计算返回路径：从serviceTarget回到轮巡起点(A)
+              const returnRoute = findShortestPath(robot.serviceTarget, 'A');
+              if (returnRoute && returnRoute.length > 0) {
+                let returnPath = [];
+                // 必须先添加robot当前位置，避免pathProgress=0时瞬移
+                returnPath.push({ x: robot.x, y: robot.y });
+                const routePath = getFullPath(returnRoute);
+                if (routePath && routePath.length > 0) {
+                  returnPath.push(...routePath);
+                }
+                if (returnPath.length > 1) {
+                  robot.path = returnPath;
+                  robot.pathProgress = 0;
+                }
+              }
+
+              console.log(`[机器人${id}]${robot.serviceTarget}服务完成，开始返回轮巡（${robot.path ? robot.path.length : 0}个点）`);
+            }
+          }
+        } else {
+          // === 返回状态 ===
+          // 返回途中有新呼叫，立即转身去服务
+          if (hasNewServiceCall && robot.path) {
+            // 停止返回，重新前往服务地点
+            robot.returning = false;
+            robot.serviceStart = time;
+
+            // 从当前位置重新计算到service point的路径
+            const newRoute = findShortestPath(robot.serviceTarget, robot.serviceTarget);
+            if (newRoute && newRoute.length > 0) {
+              let newPath = [];
+              // 必须先添加robot当前位置
+              newPath.push({ x: robot.x, y: robot.y });
+              const routePath = getFullPath(newRoute);
+              if (routePath && routePath.length > 0) {
+                newPath.push(...routePath);
+              }
+              if (newPath.length > 1) {
+                robot.path = newPath;
+                robot.pathProgress = 0;
+              }
+            }
+
+            if (callStates[robot.serviceTarget]) {
+              callStates[robot.serviceTarget].hasPending = false;
+            }
+            console.log(`[机器人${id}]返回途中${robot.serviceTarget}有新呼叫，重新服务`);
+          }
+        }
+      }
+    }
+  }
+
+  // 初始化呼叫点状态（第一次运行）
+  if (Object.keys(callStates).length === 0) {
+    initializeCallStates();
+  }
+}
+
+function getPositionOnPath(path, progress) {
+  if (!path || path.length < 1) return { x: 0, y: 0 };
+  if (progress <= 0) return path[0];
+  if (progress >= 1) return path[path.length - 1];
+
+  const len = getPathLength(path);
+  if (len <= 0) return path[0];  // 路径长度为0，返回起点
+
+  const target = len * progress;
+  let current = 0;
+
+  for (let i = 1; i < path.length; i++) {
+    if (!path[i] || !path[i-1]) continue;
+
+    const dx = path[i].x - path[i-1].x;
+    const dy = path[i].y - path[i-1].y;
+    const segLen = Math.sqrt(dx*dx + dy*dy);
+
+    if (current + segLen >= target) {
+      if (segLen <= 0) {
+        // 线段长度为0，返回该点
+        return { x: path[i-1].x, y: path[i-1].y };
+      }
+      const ratio = (target - current) / segLen;
+      return { x: path[i-1].x + dx * ratio, y: path[i-1].y + dy * ratio };
+    }
+    current += segLen;
+  }
+  return path[path.length - 1];
+}
+
+function drawPoints() {
+  // 只在点位编辑模式下显示可交互的点
+  for (const [label, pt] of Object.entries(keyPoints)) {
+    const isSelected = selectedPointLabel === label;
+    const isDragging = draggedPointLabel === label;
+    const radius = isDragging ? 22 : (isSelected ? 18 : 15);
+    const x = pt.x * SCALE;
+    const y = pt.y * SCALE;
+
+    // 绘制选中效果（外圈）
+    if (isSelected) {
+      ctx.strokeStyle = '#0ea5e9';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(x, y, radius + 5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // 绘制点
+    ctx.fillStyle = pt.color;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 绘制标签
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, x, y);
+
+    // 绘制类型
+    ctx.fillStyle = '#000000';
+    ctx.font = '10px Arial';
+    ctx.fillText(pt.type === 'robot' ? '🤖' : (pt.type === 'patrol' ? '📍' : '📞'), x, y + radius + 12);
+  }
+
+  // 显示配置信息
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 14px Arial';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  const infoText = selectedPointLabel ? `✓ 已选: ${selectedPointLabel} | ⬇ 拖动调整 | 💾 保存生效` : '⬅ 左侧选择点位 | ⬇ 拖动调整 | 💾 保存生效';
+  ctx.fillText(infoText, 10, 10);
+}
+
+function drawMap() {
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, map.width, map.height);
+
+  // 点位编辑模式：只显示点位
+  if (pointEditMode) {
+    drawPoints();
+    return;
+  }
+
+  // 调试：显示编辑状态和鼠标位置
+  if (editMode) {
+    ctx.fillStyle = '#0ea5e9';
+    ctx.font = 'bold 11px Arial';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`🖱️ 鼠标: (${mousePos.x.toFixed(1)}, ${mousePos.y.toFixed(1)})`, 10, 10);
+    ctx.fillText(`📍 起点: ${selectedStartPoint || '-'} | 点数: ${currentEditPath.length}`, 10, 23);
+    ctx.fillText(`💾 已保存: ${Object.keys(pathNetwork).length} 条路径`, 10, 36);
+
+    // 显示默认路线信息
+    const defaultPath = getDefaultABPath();
+    ctx.fillText(`🔄 默认往返路线: ${defaultPath ? defaultPath.length : '未连接'} 个点`, 10, 49);
+  } else if (isRunning) {
+    // 运行时显示默认路线信息
+    ctx.fillStyle = '#10b981';
+    ctx.font = 'bold 11px Arial';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    const defaultPath = getDefaultABPath();
+    ctx.fillText(`🔄 A→B路线: ${defaultPath ? defaultPath.length : '未连接'}点`, 10, 10);
+    if (pathNetwork['A-B']) {
+      ctx.fillText(`✓ A-B路径已保存`, 10, 23);
+    } else {
+      ctx.fillText(`⚠ 使用fallback路线`, 10, 23);
+    }
+
+    if (hoveredPoint) {
+      const pt = keyPoints[hoveredPoint];
+      const dist = Math.sqrt(Math.pow(mousePos.x - pt.x, 2) + Math.pow(mousePos.y - pt.y, 2));
+      ctx.fillStyle = '#10b981';
+      ctx.fillText(`✓ 悬停: ${hoveredPoint}(${pt.x}, ${pt.y}) 距离: ${dist.toFixed(2)}m`, 10, 49);
+    } else if (hoveredIntermediatePoint) {
+      const pt = hoveredIntermediatePoint.point;
+      const dist = Math.sqrt(Math.pow(mousePos.x - pt.x, 2) + Math.pow(mousePos.y - pt.y, 2));
+      ctx.fillStyle = '#8b5cf6';
+      ctx.fillText(`✓ 悬停中间点(${pt.x.toFixed(1)}, ${pt.y.toFixed(1)}) 距离: ${dist.toFixed(2)}m`, 10, 49);
+    }
+  }
+
+  // 网格
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 7; i++) {
+    const pos = i * SCALE * 10;
+    ctx.beginPath();
+    ctx.moveTo(pos, 0);
+    ctx.lineTo(pos, map.height);
+    ctx.stroke();
+  }
+
+  // 保存的路径
+  for (const [key, path] of Object.entries(pathNetwork)) {
+    // 绘制路径的各个线段
+    for (let i = 1; i < path.length; i++) {
+      const isHovered = deleteMode && hoveredPathSegment &&
+                        hoveredPathSegment.pathKey === key &&
+                        hoveredPathSegment.segmentIndex === i;
+
+      ctx.strokeStyle = isHovered ? '#ef4444' : '#0ea5e9';
+      ctx.lineWidth = isHovered ? 4 : 2;
+      ctx.beginPath();
+      ctx.moveTo(path[i-1].x * SCALE, path[i-1].y * SCALE);
+      ctx.lineTo(path[i].x * SCALE, path[i].y * SCALE);
+      ctx.stroke();
+    }
+
+    // 保存路径上的所有点（蓝色小圆，悬停放大）
+    for (let i = 0; i < path.length; i++) {
+      const pt = path[i];
+      const isHovered = hoveredIntermediatePoint &&
+                        hoveredIntermediatePoint.source === 'saved' &&
+                        hoveredIntermediatePoint.pathKey === key &&
+                        hoveredIntermediatePoint.index === i;
+      const radius = isHovered ? 10 : 6;
+      ctx.fillStyle = '#0ea5e9';
+      ctx.beginPath();
+      ctx.arc(pt.x * SCALE, pt.y * SCALE, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // 编辑中的路径（实线）
+  if (editMode && currentEditPath.length > 0) {
+    ctx.strokeStyle = '#8b5cf6';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(currentEditPath[0].x * SCALE, currentEditPath[0].y * SCALE);
+    for (const pt of currentEditPath) {
+      ctx.lineTo(pt.x * SCALE, pt.y * SCALE);
+    }
+    ctx.stroke();
+
+    // 编辑中的路径点（紫色中圆，悬停放大）
+    for (let i = 0; i < currentEditPath.length; i++) {
+      const pt = currentEditPath[i];
+      const isHovered = hoveredIntermediatePoint &&
+                        hoveredIntermediatePoint.source === 'current' &&
+                        hoveredIntermediatePoint.index === i;
+      const radius = isHovered ? 14 : 10;
+      ctx.fillStyle = '#8b5cf6';
+      ctx.beginPath();
+      ctx.arc(pt.x * SCALE, pt.y * SCALE, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // 虚线跟随鼠标（编辑中）
+  if (editMode && isDrawing && selectedStartPoint) {
+    const lastPt = currentEditPath.length > 0 ? currentEditPath[currentEditPath.length - 1] : keyPoints[selectedStartPoint];
+    if (lastPt) {
+      ctx.strokeStyle = '#8b5cf6';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(lastPt.x * SCALE, lastPt.y * SCALE);
+      ctx.lineTo(mousePos.x * SCALE, mousePos.y * SCALE);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  // 关键点
+  for (const [key, pt] of Object.entries(keyPoints)) {
+    const radius = hoveredPoint === key ? 12 : 8;
+    ctx.fillStyle = pt.color;
+    ctx.beginPath();
+    ctx.arc(pt.x * SCALE, pt.y * SCALE, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 16px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(key, pt.x * SCALE, pt.y * SCALE);
+  }
+
+  // 机器人
+  for (const [id, robot] of Object.entries(robots)) {
+    ctx.fillStyle = robot.color + '20';
+    ctx.beginPath();
+    ctx.arc(robot.x * SCALE, robot.y * SCALE, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = robot.color;
+    ctx.beginPath();
+    ctx.arc(robot.x * SCALE, robot.y * SCALE, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(id, robot.x * SCALE, robot.y * SCALE);
+  }
+}
+
+let lastTime = Date.now();
+function animate() {
+  const now = Date.now();
+  const dt = (now - lastTime) / 1000;
+  lastTime = now;
+
+  if (isRunning && Object.keys(pathNetwork).length > 0) {
+    time += dt;
+    updateRobots(dt);
+
+    document.getElementById('queue').innerHTML = Object.entries(callStates)
+      .filter(([_, state]) => state.hasPending)
+      .map(([location, state]) => {
+        const robotInfo = state.assignedRobotId !== null ? `机器人${state.assignedRobotId}` : '待分配';
+        return `<div class="queue-item">📍 ${location} (${robotInfo})</div>`;
+      })
+      .join('');
+
+    document.getElementById('robots').innerHTML = Object.entries(robots).map(([id, r]) => `
+      <div class="robot-status">R${id} ${r.patrolMode ? '🔄' : '🎯'} ${r.speed}m/s</div>
+    `).join('');
+  }
+
+  drawMap();
+  requestAnimationFrame(animate);
+}
+
+loadPointConfig();
+loadPaths();
+loadPatrolRoute();
+document.getElementById('robotCount').value = robotCount;
+initializeRobots();
+updatePointConfigDisplay();
+updateCallButtons();
+updatePatrolRouteDisplay();
+updateSpeedSettings();
+updateLanguageUI();
+drawMap();
+// 初始化：删除按钮初始隐藏
+const btnDelete = document.getElementById('btnDelete');
+if (btnDelete) {
+  btnDelete.style.display = 'none';
+}
+requestAnimationFrame(animate);
+</script>
+
+</body>
+</html>
