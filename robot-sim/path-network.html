@@ -674,6 +674,12 @@ function findShortestPath(start, end) {
     cachedGraph = graph;
     cachedPathLengths = pathLengths;
     cachedEdges = edges;
+
+    // 调试：打印图结构
+    console.log(`[Dijkstra图] pathNetwork有${Object.keys(pathNetwork).length}条路径，图有${Object.keys(graph).length}个节点:`, Object.keys(graph).join(', '));
+    for (const [node, neighbors] of Object.entries(graph)) {
+      console.log(`  ${node} → [${neighbors.join(', ')}]`);
+    }
   }
 
   // 确保start在图中
@@ -710,6 +716,12 @@ function findShortestPath(start, end) {
         parent[v] = u;
       }
     }
+  }
+
+  // 检查是否真的到达了目标
+  if (!dist[end] || dist[end] === Infinity) {
+    console.warn(`[Dijkstra] 无法到达${end}（从${start}出发）`);
+    return [];
   }
 
   // 重建路径（检测循环）
