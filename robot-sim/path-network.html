@@ -1669,9 +1669,9 @@ function animate() {
     time += dt;
     updateRobots(dt);
 
-    document.getElementById('queue').innerHTML = Object.entries(pendingRequests)
-      .filter(([_, isPending]) => isPending)
-      .map(([location, _]) => `<div class="queue-item">📍 ${location}</div>`)
+    document.getElementById('queue').innerHTML = Object.entries(callStates)
+      .filter(([_, state]) => state.hasPending)
+      .map(([location, state]) => `<div class="queue-item">📍 ${location} (机器人${state.assignedRobotId || '?'})</div>`)
       .join('');
 
     document.getElementById('robots').innerHTML = Object.entries(robots).map(([id, r]) => `
