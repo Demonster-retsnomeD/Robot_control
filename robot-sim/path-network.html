@@ -1411,6 +1411,8 @@ function updateRobots(dt) {
 
         if (robot.taskPath && robot.taskPath.length > 1) {
           // 反向来时路径
+          const coordBefore = { x: robot.x, y: robot.y };
+
           robot.path = robot.taskPath;  // 恢复来时路径
           robot.taskPath = null;
           robot.path.reverse();
@@ -1420,8 +1422,15 @@ function updateRobots(dt) {
 
           // 立即更新坐标到反向路径上的位置，防止下一帧才更新
           const pos = getPositionOnPath(robot.path, robot.pathProgress);
+          const coordAfter = { x: pos.x, y: pos.y };
           robot.x = pos.x;
           robot.y = pos.y;
+
+          // 诊断：检查是否瞬移
+          const coordDist = Math.sqrt(Math.pow(coordAfter.x - coordBefore.x, 2) + Math.pow(coordAfter.y - coordBefore.y, 2));
+          if (coordDist > 5) {
+            console.warn(`[机器人${id}]⚠️ 瞬移警告! 从(${coordBefore.x.toFixed(1)},${coordBefore.y.toFixed(1)})跳到(${coordAfter.x.toFixed(1)},${coordAfter.y.toFixed(1)})，距离=${coordDist.toFixed(1)}`);
+          }
 
           console.log(`[机器人${id}]服务完成，反向原路（${robot.path.length}点），初始progress=${robot.pathProgress.toFixed(2)}`);
         } else {
