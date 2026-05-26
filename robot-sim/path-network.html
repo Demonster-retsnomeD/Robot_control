@@ -873,13 +873,34 @@ function findPathBetweenPoints(startLabel, endLabel) {
   }
 }
 
-function getFullPath(nodes) {
+function getFullPath(nodes, robotStartPos = null) {
   try {
     if (!nodes || nodes.length === 0) {
       return [];
     }
 
     const fullPath = [];
+
+    // 如果提供了机器人起始位置，从该位置直接连接到目标
+    if (robotStartPos && nodes.length > 0) {
+      // 从robot当前位置到目标点
+      const target = nodes[nodes.length - 1];
+      const targetPt = keyPoints[target];
+      if (!targetPt) {
+        return [];
+      }
+
+      // 用直线路径从当前位置到目标（避免瞬移）
+      fullPath.push({ x: robotStartPos.x, y: robotStartPos.y });
+
+      // 如果目标不在当前位置，添加目标点
+      const dist = Math.sqrt(Math.pow(targetPt.x - robotStartPos.x, 2) + Math.pow(targetPt.y - robotStartPos.y, 2));
+      if (dist > 1) {
+        fullPath.push(targetPt);
+      }
+      return fullPath;
+    }
+
     for (let i = 0; i < nodes.length - 1; i++) {
       const start = nodes[i];
       const end = nodes[i + 1];
@@ -1207,17 +1228,16 @@ function updateRobots(dt) {
 
       // 有呼叫时切换到服务模式
       if (pendingTarget) {
-        const currentPos = getRobotCurrentPosition(robot);
-        const nodeRoute = findShortestPath(currentPos.label, pendingTarget);
-        const fullPath = getFullPath(nodeRoute);
+        // 从机器人当前位置直接到目标（不瞬移）
+        const fullPath = getFullPath([pendingTarget], { x: robot.x, y: robot.y });
 
         if (fullPath && fullPath.length > 1) {
           robot.patrolMode = false;
           robot.serviceTarget = pendingTarget;
-          robot.path = fullPath;           // 设置去服务地点的路径
+          robot.path = fullPath;           // 设置去服务地点的路径（从当前位置开始）
           robot.pathProgress = 0;          // 从路径起点开始
           pendingRequests[pendingTarget] = false;
-          console.log(`[机器人${id}]离开轮巡，前往${pendingTarget}`);
+          console.log(`[机器人${id}]从(${robot.x.toFixed(0)},${robot.y.toFixed(0)})前往${pendingTarget}`);
         }
       }
 
