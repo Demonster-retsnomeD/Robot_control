@@ -1423,7 +1423,11 @@ function updateRobots(dt) {
       robot.pathProgress += speed * dt;
 
       if (robot.pathProgress >= 1) {
-        // 到达目标点
+        // 到达目标点 — 先更新坐标到终点
+        const endPos = robot.path[robot.path.length - 1];
+        robot.x = endPos.x;
+        robot.y = endPos.y;
+
         if (robot.isDefaultShuttle) {
           // 默认往返：反向并继续
           robot.path.reverse();
