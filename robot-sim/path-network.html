@@ -991,8 +991,8 @@ function getDefaultABPath() {
     }
   }
 
-  // 3. fallback: 直线连接
-  return [keyPoints.A, keyPoints.B];
+  // 无A-B路径，不能启动轮巡
+  return null;
 }
 
 function startDefaultShuttle(robot) {
