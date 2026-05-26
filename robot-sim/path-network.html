@@ -959,12 +959,12 @@ function generateRequest(label) {
   const state = callStates[label];
 
   // 状态机逻辑
-  if (state.state === 'assigned' || state.state === 'pending') {
+  if (state.state === 'assigned' && state.assignedRobotId !== null) {
     // 已有机器人前往：继续用同一机器人
     state.hasPending = true;
     console.log(`[呼叫${label}] 已分配给机器人${state.assignedRobotId}，再次呼叫继续使用该机器人`);
   } else {
-    // idle或completed：重新选择最近的机器人
+    // idle、pending或completed：重新选择最近的机器人
     state.state = 'pending';
     state.assignedRobotId = null;  // 重置，让分配逻辑选择最近的
     state.hasPending = true;
@@ -1671,7 +1671,10 @@ function animate() {
 
     document.getElementById('queue').innerHTML = Object.entries(callStates)
       .filter(([_, state]) => state.hasPending)
-      .map(([location, state]) => `<div class="queue-item">📍 ${location} (机器人${state.assignedRobotId || '?'})</div>`)
+      .map(([location, state]) => {
+        const robotInfo = state.assignedRobotId !== null ? `机器人${state.assignedRobotId}` : '待分配';
+        return `<div class="queue-item">📍 ${location} (${robotInfo})</div>`;
+      })
       .join('');
 
     document.getElementById('robots').innerHTML = Object.entries(robots).map(([id, r]) => `
