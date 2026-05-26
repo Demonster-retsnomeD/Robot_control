@@ -1433,9 +1433,10 @@ function updateRobots(dt) {
           robot.path.reverse();
           robot.pathProgress = 0;
         } else {
-          // 任务到达，开始服务
+          // 任务到达，开始服务 — 保存路径用于反向
           robot.status = 'serving';
-          robot.path = null;
+          robot.taskPath = robot.path;  // 保存来时路径，用于服务完成后反向
+          robot.path = null;  // 清空path防止继续移动
           robot.pathProgress = 0;
           if (robot.currentTask && !robot.currentTask.arrivalTime) {
             robot.currentTask.arrivalTime = time; // 记录到达时间
@@ -1459,8 +1460,10 @@ function updateRobots(dt) {
         robot.currentTask = null;
         robot.status = 'moving';
 
-        if (robot.path && robot.path.length > 1) {
+        if (robot.taskPath && robot.taskPath.length > 1) {
           // 反向来时路径
+          robot.path = robot.taskPath;  // 恢复来时路径
+          robot.taskPath = null;
           robot.path.reverse();
           robot.pathProgress = getInitialProgress(robot, robot.path);  // 计算初始进度，避免瞬移
           robot.isDefaultShuttle = false;  // 仍是任务路径反向
