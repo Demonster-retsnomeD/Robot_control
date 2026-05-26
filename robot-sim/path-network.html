@@ -1045,12 +1045,41 @@ function getDefaultABPath() {
 
 function startDefaultShuttle(robot) {
   const path = getDefaultABPath();
-  if (path && path.length > 0) {
-    robot.path = [...path]; // 复制路径
-    robot.pathProgress = 0;
-    robot.status = 'moving';
-    robot.isDefaultShuttle = true;
+  if (!path || path.length < 2) return;
+
+  // 找机器人在A→B路径上最近的点
+  const pointA = path[0];
+  const pointB = path[path.length - 1];
+  let closestIdx = 0;
+  let minDist = Infinity;
+
+  for (let i = 0; i < path.length; i++) {
+    const pt = path[i];
+    const dist = Math.sqrt(Math.pow(robot.x - pt.x, 2) + Math.pow(robot.y - pt.y, 2));
+    if (dist < minDist) {
+      minDist = dist;
+      closestIdx = i;
+    }
   }
+
+  // 计算机器人到A和B的距离
+  const distToA = Math.sqrt(Math.pow(robot.x - pointA.x, 2) + Math.pow(robot.y - pointA.y, 2));
+  const distToB = Math.sqrt(Math.pow(robot.x - pointB.x, 2) + Math.pow(robot.y - pointB.y, 2));
+
+  // 选择方向：离哪个端点近就朝向哪个方向
+  if (distToA < distToB) {
+    // 离A近 → 反向走回A
+    robot.path = [...path].slice(0, closestIdx + 1).reverse();
+  } else {
+    // 离B近 → 正向走到B
+    robot.path = [...path].slice(closestIdx);
+  }
+
+  robot.pathProgress = 0;
+  robot.status = 'moving';
+  robot.isDefaultShuttle = true;
+
+  console.log(`[默认往返] 机器人从(${robot.x.toFixed(0)},${robot.y.toFixed(0)})开始，往返点数=${robot.path.length}`);
 }
 
 // 获取机器人实时位置标签（支持路径中间位置）
