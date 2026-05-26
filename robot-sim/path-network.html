@@ -519,6 +519,9 @@ function savePaths() {
 
 function updateCurrentPath() {
   const el = document.getElementById('currentPath');
+  // 元素已删除，跳过更新
+  if (!el) return;
+
   if (!selectedStartPoint) {
     el.textContent = '点击任意点开始绘制';
     el.style.color = '#64748b';
