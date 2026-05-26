@@ -1467,6 +1467,12 @@ function updateRobots(dt) {
           robot.path.reverse();
           robot.pathProgress = getInitialProgress(robot, robot.path);  // 计算初始进度，避免瞬移
           robot.isDefaultShuttle = false;  // 仍是任务路径反向
+
+          // 立即更新坐标到反向路径上的位置，防止下一帧才更新
+          const pos = getPositionOnPath(robot.path, robot.pathProgress);
+          robot.x = pos.x;
+          robot.y = pos.y;
+
           console.log(`[机器人${id}]服务完成，反向原路（${robot.path.length}点），初始progress=${robot.pathProgress.toFixed(2)}`);
         } else {
           // fallback: 如果没有路径，启动A→B往返
