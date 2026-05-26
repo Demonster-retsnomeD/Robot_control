@@ -1269,14 +1269,6 @@ function updateRobots(dt) {
           // 默认往返：反向并继续
           robot.path.reverse();
           robot.pathProgress = 0;
-        } else if (robot.isReturnPath) {
-          // 返回路径完成 — 启动默认往返
-          robot.isReturnPath = false;
-          robot.path = null;
-          robot.pathProgress = 0;
-          robot.status = 'idle';
-          console.log(`[机器人${id}]返回完成，恢复默认往返`);
-          startDefaultShuttle(robot);
         } else {
           // 任务到达，开始服务 — 保存路径用于反向
           robot.status = 'serving';
@@ -1299,41 +1291,16 @@ function updateRobots(dt) {
     if (robot.status === 'serving' && robot.currentTask) {
       const serviceElapsed = time - robot.currentTask.arrivalTime;
       if (serviceElapsed >= robot.currentTask.serviceTime) {
-        // 服务完成，反向原路返回（不瞬移）
+        // 服务完成，直接从当前位置启动往返
         robot.currentTask.status = 'completed';
         completedTasks++;
         robot.currentTask = null;
-        robot.status = 'moving';
-
-        if (robot.taskPath && robot.taskPath.length > 1) {
-          // 反向来时路径
-          const coordBefore = { x: robot.x, y: robot.y };
-
-          robot.path = robot.taskPath;  // 恢复来时路径
-          robot.taskPath = null;
-          robot.path.reverse();
-          robot.pathProgress = getInitialProgress(robot, robot.path);  // 计算初始进度，避免瞬移
-          robot.isDefaultShuttle = false;
-          robot.isReturnPath = true;  // 标记为返回路径，完成后启动默认往返
-
-          // 立即更新坐标到反向路径上的位置，防止下一帧才更新
-          const pos = getPositionOnPath(robot.path, robot.pathProgress);
-          const coordAfter = { x: pos.x, y: pos.y };
-          robot.x = pos.x;
-          robot.y = pos.y;
-
-          // 诊断：检查是否瞬移
-          const coordDist = Math.sqrt(Math.pow(coordAfter.x - coordBefore.x, 2) + Math.pow(coordAfter.y - coordBefore.y, 2));
-          if (coordDist > 5) {
-            console.warn(`[机器人${id}]⚠️ 瞬移警告! 从(${coordBefore.x.toFixed(1)},${coordBefore.y.toFixed(1)})跳到(${coordAfter.x.toFixed(1)},${coordAfter.y.toFixed(1)})，距离=${coordDist.toFixed(1)}`);
-          }
-
-          console.log(`[机器人${id}]服务完成，反向原路（${robot.path.length}点），初始progress=${robot.pathProgress.toFixed(2)}`);
-        } else {
-          // fallback: 如果没有路径，启动A→B往返
-          robot.status = 'idle';
-          startDefaultShuttle(robot);
-        }
+        robot.taskPath = null;
+        robot.path = null;
+        robot.pathProgress = 0;
+        robot.status = 'idle';
+        console.log(`[机器人${id}]服务完成，恢复往返`);
+        startDefaultShuttle(robot);
       }
     }
   }
