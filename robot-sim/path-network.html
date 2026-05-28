@@ -202,37 +202,6 @@
   <div class="content">
     <div class="left-panel">
       <div class="panel">
-        <h3 id="lbl_point_config">⚙️ 点位配置</h3>
-        <div style="font-size: 11px; margin-bottom: 12px;">
-          <div style="margin-bottom: 6px;">
-            <label style="display: block; margin-bottom: 4px;">🤖 机器人数</label>
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <button onclick="adjustPointCount('robots', -1)" style="width: 28px; height: 28px; padding: 0; cursor: pointer;">−</button>
-              <input type="number" id="configRobots" value="3" min="1" max="10" style="width: 50px; text-align: center; font-size: 11px;" onchange="adjustPointCount('robots', 0)">
-              <button onclick="adjustPointCount('robots', 1)" style="width: 28px; height: 28px; padding: 0; cursor: pointer;">+</button>
-            </div>
-          </div>
-          <div style="margin-bottom: 6px;">
-            <label style="display: block; margin-bottom: 4px;">📍 轮巡点数</label>
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <button onclick="adjustPointCount('patrol', -1)" style="width: 28px; height: 28px; padding: 0; cursor: pointer;">−</button>
-              <input type="number" id="configPatrol" value="2" min="2" max="10" style="width: 50px; text-align: center; font-size: 11px;" onchange="adjustPointCount('patrol', 0)">
-              <button onclick="adjustPointCount('patrol', 1)" style="width: 28px; height: 28px; padding: 0; cursor: pointer;">+</button>
-            </div>
-          </div>
-          <div style="margin-bottom: 6px;">
-            <label style="display: block; margin-bottom: 4px;">📞 呼叫点数</label>
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <button onclick="adjustPointCount('call', -1)" style="width: 28px; height: 28px; padding: 0; cursor: pointer;">−</button>
-              <input type="number" id="configCall" value="2" min="0" max="10" style="width: 50px; text-align: center; font-size: 11px;" onchange="adjustPointCount('call', 0)">
-              <button onclick="adjustPointCount('call', 1)" style="width: 28px; height: 28px; padding: 0; cursor: pointer;">+</button>
-            </div>
-          </div>
-        </div>
-        <button id="btnGenerate" class="btn-primary" onclick="generateDefaultLayout()" style="background: #f59e0b; margin-bottom: 8px;">🎯 生成默认布局</button>
-      </div>
-
-      <div class="panel">
         <h3 id="lbl_robot_settings">🤖 机器人设置</h3>
         <div style="font-size: 12px; margin-bottom: 12px; padding: 8px; background: #f1f5f9; border-radius: 4px;">
           <label style="display: flex; align-items: center; gap: 4px;">
