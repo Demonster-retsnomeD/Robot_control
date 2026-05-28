@@ -2378,11 +2378,10 @@ function updateRobots(dt) {
   const SLOWDOWN_SPEED = 2;        // 避障减速：2m/s
 
   for (const [id, robot] of Object.entries(robots)) {
-    // 初始化避障字段
+    // 初始化避障字段（仅第一次）
     if (robot.avoidanceMode === undefined) robot.avoidanceMode = false;
-    if (!robot.originalSpeed) robot.originalSpeed = robot.speed;
-    if (!robot.prevX) robot.prevX = robot.x;
-    if (!robot.prevY) robot.prevY = robot.y;
+    if (robot.prevX === undefined) robot.prevX = robot.x;
+    if (robot.prevY === undefined) robot.prevY = robot.y;
 
     // 计算当前机器人的运动方向向量
     const robotDx = robot.x - robot.prevX;
