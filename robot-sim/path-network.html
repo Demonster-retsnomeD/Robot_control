@@ -2517,6 +2517,30 @@ function drawPoints() {
   ctx.fillText(infoText, 10, 10);
 }
 
+function drawReadOnlyPoints() {
+  // 在路径编辑或运行模式下显示小的、只读的点位标签
+  for (const [label, pt] of Object.entries(keyPoints)) {
+    const x = pt.x * SCALE;
+    const y = pt.y * SCALE;
+    const radius = 8;
+
+    // 绘制点
+    ctx.fillStyle = pt.color;
+    ctx.globalAlpha = 0.8;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // 绘制标签（小号）
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 9px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, x, y);
+  }
+}
+
 function drawMap() {
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, map.width, map.height);
@@ -2577,6 +2601,9 @@ function drawMap() {
     ctx.lineTo(pos, map.height);
     ctx.stroke();
   }
+
+  // 显示小的读只点位（路径编辑和运行模式）
+  drawReadOnlyPoints();
 
   // 保存的路径
   for (const [key, path] of Object.entries(pathNetwork)) {
