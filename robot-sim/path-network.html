@@ -2422,18 +2422,36 @@ function updateRobots(dt) {
     // 仅在反向行驶时检测碰撞
     if (closestOtherId && isOppositeDirection) {
       if (minDistToOther < AVOID_DISTANCE) {
-        // 进入避障模式
+        // 进入避障模式：双方都减速
         robot.avoidanceMode = true;
         robot.speed = SLOWDOWN_SPEED;
+
+        const other = robots[closestOtherId];
+        if (other) {
+          other.avoidanceMode = true;
+          other.speed = SLOWDOWN_SPEED;
+        }
       } else if (minDistToOther > RESUME_DISTANCE && robot.avoidanceMode) {
         // 恢复原速
         robot.avoidanceMode = false;
         robot.speed = robot.originalSpeed;
+
+        const other = robots[closestOtherId];
+        if (other && other.avoidanceMode) {
+          other.avoidanceMode = false;
+          other.speed = other.originalSpeed;
+        }
       }
     } else if (!isOppositeDirection && robot.avoidanceMode) {
       // 如果变成同向，立即恢复原速
       robot.avoidanceMode = false;
       robot.speed = robot.originalSpeed;
+
+      const other = robots[closestOtherId];
+      if (other && other.avoidanceMode) {
+        other.avoidanceMode = false;
+        other.speed = other.originalSpeed;
+      }
     }
 
     // 记录当前位置作为下一帧的前一位置（必须在速度调整后）
