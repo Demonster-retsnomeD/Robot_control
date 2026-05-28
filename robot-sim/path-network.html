@@ -1467,6 +1467,8 @@ function initializeRobots() {
     robots[i] = {
       x: startPt.x,
       y: startPt.y,
+      prevX: startPt.x,    // 前一帧位置（用于方向计算）
+      prevY: startPt.y,
       speed: defaultSpeeds[i - 1] || 5,
       originalSpeed: defaultSpeeds[i - 1] || 5,  // 保存原速（避障时恢复用）
       color: '#ef4444',
@@ -2166,15 +2168,18 @@ function updateRobots(dt) {
 
   for (const [id, robot] of Object.entries(robots)) {
     // 初始化避障字段
-    if (!robot.avoidanceMode) robot.avoidanceMode = false;
+    if (robot.avoidanceMode === undefined) robot.avoidanceMode = false;
     if (!robot.originalSpeed) robot.originalSpeed = robot.speed;
-    if (!robot.prevX) robot.prevX = robot.x;  // 上一帧位置
+    if (!robot.prevX) robot.prevX = robot.x;
     if (!robot.prevY) robot.prevY = robot.y;
 
     // 计算当前机器人的运动方向向量
     const robotDx = robot.x - robot.prevX;
     const robotDy = robot.y - robot.prevY;
     const robotDirLen = Math.sqrt(robotDx * robotDx + robotDy * robotDy);
+
+    // 调试：如果方向向量不为0，才进行碰撞检测
+    const hasMovement = robotDirLen > 0.001;
 
     // 检测与其他机器人的距离和方向
     let minDistToOther = Infinity;
@@ -2194,9 +2199,9 @@ function updateRobots(dt) {
         closestOtherId = otherId;
 
         // 检测运动方向：计算点积判断是否反向
-        if (robotDirLen > 0.01) {
-          const otherDx = other.x - (other.prevX || other.x);
-          const otherDy = other.y - (other.prevY || other.y);
+        if (hasMovement && other.prevX !== undefined && other.prevY !== undefined) {
+          const otherDx = other.x - other.prevX;
+          const otherDy = other.y - other.prevY;
           const dotProduct = robotDx * otherDx + robotDy * otherDy;
           // 点积 < 0 = 反向，> 0 = 同向
           isOppositeDirection = dotProduct < 0;
@@ -2220,6 +2225,10 @@ function updateRobots(dt) {
       robot.avoidanceMode = false;
       robot.speed = robot.originalSpeed;
     }
+
+    // 记录当前位置作为下一帧的前一位置（必须在速度调整后）
+    robot.prevX = robot.x;
+    robot.prevY = robot.y;
   }
 
   for (const [id, robot] of Object.entries(robots)) {
@@ -2269,10 +2278,6 @@ function updateRobots(dt) {
           }
         }
       }
-
-      // 保存当前位置作为下一帧的前一位置（用于方向计算）
-      robot.prevX = robot.x;
-      robot.prevY = robot.y;
 
       // 有呼叫时切换到服务模式
       if (pendingTarget) {
@@ -2426,10 +2431,6 @@ function updateRobots(dt) {
           }
         }
       }
-
-      // 保存当前位置作为下一帧的前一位置（用于方向计算）
-      robot.prevX = robot.x;
-      robot.prevY = robot.y;
 
       // 服务阶段或返回阶段
       if (robot.serviceStart !== null && !robot.path) {
