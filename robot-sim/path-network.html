@@ -2419,31 +2419,22 @@ function updateRobots(dt) {
       }
     }
 
-    // 仅在反向行驶时检测碰撞
-    if (closestOtherId && isOppositeDirection) {
-      if (minDistToOther < AVOID_DISTANCE) {
-        // 进入避障模式：双方都减速
-        robot.avoidanceMode = true;
-        robot.speed = SLOWDOWN_SPEED;
+    // 避障判断：每帧检查是否满足避障条件
+    // 条件：反向 && 距离<5 → 减速；否则 → 恢复
+    const shouldAvoid = closestOtherId && isOppositeDirection && minDistToOther < AVOID_DISTANCE;
 
-        const other = robots[closestOtherId];
-        if (other) {
-          other.avoidanceMode = true;
-          other.speed = SLOWDOWN_SPEED;
-        }
-      } else if (minDistToOther > RESUME_DISTANCE && robot.avoidanceMode) {
-        // 恢复原速
-        robot.avoidanceMode = false;
-        robot.speed = robot.originalSpeed;
+    if (shouldAvoid) {
+      // 进入或保持避障模式：双方都减速
+      robot.avoidanceMode = true;
+      robot.speed = SLOWDOWN_SPEED;
 
-        const other = robots[closestOtherId];
-        if (other && other.avoidanceMode) {
-          other.avoidanceMode = false;
-          other.speed = other.originalSpeed;
-        }
+      const other = robots[closestOtherId];
+      if (other) {
+        other.avoidanceMode = true;
+        other.speed = SLOWDOWN_SPEED;
       }
-    } else if (!isOppositeDirection && robot.avoidanceMode) {
-      // 如果变成同向，立即恢复原速
+    } else if (robot.avoidanceMode) {
+      // 避障条件不满足，恢复原速
       robot.avoidanceMode = false;
       robot.speed = robot.originalSpeed;
 
