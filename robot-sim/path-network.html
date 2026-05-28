@@ -270,6 +270,15 @@
       </div>
 
       <div class="panel">
+        <h3>💾 地图预设</h3>
+        <div style="font-size: 11px; margin-bottom: 8px; display: flex; gap: 4px;">
+          <input type="text" id="presetName" placeholder="预设名称" style="flex: 1; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11px;">
+          <button class="btn-primary" onclick="savePresetDialog()" style="background: #10b981; padding: 6px 8px; width: auto;">💾</button>
+        </div>
+        <div id="presetList" style="max-height: 150px; overflow-y: auto; font-size: 11px;"></div>
+      </div>
+
+      <div class="panel">
         <h3>📂 已保存路径</h3>
         <div id="pathList" class="path-list">无路径</div>
       </div>
@@ -1569,6 +1578,118 @@ function adjustPointCount(type, delta) {
   input.value = val;
 }
 
+// 地图预设管理
+let presets = {};
+
+function loadPresetsFromStorage() {
+  const saved = localStorage.getItem('mapPresets');
+  if (saved) {
+    try {
+      presets = JSON.parse(saved);
+      console.log(`[预设] 加载${Object.keys(presets).length}个预设`);
+    } catch (e) {
+      console.warn('[预设] 加载失败');
+      presets = {};
+    }
+  }
+  updatePresetList();
+}
+
+function savePresetsToStorage() {
+  localStorage.setItem('mapPresets', JSON.stringify(presets));
+}
+
+function savePresetDialog() {
+  const name = document.getElementById('presetName').value.trim();
+  if (!name) {
+    alert('请输入预设名称');
+    return;
+  }
+
+  // 检查是否已存在
+  if (name in presets) {
+    if (!confirm(`预设"${name}"已存在，是否覆盖？`)) {
+      return;
+    }
+  }
+
+  // 保存当前配置
+  presets[name] = {
+    keyPoints: JSON.parse(JSON.stringify(keyPoints)),
+    pathNetwork: JSON.parse(JSON.stringify(pathNetwork)),
+    patrolRoute: [...patrolRoute],
+    robotCount: robotCount,
+    timestamp: new Date().toLocaleString()
+  };
+
+  savePresetsToStorage();
+  updatePresetList();
+  document.getElementById('presetName').value = '';
+  console.log(`[预设] 已保存"${name}"`);
+}
+
+function loadPreset(name) {
+  if (!(name in presets)) {
+    alert('预设不存在');
+    return;
+  }
+
+  const preset = presets[name];
+  keyPoints = JSON.parse(JSON.stringify(preset.keyPoints));
+  pathNetwork = JSON.parse(JSON.stringify(preset.pathNetwork));
+  patrolRoute = [...preset.patrolRoute];
+  robotCount = preset.robotCount;
+
+  // 刷新UI
+  document.getElementById('robotCount').value = robotCount;
+  initializeRobots();
+  initializeCallStates();
+  updatePointConfigDisplay();
+  updateCallButtons();
+  updateSpeedSettings();
+  updatePathList();
+  updatePatrolRouteDisplay();
+  resetEditPath();
+  isRunning = false;
+  document.getElementById('btnStart').textContent = '▶️ 开始';
+
+  console.log(`[预设] 已加载"${name}"`);
+}
+
+function deletePreset(name) {
+  if (!confirm(`确定删除预设"${name}"？`)) {
+    return;
+  }
+
+  delete presets[name];
+  savePresetsToStorage();
+  updatePresetList();
+  console.log(`[预设] 已删除"${name}"`);
+}
+
+function updatePresetList() {
+  const listDiv = document.getElementById('presetList');
+  const presetNames = Object.keys(presets);
+
+  if (presetNames.length === 0) {
+    listDiv.innerHTML = '<div style="padding: 8px; color: #64748b;">无已保存预设</div>';
+    return;
+  }
+
+  listDiv.innerHTML = presetNames.map(name => {
+    const preset = presets[name];
+    return `<div style="padding: 8px; margin-bottom: 6px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onmouseover="this.style.background='#e8eef7'" onmouseout="this.style.background='#f1f5f9'">
+      <div style="flex: 1; cursor: pointer;" onclick="loadPreset('${name}')">
+        <div style="font-weight: 600;">${name}</div>
+        <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
+          ${preset.robotCount}🤖 · ${Object.keys(preset.keyPoints).length}点 · ${Object.keys(preset.pathNetwork).length}路
+        </div>
+      </div>
+      <button style="background: transparent; border: none; color: #ef4444; cursor: pointer; font-weight: bold; padding: 0 4px;" onclick="deletePreset('${name}'); event.stopPropagation();">✕</button>
+    </div>`;
+  }).join('');
+}
+
 function generateDefaultLayout() {
   const numRobots = parseInt(document.getElementById('configRobots').value) || 3;
   const numPatrol = parseInt(document.getElementById('configPatrol').value) || 2;
@@ -2807,6 +2928,7 @@ function animate() {
 loadPointConfig();
 loadPaths();
 loadPatrolRoute();
+loadPresetsFromStorage();
 document.getElementById('robotCount').value = robotCount;
 initializeRobots();
 updatePointConfigDisplay();
