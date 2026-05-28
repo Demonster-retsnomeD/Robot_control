@@ -2382,6 +2382,7 @@ function updateRobots(dt) {
     if (robot.avoidanceMode === undefined) robot.avoidanceMode = false;
     if (robot.prevX === undefined) robot.prevX = robot.x;
     if (robot.prevY === undefined) robot.prevY = robot.y;
+    if (robot.prevDist === undefined) robot.prevDist = Infinity;
 
     // 计算当前机器人的运动方向向量
     const robotDx = robot.x - robot.prevX;
@@ -2419,9 +2420,9 @@ function updateRobots(dt) {
       }
     }
 
-    // 避障判断：每帧检查是否满足避障条件
-    // 条件：反向 && 距离<5 → 减速；否则 → 恢复
-    const shouldAvoid = closestOtherId && isOppositeDirection && minDistToOther < AVOID_DISTANCE;
+    // 避障判断：反向 && 距离减小 && 距离<5 → 减速；否则 → 恢复
+    const distanceDelta = minDistToOther - robot.prevDist;
+    const shouldAvoid = closestOtherId && isOppositeDirection && minDistToOther < AVOID_DISTANCE && distanceDelta <= 0;
 
     if (shouldAvoid) {
       // 进入或保持避障模式：双方都减速
@@ -2445,9 +2446,10 @@ function updateRobots(dt) {
       }
     }
 
-    // 记录当前位置作为下一帧的前一位置（必须在速度调整后）
+    // 记录当前位置和距离作为下一帧的参考（必须在速度调整后）
     robot.prevX = robot.x;
     robot.prevY = robot.y;
+    robot.prevDist = minDistToOther;
   }
 
   for (const [id, robot] of Object.entries(robots)) {
