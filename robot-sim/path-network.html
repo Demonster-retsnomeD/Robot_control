@@ -651,6 +651,22 @@ function clearPathCache() {
   console.log(`[缓存] 已清除`);
 }
 
+// 清理轮巡路由中不在pathNetwork中的路径段
+function cleanPatrolRoute() {
+  const beforeCount = patrolRoute.length;
+  patrolRoute = patrolRoute.filter(segment => {
+    const exists = segment in pathNetwork;
+    if (!exists) {
+      console.log(`[轮巡] 移除无效路径段: "${segment}"`);
+    }
+    return exists;
+  });
+
+  if (patrolRoute.length < beforeCount) {
+    console.log(`[轮巡] 清理完毕: ${beforeCount} → ${patrolRoute.length} 个路径段`);
+  }
+}
+
 // 加载路径网络
 function loadPaths() {
   const saved = localStorage.getItem('pathNetwork');
@@ -1118,6 +1134,7 @@ function savePointConfigUI() {
 
   savePointConfig();
   clearPathCache();  // 点位改变，路径图需要重建
+  cleanPatrolRoute();  // ⚠️ 移除指向已删除点的轮巡路由段
   initializeRobots();
   initializeCallStates();
   pointEditMode = false;
@@ -1351,8 +1368,20 @@ function updatePatrolRouteList() {
   const listDiv = document.getElementById('patrolRouteList');
   listDiv.innerHTML = '';
 
+  console.log(`[轮巡] 更新路由列表...`);
+  console.log(`[轮巡] 当前patrolRoute: [${patrolRoute.join(' → ')}]`);
+  console.log(`[轮巡] pathNetwork中的路径段: [${Object.keys(pathNetwork).join(', ')}]`);
+
+  // 清理无效的路径段
+  const beforeClean = patrolRoute.length;
+  cleanPatrolRoute();
+  if (patrolRoute.length < beforeClean) {
+    console.log(`[轮巡] 自动清理了${beforeClean - patrolRoute.length}个无效路径段`);
+  }
+
   if (Object.keys(pathNetwork).length === 0) {
     listDiv.innerHTML = '<div style="padding: 8px; color: #64748b; font-size: 11px;">无路径，请先编辑路径</div>';
+    console.log(`[轮巡] 无路径段可选`);
     return;
   }
 
@@ -1461,16 +1490,25 @@ function validatePatrolRoute() {
   for (let i = 0; i < patrolRoute.length - 1; i++) {
     const current = pathNetwork[patrolRoute[i]];
     const next = pathNetwork[patrolRoute[i + 1]];
-    if (!current || !next) return `路径段"${patrolRoute[i]}"或"${patrolRoute[i+1]}"不存在`;
+
+    if (!current || !next) {
+      const missingSegment = !current ? patrolRoute[i] : patrolRoute[i+1];
+      console.log(`✗ 路径段"${missingSegment}"不存在`);
+      console.log(`  当前pathNetwork中的路径段: [${Object.keys(pathNetwork).join(', ')}]`);
+      console.log(`  当前patrolRoute: [${patrolRoute.join(' → ')}]`);
+      return `路径段"${patrolRoute[i]}"或"${patrolRoute[i+1]}"不存在`;
+    }
 
     const currentEnd = current[current.length - 1];
     const nextStart = next[0];
     const dist = Math.sqrt(Math.pow(currentEnd.x - nextStart.x, 2) + Math.pow(currentEnd.y - nextStart.y, 2));
     if (dist > 2.0) {
+      console.log(`✗ 路径段"${patrolRoute[i]}"和"${patrolRoute[i+1]}"未连接，距离${dist.toFixed(1)}`);
       return `路径段"${patrolRoute[i]}"和"${patrolRoute[i+1]}"未连接（距离${dist.toFixed(1)}）`;
     }
   }
 
+  console.log(`✓ 轮巡路由验证通过: [${patrolRoute.join(' → ')}]`);
   return null; // 验证通过
 }
 
@@ -1720,6 +1758,8 @@ function loadPreset(name) {
 
   // ⚠️ 清除寻路缓存——新地图需要重新构建图
   clearPathCache();
+  // ⚠️ 清理轮巡路由——确保patrolRoute中的路径段都在pathNetwork中存在
+  cleanPatrolRoute();
 
   // 加载后显示所有关键点
   console.log(`[预设] 加载的所有关键点:`, Object.keys(keyPoints).sort());
