@@ -2453,11 +2453,11 @@ function updateRobots(dt) {
       // 不在避障模式：检查是否应该进入
       const shouldAvoid = closestOtherId && isOppositeDirection && minDistToOther < AVOID_DISTANCE;
       if (shouldAvoid) {
-        // 进入避障模式：记录目标，双方都减速，更新最小距离记录
+        // 进入避障模式：记录目标，重置最小距离为当前距离，双方都减速
         console.log(`[进入减速] 机器人${id} 与 ${closestOtherId} 反向接近(距离=${minDistToOther.toFixed(2)}): ${robot.originalSpeed}m/s → 2m/s`);
         robot.avoidanceMode = true;
         robot.avoidanceTargetId = closestOtherId;
-        robot.minClosestDist = Math.min(robot.minClosestDist, minDistToOther);
+        robot.minClosestDist = minDistToOther;  // 重置为当前距离，不用Math.min
         robot.speed = SLOWDOWN_SPEED;
 
         const other = robots[closestOtherId];
@@ -2465,7 +2465,7 @@ function updateRobots(dt) {
           console.log(`[进入减速] 机器人${closestOtherId}: ${other.originalSpeed}m/s → 2m/s`);
           other.avoidanceMode = true;
           other.avoidanceTargetId = id;
-          other.minClosestDist = Math.min(other.minClosestDist, minDistToOther);
+          other.minClosestDist = minDistToOther;  // 重置为当前距离
           other.speed = SLOWDOWN_SPEED;
         }
       }
