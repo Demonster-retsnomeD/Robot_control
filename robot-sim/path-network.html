@@ -2908,6 +2908,20 @@ function drawMap() {
       ctx.lineTo(path[i].x * SCALE, path[i].y * SCALE);
       ctx.stroke();
     }
+
+    // 保存路径上的所有点（蓝色小圆，悬停放大）
+    for (let i = 0; i < path.length; i++) {
+      const pt = path[i];
+      const isHovered = hoveredIntermediatePoint &&
+                        hoveredIntermediatePoint.source === 'saved' &&
+                        hoveredIntermediatePoint.pathKey === key &&
+                        hoveredIntermediatePoint.index === i;
+      const radius = isHovered ? 10 : 6;
+      ctx.fillStyle = '#0ea5e9';
+      ctx.beginPath();
+      ctx.arc(pt.x * SCALE, pt.y * SCALE, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   // 编辑中的路径（实线）
