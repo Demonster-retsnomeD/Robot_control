@@ -572,6 +572,20 @@ function relabelPoints() {
     }
   }
 
+  // 按X坐标排序，保证顺序稳定（从左到右）
+  patrolPoints.sort((a, b) => {
+    if (Math.abs(a.x - b.x) > 0.1) return a.x - b.x;  // X不同时按X排序
+    return a.y - b.y;  // X相同时按Y排序
+  });
+  callPoints.sort((a, b) => {
+    if (Math.abs(a.x - b.x) > 0.1) return a.x - b.x;
+    return a.y - b.y;
+  });
+  robotPoints.sort((a, b) => {
+    if (Math.abs(a.x - b.x) > 0.1) return a.x - b.x;
+    return a.y - b.y;
+  });
+
   // 清空keyPoints并重新标签化
   keyPoints = {};
 
@@ -596,7 +610,7 @@ function relabelPoints() {
     keyPoints[newLabel] = { ...pt, label: newLabel };
   }
 
-  console.log(`[点位] 重新标签化完成`);
+  console.log(`[点位] 重新标签化完成（按X坐标排序）`);
 }
 
 function activateCreationMode(type) {
