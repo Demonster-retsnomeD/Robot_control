@@ -2421,25 +2421,9 @@ function updateRobots(dt) {
       }
     }
 
-    // 避障判断：反向 && 距离<5 → 进入减速；距离开始增大 → 恢复
-    const shouldAvoid = closestOtherId && isOppositeDirection && minDistToOther < AVOID_DISTANCE;
-
-    if (shouldAvoid) {
-      // 进入避障模式：记录目标，双方都减速，更新最小距离记录
-      robot.avoidanceMode = true;
-      robot.avoidanceTargetId = closestOtherId;
-      robot.minClosestDist = Math.min(robot.minClosestDist, minDistToOther);
-      robot.speed = SLOWDOWN_SPEED;
-
-      const other = robots[closestOtherId];
-      if (other) {
-        other.avoidanceMode = true;
-        other.avoidanceTargetId = id;
-        other.minClosestDist = Math.min(other.minClosestDist, minDistToOther);
-        other.speed = SLOWDOWN_SPEED;
-      }
-    } else if (robot.avoidanceMode && robot.avoidanceTargetId) {
-      // 检查与避障目标的距离，判断是否应该恢复
+    // 避障状态机：优先检查恢复，再检查进入
+    if (robot.avoidanceMode && robot.avoidanceTargetId) {
+      // 在避障模式：检查是否应该恢复
       const targetRobot = robots[robot.avoidanceTargetId];
       if (targetRobot) {
         const dx = robot.x - targetRobot.x;
@@ -2459,6 +2443,24 @@ function updateRobots(dt) {
             targetRobot.minClosestDist = Infinity;
             targetRobot.speed = targetRobot.originalSpeed;
           }
+        }
+      }
+    } else {
+      // 不在避障模式：检查是否应该进入
+      const shouldAvoid = closestOtherId && isOppositeDirection && minDistToOther < AVOID_DISTANCE;
+      if (shouldAvoid) {
+        // 进入避障模式：记录目标，双方都减速，更新最小距离记录
+        robot.avoidanceMode = true;
+        robot.avoidanceTargetId = closestOtherId;
+        robot.minClosestDist = Math.min(robot.minClosestDist, minDistToOther);
+        robot.speed = SLOWDOWN_SPEED;
+
+        const other = robots[closestOtherId];
+        if (other) {
+          other.avoidanceMode = true;
+          other.avoidanceTargetId = id;
+          other.minClosestDist = Math.min(other.minClosestDist, minDistToOther);
+          other.speed = SLOWDOWN_SPEED;
         }
       }
     }
