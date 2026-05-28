@@ -2829,8 +2829,11 @@ function drawPoints() {
 }
 
 function drawReadOnlyPoints() {
-  // 在路径编辑或运行模式下显示小的、只读的点位标签
+  // 在路径编辑或运行模式下显示小的、只读的点位标签（隐藏robot点）
   for (const [label, pt] of Object.entries(keyPoints)) {
+    // 隐藏机器人标记点，只显示轮巡点和呼叫点
+    if (pt.type === 'robot') continue;
+
     const x = pt.x * SCALE;
     const y = pt.y * SCALE;
     const radius = 8;
