@@ -2143,6 +2143,7 @@ function setRobotSpeed(robotId, speed) {
   }
   if (robots[robotId]) {
     robots[robotId].speed = speedValue;
+    robots[robotId].originalSpeed = speedValue;  // 同时更新原速，避障恢复时用此值
     console.log(`[机器人${robotId}]速度设置为 ${speedValue} m/s`);
   }
 }
