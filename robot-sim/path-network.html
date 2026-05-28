@@ -1130,21 +1130,32 @@ function savePointConfigUI() {
   initializeRobots();
   initializeCallStates();
   pointEditMode = false;
-  pointCreationMode = null;
+  selectedPointLabel = null;
+  draggedPointLabel = null;
 
-  document.getElementById('btnPointEdit').textContent = '✏️ 编辑点位';
-  document.getElementById('btnPointEdit').style.background = '#06b6d4';
-  document.getElementById('btnPointSave').style.display = 'none';
-  document.getElementById('btnEdit').disabled = false;
-  document.getElementById('btnStart').disabled = false;
-  document.getElementById('pointEditPanel').style.display = 'none';
-  document.getElementById('pointListPanel').style.display = 'none';
+  const btnPointEdit = document.getElementById('btnPointEdit');
+  const btnPointSave = document.getElementById('btnPointSave');
+  const btnPointCancel = document.getElementById('btnPointCancel');
+  const btnEdit = document.getElementById('btnEdit');
+  const btnStart = document.getElementById('btnStart');
+  const pointEditPanel = document.getElementById('pointEditPanel');
+  const pointConfigPanel = document.getElementById('pointConfigPanel');
+
+  btnPointEdit.textContent = '✏️ 编辑点位';
+  btnPointEdit.style.background = '#06b6d4';
+  btnPointEdit.disabled = false;
+  btnPointSave.style.display = 'none';
+  btnPointCancel.style.display = 'none';
+  btnEdit.disabled = Object.keys(pathNetwork).length === 0;
+  btnStart.disabled = Object.keys(pathNetwork).length === 0;
+  pointEditPanel.style.display = 'none';
+  pointConfigPanel.style.display = 'block';
 
   updatePointConfigDisplay();
   updateCallButtons();
   const patrolCount = Object.values(keyPoints).filter(p => p.type === 'patrol').length;
   const callCount = Object.values(keyPoints).filter(p => p.type === 'call').length;
-  console.log(`[点位] 已保存：${patrolCount}轮+${callCount}呼，3个机器人就位`);
+  console.log(`[点位] 已保存：${patrolCount}轮+${callCount}呼，已进入路径编辑模式`);
 }
 
 function cancelPointEdit() {
