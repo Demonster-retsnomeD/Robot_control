@@ -1665,9 +1665,12 @@ function loadPreset(name) {
   patrolRoute = [...preset.patrolRoute];
   robotCount = preset.robotCount;
 
+  // 停止运行并重置机器人
+  isRunning = false;
+  resetRobots();  // 重置所有机器人状态
+
   // 刷新UI
   document.getElementById('robotCount').value = robotCount;
-  initializeRobots();
   initializeCallStates();
   updatePointConfigDisplay();
   updateCallButtons();
@@ -1675,7 +1678,6 @@ function loadPreset(name) {
   updatePathList();
   updatePatrolRouteDisplay();
   resetEditPath();
-  isRunning = false;
   document.getElementById('btnStart').textContent = '▶️ 开始';
 
   console.log(`[预设] 已加载"${name}"`);
