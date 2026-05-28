@@ -229,23 +229,36 @@
 
     <div class="sidebar">
       <div class="panel">
-        <h3>📐 点位编辑</h3>
-        <button id="btnPointEdit" class="btn-edit" onclick="togglePointEditMode()" style="background: #06b6d4; margin-top: 0;">✏️ 编辑点位</button>
-        <button id="btnPointSave" class="btn-edit" onclick="savePointConfigUI()" style="background: #10b981; margin-top: 4px; display: none;">💾 保存完成</button>
+        <h3>⚙️ 点位配置</h3>
+        <div id="pointConfigPanel" style="display: block;">
+          <div style="margin-bottom: 8px;">
+            <label style="font-size: 11px; color: #64748b;">🤖 机器人数 (1-5)</label>
+            <input type="number" id="configRobots" value="3" min="1" max="5" style="width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11px;">
+          </div>
+          <div style="margin-bottom: 8px;">
+            <label style="font-size: 11px; color: #64748b;">📍 轮巡点 (2-10)</label>
+            <input type="number" id="configPatrol" value="5" min="2" max="10" style="width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11px;">
+          </div>
+          <div style="margin-bottom: 10px;">
+            <label style="font-size: 11px; color: #64748b;">📞 呼叫点 (2-10)</label>
+            <input type="number" id="configCall" value="3" min="2" max="10" style="width: 100%; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11px;">
+          </div>
+          <button class="btn-primary" onclick="generateDefaultLayout()" style="background: #3b82f6; width: 100%;">✏️ 编辑点位</button>
+        </div>
 
         <div id="pointEditPanel" style="display: none; margin-top: 12px; padding: 12px; border: 2px dashed #0ea5e9; border-radius: 6px;">
-          <div style="font-size: 12px; color: #0ea5e9; margin-bottom: 8px; font-weight: bold;">创建模式: <span id="modeIndicator">—</span></div>
-          <button class="btn-primary" onclick="activateCreationMode('patrol')" style="background: #10b981;">📍 轮巡点</button>
-          <button class="btn-primary" onclick="activateCreationMode('call')" style="background: #8b5cf6;">📞 呼叫点</button>
-          <div style="font-size: 11px; color: #64748b; margin-top: 8px;">点击地图上的空白区域创建新点</div>
+          <div style="font-size: 11px; color: #0ea5e9; margin-bottom: 8px; font-weight: bold;">🎯 拖动点位到目标位置</div>
+
+          <div id="pointListPanel" style="margin-top: 8px; border-top: 1px solid #e2e8f0; padding-top: 8px;">
+            <h4 style="font-size: 12px; margin-bottom: 8px;">📍 已有点位</h4>
+            <div id="pointList" style="max-height: 200px; overflow-y: auto; font-size: 11px;"></div>
+          </div>
+
+          <button id="btnPointSave" class="btn-edit" onclick="savePointConfigUI()" style="background: #10b981; margin-top: 8px; width: 100%; display: none;">💾 保存点位</button>
+          <button id="btnPointCancel" class="btn-edit" onclick="cancelPointEdit()" style="background: #ef4444; margin-top: 4px; width: 100%; display: none;">❌ 取消</button>
         </div>
 
-        <div id="pointListPanel" style="display: none; margin-top: 12px; border-top: 1px solid #e2e8f0; padding-top: 8px;">
-          <h4 style="font-size: 12px; margin-bottom: 8px;">📍 已有点位</h4>
-          <div id="pointList" style="max-height: 200px; overflow-y: auto; font-size: 11px;"></div>
-        </div>
-
-        <div id="pointConfigDisplay" style="font-size: 11px; color: #64748b; margin-top: 8px;">未编辑</div>
+        <div id="pointConfigDisplay" style="font-size: 11px; color: #64748b; margin-top: 8px;">未配置</div>
       </div>
 
       <div class="panel">
@@ -275,7 +288,12 @@
           <input type="text" id="presetName" placeholder="预设名称" style="flex: 1; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11px;">
           <button class="btn-primary" onclick="savePresetDialog()" style="background: #10b981; padding: 6px 8px; width: auto;">💾</button>
         </div>
-        <div id="presetList" style="max-height: 150px; overflow-y: auto; font-size: 11px;"></div>
+        <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+          <button class="btn-primary" onclick="exportPresets()" style="background: #06b6d4; padding: 6px 8px; flex: 1; font-size: 11px;">📥 导出</button>
+          <button class="btn-primary" onclick="document.getElementById('importFile').click()" style="background: #f59e0b; padding: 6px 8px; flex: 1; font-size: 11px;">📤 导入</button>
+          <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importPresets(event)">
+        </div>
+        <div id="presetList" style="max-height: 120px; overflow-y: auto; font-size: 11px;"></div>
       </div>
 
       <div class="panel">
@@ -434,6 +452,7 @@ let hoveredIntermediatePoint = null;
 let hoveredPathSegment = null; // { pathKey, segmentIndex }
 let draggedPointLabel = null;
 let selectedPointLabel = null; // 当前选中的点位（仅在点位编辑模式）
+let pointConfigBackup = null; // 点位编辑前的备份，用于取消编辑时还原
 let pointCreationMode = null; // 'patrol' | 'call' | null
 let patrolRouteEditMode = false; // 轮巡路由编辑模式
 let patrolRoute = []; // 选中的轮巡路径段keys
@@ -1073,40 +1092,30 @@ function toggleDeleteMode() {
 }
 
 function togglePointEditMode() {
-  pointEditMode = !pointEditMode;
+  // This is now called after generateDefaultLayout, so just enter edit mode
+  pointEditMode = true;
   editMode = false;
   deleteMode = false;
-  pointCreationMode = null;
 
   const btnPointEdit = document.getElementById('btnPointEdit');
   const btnPointSave = document.getElementById('btnPointSave');
+  const btnPointCancel = document.getElementById('btnPointCancel');
   const btnEdit = document.getElementById('btnEdit');
   const btnStart = document.getElementById('btnStart');
   const pointEditPanel = document.getElementById('pointEditPanel');
-  const pointListPanel = document.getElementById('pointListPanel');
-  const modeIndicator = document.getElementById('modeIndicator');
+  const pointConfigPanel = document.getElementById('pointConfigPanel');
 
-  if (pointEditMode) {
-    btnPointEdit.textContent = '✏️ 编辑中...';
-    btnPointEdit.style.background = '#ef4444';
-    btnPointSave.style.display = 'inline-block';
-    btnEdit.disabled = true;
-    btnStart.disabled = true;
-    pointEditPanel.style.display = 'block';
-    pointListPanel.style.display = 'block';
-    modeIndicator.textContent = '—';
-    updatePointList();
-    console.log('[点位] 进入编辑模式');
-  } else {
-    btnPointEdit.textContent = '✏️ 编辑点位';
-    btnPointEdit.style.background = '#06b6d4';
-    btnPointSave.style.display = 'none';
-    btnEdit.disabled = false;
-    btnStart.disabled = Object.keys(pathNetwork).length === 0;
-    pointEditPanel.style.display = 'none';
-    pointListPanel.style.display = 'none';
-    console.log('[点位] 退出编辑模式');
-  }
+  btnPointEdit.textContent = '✏️ 编辑中...';
+  btnPointEdit.style.background = '#ef4444';
+  btnPointEdit.disabled = true;
+  btnPointSave.style.display = 'inline-block';
+  btnPointCancel.style.display = 'inline-block';
+  btnEdit.disabled = true;
+  btnStart.disabled = true;
+  pointEditPanel.style.display = 'block';
+  pointConfigPanel.style.display = 'none';
+  updatePointList();
+  console.log('[点位] 进入点位编辑模式（拖动调整位置）');
 }
 
 function savePointConfigUI() {
@@ -1136,6 +1145,38 @@ function savePointConfigUI() {
   const patrolCount = Object.values(keyPoints).filter(p => p.type === 'patrol').length;
   const callCount = Object.values(keyPoints).filter(p => p.type === 'call').length;
   console.log(`[点位] 已保存：${patrolCount}轮+${callCount}呼，3个机器人就位`);
+}
+
+function cancelPointEdit() {
+  // 恢复备份
+  if (pointConfigBackup) {
+    keyPoints = JSON.parse(JSON.stringify(pointConfigBackup));
+    pointConfigBackup = null;
+  }
+
+  pointEditMode = false;
+  selectedPointLabel = null;
+  draggedPointLabel = null;
+
+  const btnPointEdit = document.getElementById('btnPointEdit');
+  const btnPointSave = document.getElementById('btnPointSave');
+  const btnPointCancel = document.getElementById('btnPointCancel');
+  const btnEdit = document.getElementById('btnEdit');
+  const btnStart = document.getElementById('btnStart');
+  const pointEditPanel = document.getElementById('pointEditPanel');
+  const pointConfigPanel = document.getElementById('pointConfigPanel');
+
+  btnPointEdit.textContent = '✏️ 编辑点位';
+  btnPointEdit.style.background = '#06b6d4';
+  btnPointEdit.disabled = false;
+  btnPointSave.style.display = 'none';
+  btnPointCancel.style.display = 'none';
+  btnEdit.disabled = Object.keys(pathNetwork).length === 0;
+  btnStart.disabled = Object.keys(pathNetwork).length === 0;
+  pointEditPanel.style.display = 'none';
+  pointConfigPanel.style.display = 'block';
+
+  console.log('[点位] 已取消编辑');
 }
 
 function updatePointConfigDisplay() {
@@ -1690,6 +1731,62 @@ function updatePresetList() {
   }).join('');
 }
 
+function exportPresets() {
+  if (Object.keys(presets).length === 0) {
+    alert('无预设可导出');
+    return;
+  }
+
+  const data = {
+    version: '1.0',
+    exportTime: new Date().toISOString(),
+    presets: presets
+  };
+
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `robot-presets-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  console.log(`[预设] 已导出${Object.keys(presets).length}个预设`);
+}
+
+function importPresets(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.presets || typeof data.presets !== 'object') {
+        throw new Error('Invalid preset file format');
+      }
+
+      const count = Object.keys(data.presets).length;
+      if (confirm(`导入${count}个预设？这会覆盖同名预设。`)) {
+        presets = { ...presets, ...data.presets };
+        savePresetsToStorage();
+        updatePresetList();
+        console.log(`[预设] 已导入${count}个预设`);
+      }
+    } catch (err) {
+      alert(`导入失败: ${err.message}`);
+      console.error('[预设] 导入错误:', err);
+    }
+  };
+  reader.readAsText(file);
+
+  // 清空input，允许再次选择同一文件
+  event.target.value = '';
+}
+
 function generateDefaultLayout() {
   const numRobots = parseInt(document.getElementById('configRobots').value) || 3;
   const numPatrol = parseInt(document.getElementById('configPatrol').value) || 2;
@@ -1745,6 +1842,9 @@ function generateDefaultLayout() {
     };
   }
 
+  // 保存备份，用于取消编辑时还原
+  pointConfigBackup = JSON.parse(JSON.stringify(keyPoints));
+
   // 保存配置
   savePointConfig();
   initializeRobots();
@@ -1754,10 +1854,13 @@ function generateDefaultLayout() {
   updatePointList();
   updateCallButtons();
   updatePointConfigDisplay();
-  document.getElementById('btnEdit').disabled = Object.keys(pathNetwork).length === 0;
+  document.getElementById('btnEdit').disabled = true;
   document.getElementById('btnStart').disabled = true;
 
-  console.log(`[配置] 生成布局：${numRobots}机器人, ${numPatrol}轮巡点, ${numCall}呼叫点`);
+  // 进入编辑模式
+  togglePointEditMode();
+
+  console.log(`[配置] 生成布局：${numRobots}机器人, ${numPatrol}轮巡点, ${numCall}呼叫点，已进入编辑模式`);
 }
 
 // Dijkstra 找最短路径 — 支持虚拟连接（直线补全），使用缓存
