@@ -2430,14 +2430,18 @@ function updateRobots(dt) {
         const dy = robot.y - targetRobot.y;
         const distToTarget = Math.sqrt(dx * dx + dy * dy);
 
+        console.log(`[避障检查] 机器人${id} vs 目标${robot.avoidanceTargetId}: 当前距离=${distToTarget.toFixed(2)}, 最小距离=${robot.minClosestDist.toFixed(2)}`);
+
         // 距离 > 最近接近距离 = 开始相离 → 恢复原速
         if (distToTarget > robot.minClosestDist) {
+          console.log(`[恢复速度] 机器人${id}: ${robot.speed}m/s → ${robot.originalSpeed}m/s (距离${distToTarget.toFixed(2)} > 最小${robot.minClosestDist.toFixed(2)})`);
           robot.avoidanceMode = false;
           robot.avoidanceTargetId = null;
           robot.minClosestDist = Infinity;
           robot.speed = robot.originalSpeed;
 
           if (targetRobot.avoidanceMode) {
+            console.log(`[恢复速度] 机器人${robot.avoidanceTargetId}: ${targetRobot.speed}m/s → ${targetRobot.originalSpeed}m/s`);
             targetRobot.avoidanceMode = false;
             targetRobot.avoidanceTargetId = null;
             targetRobot.minClosestDist = Infinity;
@@ -2450,6 +2454,7 @@ function updateRobots(dt) {
       const shouldAvoid = closestOtherId && isOppositeDirection && minDistToOther < AVOID_DISTANCE;
       if (shouldAvoid) {
         // 进入避障模式：记录目标，双方都减速，更新最小距离记录
+        console.log(`[进入减速] 机器人${id} 与 ${closestOtherId} 反向接近(距离=${minDistToOther.toFixed(2)}): ${robot.originalSpeed}m/s → 2m/s`);
         robot.avoidanceMode = true;
         robot.avoidanceTargetId = closestOtherId;
         robot.minClosestDist = Math.min(robot.minClosestDist, minDistToOther);
@@ -2457,6 +2462,7 @@ function updateRobots(dt) {
 
         const other = robots[closestOtherId];
         if (other) {
+          console.log(`[进入减速] 机器人${closestOtherId}: ${other.originalSpeed}m/s → 2m/s`);
           other.avoidanceMode = true;
           other.avoidanceTargetId = id;
           other.minClosestDist = Math.min(other.minClosestDist, minDistToOther);
