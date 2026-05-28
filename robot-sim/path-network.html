@@ -476,10 +476,10 @@ function fromRoman(str) {
 }
 
 function getNextPatrolLabel() {
-  // 找到最大的字母标签
+  // 找到最大的轮巡点字母标签（只查找type='patrol'的点）
   let maxIdx = -1;
-  for (const label of Object.keys(keyPoints)) {
-    if (/^[A-Z]$/.test(label)) {
+  for (const [label, pt] of Object.entries(keyPoints)) {
+    if (pt && pt.type === 'patrol' && /^[A-Z]$/.test(label)) {
       maxIdx = Math.max(maxIdx, label.charCodeAt(0) - 65);
     }
   }
@@ -487,11 +487,10 @@ function getNextPatrolLabel() {
 }
 
 function getNextCallLabel() {
-  // 找到最大的罗马数字
+  // 找到最大的呼叫点罗马数字（只查找type='call'的点）
   let maxNum = 0;
-  for (const label of Object.keys(keyPoints)) {
-    const pt = keyPoints[label];
-    if (pt.type === 'call') {
+  for (const [label, pt] of Object.entries(keyPoints)) {
+    if (pt && pt.type === 'call') {
       const num = fromRoman(label);
       maxNum = Math.max(maxNum, num);
     }
