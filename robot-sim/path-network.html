@@ -1121,7 +1121,7 @@ function savePointConfigUI() {
   btnPointEdit.disabled = false;
   btnPointSave.style.display = 'none';
   btnPointCancel.style.display = 'none';
-  btnEdit.disabled = Object.keys(pathNetwork).length === 0;
+  btnEdit.disabled = false;  // 总是允许编辑路径（即使没有现存路径）
   btnStart.disabled = Object.keys(pathNetwork).length === 0;
   pointEditPanel.style.display = 'none';
   pointConfigPanel.style.display = 'block';
