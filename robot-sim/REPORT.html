@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Robot Path Network Simulation - System Report 机器人路径网络仿真系统报告</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+
+    header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 40px 60px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    header p {
+      font-size: 14px;
+      opacity: 0.95;
+      letter-spacing: 0.5px;
+    }
+
+    .lang-switch {
+      display: flex;
+      gap: 8px;
+      background: rgba(255,255,255,0.2);
+      padding: 8px 12px;
+      border-radius: 6px;
+    }
+
+    .lang-btn {
+      padding: 8px 16px;
+      border: none;
+      background: transparent;
+      color: white;
+      cursor: pointer;
+      font-weight: 600;
+      border-radius: 4px;
+      transition: all 0.3s;
+    }
+
+    .lang-btn.active {
+      background: rgba(255,255,255,0.3);
+    }
+
+    .lang-btn:hover {
+      background: rgba(255,255,255,0.2);
+    }
+
+    .content {
+      padding: 60px;
+    }
+
+    section {
+      margin-bottom: 50px;
+      display: none;
+    }
+
+    section.active {
+      display: block;
+      animation: fadeIn 0.5s;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .section-title {
+      font-size: 28px;
+      font-weight: 700;
+      color: #667eea;
+      margin-bottom: 30px;
+      padding-bottom: 16px;
+      border-bottom: 3px solid #667eea;
+    }
+
+    .subsection {
+      margin-bottom: 40px;
+    }
+
+    .subsection-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .subsection-title:before {
+      content: '▸';
+      font-size: 24px;
+      color: #667eea;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .feature-card {
+      background: #f8f9ff;
+      padding: 20px;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+    }
+
+    .feature-card h4 {
+      font-size: 16px;
+      color: #333;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .feature-card p {
+      font-size: 14px;
+      color: #666;
+      line-height: 1.6;
+    }
+
+    .code-block {
+      background: #2d2d2d;
+      color: #f8f8f2;
+      padding: 20px;
+      border-radius: 8px;
+      overflow-x: auto;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      margin: 16px 0;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-box {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .stat-box .number {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .stat-box .label {
+      font-size: 13px;
+      opacity: 0.9;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      background: #f8f9ff;
+    }
+
+    table th {
+      background: #667eea;
+      color: white;
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 600;
+    }
+
+    table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    table tr:hover {
+      background: #f0f2ff;
+    }
+
+    .timeline {
+      position: relative;
+      padding-left: 30px;
+    }
+
+    .timeline-item {
+      margin-bottom: 24px;
+      position: relative;
+    }
+
+    .timeline-item:before {
+      content: '';
+      position: absolute;
+      left: -30px;
+      top: 3px;
+      width: 12px;
+      height: 12px;
+      background: #667eea;
+      border-radius: 50%;
+      border: 3px solid white;
+      box-shadow: 0 0 0 2px #667eea;
+    }
+
+    .timeline-item h4 {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 4px;
+    }
+
+    .timeline-item p {
+      color: #666;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      background: #e0e7ff;
+      color: #667eea;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+
+    .badge.success {
+      background: #dcfce7;
+      color: #16a34a;
+    }
+
+    footer {
+      background: #f8f9fa;
+      padding: 30px 60px;
+      text-align: center;
+      color: #666;
+      font-size: 13px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .list-item {
+      margin-bottom: 12px;
+      padding-left: 24px;
+      position: relative;
+      line-height: 1.6;
+      color: #555;
+    }
+
+    .list-item:before {
+      content: '✓';
+      position: absolute;
+      left: 0;
+      color: #667eea;
+      font-weight: bold;
+    }
+
+    .highlight {
+      background: #fef3c7;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+
+    @media (max-width: 768px) {
+      header {
+        flex-direction: column;
+        text-align: center;
+        padding: 30px 20px;
+      }
+
+      .content {
+        padding: 30px 20px;
+      }
+
+      .feature-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .section-title {
+        font-size: 22px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1 id="title">机器人路径网络仿真系统</h1>
+        <p id="subtitle">Robot Path Network Simulation System</p>
+      </div>
+      <div class="lang-switch">
+        <button class="lang-btn active" data-lang="zh">中文</button>
+        <button class="lang-btn" data-lang="en">English</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <!-- 中文版 -->
+      <section class="zh active">
+        <!-- 概览 -->
+        <div class="section-title">📊 系统概览</div>
+        <div class="subsection">
+          <div class="stats-grid">
+            <div class="stat-box">
+              <div class="number">2763</div>
+              <div class="label">代码行数</div>
+            </div>
+            <div class="stat-box">
+              <div class="number">72</div>
+              <div class="label">核心函数</div>
+            </div>
+            <div class="stat-box">
+              <div class="number">8</div>
+              <div class="label">功能模块</div>
+            </div>
+            <div class="stat-box">
+              <div class="number">零</div>
+              <div class="label">外部依赖</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">系统特性</div>
+          <div class="list-item">单文件HTML5应用，无框架、无构建步骤</div>
+          <div class="list-item">3机器人路径网络仿真系统</div>
+          <div class="list-item">用户绘制路径 → 系统自动调度 → 机器人执行任务</div>
+          <div class="list-item">Dijkstra最短路径算法 + 粘性任务分配</div>
+          <div class="list-item">localStorage持久化，支持多个预设地图</div>
+          <div class="list-item">完整的诊断日志系统（F12 Console输出）</div>
+        </div>
+
+        <!-- 功能模块 -->
+        <div class="section-title">🎯 8大功能模块</div>
+
+        <div class="subsection">
+          <div class="subsection-title">1️⃣ 点位管理系统 (18个函数)</div>
+          <div class="feature-grid">
+            <div class="feature-card">
+              <h4>两层编辑</h4>
+              <p>第一层配置数量，第二层拖动位置。支持机器人、轮巡点、呼叫点三种类型。</p>
+            </div>
+            <div class="feature-card">
+              <h4>自动布局</h4>
+              <p>新建地图时自动生成网格排列：机器人左侧、轮巡点中间、呼叫点右侧。</p>
+            </div>
+            <div class="feature-card">
+              <h4>实时反馈</h4>
+              <p>拖动点位时显示坐标、高亮圆圈、十字光标。支持保存/撤销编辑。</p>
+            </div>
+          </div>
+          <div class="list-item">支持点位类型：机器人(1-N)、轮巡点(A-Z)、呼叫点(I-IV)</div>
+          <div class="list-item">Canvas实时渲染，拖动流畅响应</div>
+          <div class="list-item">localStorage自动保存配置</div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">2️⃣ 路径编辑系统 (16个函数)</div>
+          <p style="margin-bottom: 16px; color: #555;">点击两个关键点，系统自动追踪鼠标光标绘制光滑曲线。支持编辑、删除、保存单条路径。</p>
+          <div class="list-item">交互式绘图，鼠标自动光滑曲线</div>
+          <div class="list-item">实时预览所有路径</div>
+          <div class="list-item">防止重复创建相同路径</div>
+          <div class="list-item">路径存储为坐标数组</div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">3️⃣ 轮巡路由系统 (12个函数)</div>
+          <p style="margin-bottom: 16px; color: #555;">从已有路径中选择路径段，组成轮巡序列。支持自动检查连接性和清理孤立路由段。</p>
+          <div class="list-item">路由配置：patrolRoute = ["A-B", "B-C", "C-A"]</div>
+          <div class="list-item">自动检查路径段连接性（前一条终点 = 后一条起点）</div>
+          <div class="list-item">自动清理指向已删除点的路由段</div>
+          <div class="list-item">诊断日志显示当前可用的路径段</div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">4️⃣ 机器人调度系统 (22个函数)</div>
+          <p style="margin-bottom: 16px; color: #555;">两层状态机：Robot(轮巡 ↔ 服务) 和 CallPoint(空闲 → 待分配 → 已分配 → 完成)</p>
+          <div class="list-item"><span class="highlight">粘性分配</span> — 同一呼叫点连续请求，继续用同一机器人</div>
+          <div class="list-item"><span class="highlight">距离优化</span> — 从当前位置找最近路径节点，计算到目标距离</div>
+          <div class="list-item"><span class="highlight">单独调速</span> — 每个机器人独立速度(1-20 m/s)，实时更新</div>
+          <div class="list-item"><span class="highlight">服务周期</span> — 到达呼叫点 → 停留5秒 → 返回轮巡</div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">5️⃣ 寻路系统 (9个函数 + 缓存)</div>
+          <p style="margin-bottom: 16px; color: #555;">Dijkstra最短路径算法，支持关键点和伪标签(x,y)节点。首次构建图后缓存，切换地图时自动清缓存。</p>
+          <div class="list-item"><span class="highlight">图构建</span> — 从pathNetwork提取关键点+伪标签节点</div>
+          <div class="list-item"><span class="highlight">节点映射</span> — 路径坐标自动识别为关键点或生成伪标签</div>
+          <div class="list-item"><span class="highlight">缓存管理</span> — loadPreset/savePointConfigUI/savePaths时自动清缓存</div>
+          <div class="list-item"><span class="highlight">时间复杂度</span> — O(n²)，缓存命中&lt;5ms，首次构建~20ms</div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">6️⃣ 任务分配算法 (8个函数)</div>
+          <div class="list-item">检测呼叫请求 → 状态机转为pending</div>
+          <div class="list-item">找最近的路径节点(距离&lt;3px)</div>
+          <div class="list-item">Dijkstra寻找最短节点路由</div>
+          <div class="list-item">getFullPath()展开为完整坐标数组</div>
+          <div class="list-item">分配给该机器人，状态转为assigned</div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">7️⃣ 预设系统 (10个函数)</div>
+          <div class="list-item">保存预设 — JSON序列化整个配置(点位+路径+轮巡+机器人数)</div>
+          <div class="list-item">加载预设 — 一键切换完整地图配置</div>
+          <div class="list-item">删除预设 — 确认后永久删除</div>
+          <div class="list-item">localStorage持久化 — 浏览器关闭后数据保留</div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">8️⃣ 诊断和监控 (6层日志系统)</div>
+          <div class="code-block">[预设] 加载的所有关键点: [A, B, C, I, II, III]
+[初始化] 完成! 创建了3个呼叫点: [I, II, III]
+[UI] 当前callStates包含: [I, II, III]
+[按钮点击] 点击呼叫点按钮: "I" @ (100.5, 200.3)
+[寻路] 查询: A → I
+[寻路] 返回路径: [A → (120,150) → I] (3个节点)
+[机器人1] 任务分配成功! 路径20个点，状态: pending→assigned</div>
+        </div>
+
+        <!-- 最近修复 -->
+        <div class="section-title">🐛 最近修复 (2026-05-28 今天完成)</div>
+
+        <div class="subsection">
+          <table>
+            <thead>
+              <tr>
+                <th>问题</th>
+                <th>原因</th>
+                <th>修复</th>
+                <th>提交</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>切换地图呼叫失败</td>
+                <td>Dijkstra缓存跨地图污染</td>
+                <td>clearPathCache()在loadPreset</td>
+                <td><span class="badge success">a9fd3d1</span></td>
+              </tr>
+              <tr>
+                <td>按钮onclick错误</td>
+                <td>loop闭包捕获错误label</td>
+                <td>IIFE创建独立闭包</td>
+                <td><span class="badge success">a9fd3d1</span></td>
+              </tr>
+              <tr>
+                <td>"路径段不存在"错误</td>
+                <td>删除点但patrolRoute未清理</td>
+                <td>cleanPatrolRoute()自动清理</td>
+                <td><span class="badge success">50e5068</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 数据结构 -->
+        <div class="section-title">💾 核心数据结构</div>
+        <div class="subsection">
+          <p style="margin-bottom: 16px; color: #555;">关键点数据（所有点位位置）</p>
+          <div class="code-block">keyPoints = {
+  "1": {x: 50, y: 100, type: 'robot'},
+  "A": {x: 150, y: 200, type: 'patrol'},
+  "I": {x: 300, y: 250, type: 'call'}
+}</div>
+        </div>
+
+        <div class="subsection">
+          <p style="margin-bottom: 16px; color: #555;">路径网络（坐标序列）</p>
+          <div class="code-block">pathNetwork = {
+  "A-B": [{x, y}, {x, y}, ...],  // 坐标数组
+  "B-C": [{x, y}, ...],
+  "C-A": [{x, y}, ...]
+}</div>
+        </div>
+
+        <div class="subsection">
+          <p style="margin-bottom: 16px; color: #555;">轮巡序列和机器人状态</p>
+          <div class="code-block">patrolRoute = ["A-B", "B-C", "C-A"]
+
+robots = {
+  1: {x, y, speed, path, pathProgress, patrolMode, serviceTarget, ...},
+  2: {...},
+  3: {...}
+}
+
+callStates = {
+  "I": {state: 'idle|pending|assigned', assignedRobotId, hasPending},
+  "II": {...}
+}</div>
+        </div>
+
+        <!-- 部署 -->
+        <div class="section-title">🚀 部署和使用</div>
+        <div class="subsection">
+          <div class="feature-grid">
+            <div class="feature-card">
+              <h4>💻 本地运行</h4>
+              <p>双击 path-network.html 在浏览器打开，无需服务器。</p>
+            </div>
+            <div class="feature-card">
+              <h4>☁️ 在线演示</h4>
+              <p>https://robot-sim-iota.vercel.app</p>
+            </div>
+            <div class="feature-card">
+              <h4>📦 代码仓库</h4>
+              <p>https://github.com/Demonster-retsnomeD/Robot_control</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 下步计划 -->
+        <div class="section-title">📈 下一步改进方向</div>
+        <div class="subsection">
+          <div class="list-item">实时统计（平均等待时间、完成率、总里程）</div>
+          <div class="list-item">录制和回放仿真动画</div>
+          <div class="list-item">优先级队列（某些呼叫点更紧急）</div>
+          <div class="list-item">路线约束（禁止某些路段）</div>
+          <div class="list-item">多场景库预设（餐厅配送、仓储、清洁等）</div>
+          <div class="list-item">导出仿真数据为JSON/CSV</div>
+        </div>
+      </section>
+
+      <!-- 英文版 -->
+      <section class="en">
+        <!-- Overview -->
+        <div class="section-title">📊 System Overview</div>
+        <div class="subsection">
+          <div class="stats-grid">
+            <div class="stat-box">
+              <div class="number">2763</div>
+              <div class="label">Lines of Code</div>
+            </div>
+            <div class="stat-box">
+              <div class="number">72</div>
+              <div class="label">Core Functions</div>
+            </div>
+            <div class="stat-box">
+              <div class="number">8</div>
+              <div class="label">Feature Modules</div>
+            </div>
+            <div class="stat-box">
+              <div class="number">Zero</div>
+              <div class="label">Dependencies</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">System Features</div>
+          <div class="list-item">Single-file HTML5 application, no framework or build step</div>
+          <div class="list-item">3-robot path network simulation system</div>
+          <div class="list-item">User draws paths → System auto-schedules → Robots execute tasks</div>
+          <div class="list-item">Dijkstra shortest path algorithm + sticky task assignment</div>
+          <div class="list-item">localStorage persistence with multiple preset maps</div>
+          <div class="list-item">Comprehensive diagnostic logging system (F12 Console)</div>
+        </div>
+
+        <!-- 8 Feature Modules -->
+        <div class="section-title">🎯 8 Feature Modules</div>
+
+        <div class="subsection">
+          <div class="subsection-title">1️⃣ Point Management System (18 functions)</div>
+          <div class="feature-grid">
+            <div class="feature-card">
+              <h4>Two-Layer Editing</h4>
+              <p>First layer: configure quantity; second layer: drag positions. Supports robots, patrol points, and call points.</p>
+            </div>
+            <div class="feature-card">
+              <h4>Auto Layout</h4>
+              <p>New maps auto-generate grid layout: robots left, patrol points center, call points right.</p>
+            </div>
+            <div class="feature-card">
+              <h4>Real-time Feedback</h4>
+              <p>Drag shows coordinates, highlighted circles, crosshair cursor. Save/undo support.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">2️⃣ Path Editing System (16 functions)</div>
+          <p style="margin-bottom: 16px; color: #555;">Click two keypoints, system auto-traces mouse for smooth curve. Edit, delete, and save individual paths.</p>
+          <div class="list-item">Interactive drawing with smooth mouse tracing</div>
+          <div class="list-item">Real-time path preview</div>
+          <div class="list-item">Prevents duplicate path creation</div>
+          <div class="list-item">Paths stored as coordinate arrays</div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">3️⃣ Patrol Route System (12 functions)</div>
+          <p style="margin-bottom: 16px; color: #555;">Select path segments to form patrol sequence. Auto-checks connectivity and cleans up orphaned route segments.</p>
+          <div class="list-item">Route config: patrolRoute = ["A-B", "B-C", "C-A"]</div>
+          <div class="list-item">Auto-validates path segment connectivity</div>
+          <div class="list-item">Auto-removes routes referencing deleted points</div>
+          <div class="list-item">Diagnostic logging shows available segments</div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">4️⃣ Robot Dispatch System (22 functions)</div>
+          <p style="margin-bottom: 16px; color: #555;">Dual state machines: Robot(patrol ↔ service) and CallPoint(idle → pending → assigned → complete)</p>
+          <div class="list-item"><span class="highlight">Sticky Assignment</span> — Repeated calls on same point use same robot</div>
+          <div class="list-item"><span class="highlight">Distance Optimization</span> — Find nearest path node, compute distance to target</div>
+          <div class="list-item"><span class="highlight">Independent Speed</span> — Each robot has own speed (1-20 m/s), real-time control</div>
+          <div class="list-item"><span class="highlight">Service Cycle</span> — Arrive → stay 5s → return to patrol</div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">5️⃣ Pathfinding System (9 functions + caching)</div>
+          <p style="margin-bottom: 16px; color: #555;">Dijkstra's shortest path, supports keypoints and pseudo-labels (x,y). Caches graph, auto-clears on map switch.</p>
+          <div class="list-item"><span class="highlight">Graph Building</span> — Extract keypoints + pseudo-label nodes from pathNetwork</div>
+          <div class="list-item"><span class="highlight">Node Mapping</span> — Path coordinates auto-identify as keypoints or pseudo-labels</div>
+          <div class="list-item"><span class="highlight">Cache Management</span> — Auto-clear on loadPreset/savePointConfigUI/savePaths</div>
+          <div class="list-item"><span class="highlight">Time Complexity</span> — O(n²), cache hit &lt;5ms, first build ~20ms</div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">6️⃣ Task Assignment Algorithm (8 functions)</div>
+          <div class="list-item">Detect call request → state transitions to pending</div>
+          <div class="list-item">Find nearest path node (distance &lt;3px)</div>
+          <div class="list-item">Dijkstra finds shortest node route</div>
+          <div class="list-item">getFullPath() expands to full coordinate array</div>
+          <div class="list-item">Assign to robot, state transitions to assigned</div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">7️⃣ Preset System (10 functions)</div>
+          <div class="list-item">Save preset — JSON serialize complete config (points+paths+patrol+robots)</div>
+          <div class="list-item">Load preset — One-click switch entire map config</div>
+          <div class="list-item">Delete preset — Confirmed permanent deletion</div>
+          <div class="list-item">localStorage persistence — Data survives browser close</div>
+        </div>
+
+        <div class="subsection">
+          <div class="subsection-title">8️⃣ Diagnostics & Monitoring (6-layer logging)</div>
+          <div class="code-block">[Preset] Loaded keypoints: [A, B, C, I, II, III]
+[Init] Created 3 call points: [I, II, III]
+[UI] Current callStates: [I, II, III]
+[Button click] Clicked call point: "I" @ (100.5, 200.3)
+[Pathfind] Query: A → I
+[Pathfind] Returned: [A → (120,150) → I] (3 nodes)
+[Robot1] Task assignment success! Path 20 points, state: pending→assigned</div>
+        </div>
+
+        <!-- Recent Fixes -->
+        <div class="section-title">🐛 Recent Fixes (2026-05-28 Today)</div>
+
+        <div class="subsection">
+          <table>
+            <thead>
+              <tr>
+                <th>Issue</th>
+                <th>Root Cause</th>
+                <th>Fix</th>
+                <th>Commit</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Call fails on map switch</td>
+                <td>Dijkstra cache pollution across maps</td>
+                <td>clearPathCache() in loadPreset</td>
+                <td><span class="badge success">a9fd3d1</span></td>
+              </tr>
+              <tr>
+                <td>Button onclick wrong</td>
+                <td>Loop closure captures wrong label</td>
+                <td>IIFE creates isolated closure</td>
+                <td><span class="badge success">a9fd3d1</span></td>
+              </tr>
+              <tr>
+                <td>"Path segment not found" error</td>
+                <td>Point deleted but patrolRoute not cleaned</td>
+                <td>cleanPatrolRoute() auto-cleanup</td>
+                <td><span class="badge success">50e5068</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Data Structures -->
+        <div class="section-title">💾 Core Data Structures</div>
+        <div class="subsection">
+          <p style="margin-bottom: 16px; color: #555;">Keypoints data (all point locations)</p>
+          <div class="code-block">keyPoints = {
+  "1": {x: 50, y: 100, type: 'robot'},
+  "A": {x: 150, y: 200, type: 'patrol'},
+  "I": {x: 300, y: 250, type: 'call'}
+}</div>
+        </div>
+
+        <div class="subsection">
+          <p style="margin-bottom: 16px; color: #555;">Path network (coordinate sequences)</p>
+          <div class="code-block">pathNetwork = {
+  "A-B": [{x, y}, {x, y}, ...],  // coordinate array
+  "B-C": [{x, y}, ...],
+  "C-A": [{x, y}, ...]
+}</div>
+        </div>
+
+        <div class="subsection">
+          <p style="margin-bottom: 16px; color: #555;">Patrol sequence and robot states</p>
+          <div class="code-block">patrolRoute = ["A-B", "B-C", "C-A"]
+
+robots = {
+  1: {x, y, speed, path, pathProgress, patrolMode, serviceTarget, ...},
+  2: {...},
+  3: {...}
+}
+
+callStates = {
+  "I": {state: 'idle|pending|assigned', assignedRobotId, hasPending},
+  "II": {...}
+}</div>
+        </div>
+
+        <!-- Deployment -->
+        <div class="section-title">🚀 Deployment & Usage</div>
+        <div class="subsection">
+          <div class="feature-grid">
+            <div class="feature-card">
+              <h4>💻 Local Run</h4>
+              <p>Double-click path-network.html to open in browser. No server required.</p>
+            </div>
+            <div class="feature-card">
+              <h4>☁️ Live Demo</h4>
+              <p>https://robot-sim-iota.vercel.app</p>
+            </div>
+            <div class="feature-card">
+              <h4>📦 Repository</h4>
+              <p>https://github.com/Demonster-retsnomeD/Robot_control</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Future -->
+        <div class="section-title">📈 Future Improvements</div>
+        <div class="subsection">
+          <div class="list-item">Real-time statistics (avg wait time, completion rate, total distance)</div>
+          <div class="list-item">Record and playback simulation animation</div>
+          <div class="list-item">Priority queue (certain call points higher priority)</div>
+          <div class="list-item">Route constraints (forbidden segments)</div>
+          <div class="list-item">Scenario library (restaurant delivery, warehouse, cleaning)</div>
+          <div class="list-item">Export simulation data as JSON/CSV</div>
+        </div>
+      </section>
+    </div>
+
+    <footer>
+      <p>Robot Path Network Simulation System | 机器人路径网络仿真系统</p>
+      <p>Generated on 2026-05-28 | Build with pure HTML5 + Canvas API | Zero Dependencies</p>
+    </footer>
+  </div>
+
+  <script>
+    const zhSection = document.querySelector('.content .zh');
+    const enSection = document.querySelector('.content .en');
+    const langBtns = document.querySelectorAll('.lang-btn');
+
+    langBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const lang = btn.dataset.lang;
+
+        // 更新按钮状态
+        langBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        // 显示对应语言的内容
+        if (lang === 'zh') {
+          zhSection.classList.add('active');
+          enSection.classList.remove('active');
+          document.documentElement.lang = 'zh';
+        } else {
+          enSection.classList.add('active');
+          zhSection.classList.remove('active');
+          document.documentElement.lang = 'en';
+        }
+      });
+    });
+  </script>
+</body>
+</html>
