@@ -1486,13 +1486,16 @@ function initializeRobots() {
       x: startPt.x,
       y: startPt.y,
       speed: defaultSpeeds[i - 1] || 5,
+      originalSpeed: defaultSpeeds[i - 1] || 5,  // 保存原速（避障时恢复用）
       color: '#ef4444',
       patrolMode: true,
       path: null,
       pathProgress: 0,
       serviceTarget: null,
       serviceStart: null,
-      returning: false
+      returning: false,
+      avoidanceMode: false,  // 避障状态标志
+      distanceTraveled: 0    // 累计走过的距离
     };
   }
 
@@ -1551,6 +1554,12 @@ function updateSpeedSettings() {
 function resetRobots() {
   // 重置所有机器人到当前keyPoints位置
   initializeRobots();
+
+  // 重置避障和距离追踪
+  for (const [id, robot] of Object.entries(robots)) {
+    robot.avoidanceMode = false;
+    robot.distanceTraveled = 0;
+  }
 
   // 清空呼叫点状态机
   initializeCallStates();
@@ -2168,6 +2177,53 @@ function diagnosticRobotPositions() {
 }
 
 function updateRobots(dt) {
+  // 第1步：检测碰撞避障
+  const AVOID_DISTANCE = 5;        // 触发避障距离（<5单位）
+  const RESUME_DISTANCE = 8;       // 恢复原速距离（>8单位）
+  const SAFE_START_DISTANCE = 10;  // 安全起始距离（走过10单位后才检测）
+  const SLOWDOWN_SPEED = 2;        // 避障减速：2m/s
+
+  for (const [id, robot] of Object.entries(robots)) {
+    // 初始化避障字段
+    if (!robot.avoidanceMode) robot.avoidanceMode = false;
+    if (!robot.originalSpeed) robot.originalSpeed = robot.speed;
+    if (!robot.distanceTraveled) robot.distanceTraveled = 0;
+
+    // 检测与其他机器人的距离
+    let minDistToOther = Infinity;
+    let closestOtherId = null;
+
+    for (const [otherId, other] of Object.entries(robots)) {
+      if (otherId === id) continue;
+
+      // 计算两机器人的距离
+      const dx = robot.x - other.x;
+      const dy = robot.y - other.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < minDistToOther) {
+        minDistToOther = dist;
+        closestOtherId = otherId;
+      }
+    }
+
+    // 如果两个机器人都已走过安全起始距离，才检测碰撞
+    const robotSafeStart = robot.distanceTraveled > SAFE_START_DISTANCE;
+    const otherSafeStart = closestOtherId ? robots[closestOtherId].distanceTraveled > SAFE_START_DISTANCE : true;
+
+    if (robotSafeStart && otherSafeStart) {
+      if (minDistToOther < AVOID_DISTANCE) {
+        // 进入避障模式
+        robot.avoidanceMode = true;
+        robot.speed = SLOWDOWN_SPEED;
+      } else if (minDistToOther > RESUME_DISTANCE && robot.avoidanceMode) {
+        // 恢复原速
+        robot.avoidanceMode = false;
+        robot.speed = robot.originalSpeed;
+      }
+    }
+  }
+
   for (const [id, robot] of Object.entries(robots)) {
     // 检查是否有呼叫请求（未分配的或已分配给本机器人的）
     let pendingTarget = null;
@@ -2196,7 +2252,10 @@ function updateRobots(dt) {
         if (pathLen > 0) {
           const speed = robot.speed / pathLen;
           if (isFinite(speed)) {
+            const oldProgress = robot.pathProgress;
             robot.pathProgress += speed * dt;
+            // 累计走过的距离
+            robot.distanceTraveled += (robot.pathProgress - oldProgress) * pathLen;
 
             if (robot.pathProgress >= 1) {
               // 到达端点，反向
@@ -2323,7 +2382,10 @@ function updateRobots(dt) {
         if (pathLen > 0) {
           const speed = robot.speed / pathLen;
           if (isFinite(speed)) {
+            const oldProgress = robot.pathProgress;
             robot.pathProgress += speed * dt;
+            // 累计走过的距离
+            robot.distanceTraveled += (robot.pathProgress - oldProgress) * pathLen;
 
             if (robot.pathProgress >= 1) {
               // 到达终点
