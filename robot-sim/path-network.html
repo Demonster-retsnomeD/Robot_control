@@ -559,15 +559,12 @@ function relabelPoints() {
   // 收集所有点按类型分组
   const patrolPoints = [];
   const callPoints = [];
-  const robotPoints = [];
 
   for (const [label, pt] of Object.entries(keyPoints)) {
     if (pt.type === 'patrol') {
       patrolPoints.push(pt);
     } else if (pt.type === 'call') {
       callPoints.push(pt);
-    } else if (pt.type === 'robot') {
-      robotPoints.push(pt);
     }
   }
 
@@ -577,10 +574,6 @@ function relabelPoints() {
     return a.y - b.y;  // X相同时按Y排序
   });
   callPoints.sort((a, b) => {
-    if (Math.abs(a.x - b.x) > 0.1) return a.x - b.x;
-    return a.y - b.y;
-  });
-  robotPoints.sort((a, b) => {
     if (Math.abs(a.x - b.x) > 0.1) return a.x - b.x;
     return a.y - b.y;
   });
@@ -599,13 +592,6 @@ function relabelPoints() {
   for (let i = 0; i < callPoints.length; i++) {
     const pt = callPoints[i];
     const newLabel = toRoman(i + 1);
-    keyPoints[newLabel] = { ...pt, label: newLabel };
-  }
-
-  // 机器人：1, 2, 3, ...
-  for (let i = 0; i < robotPoints.length; i++) {
-    const pt = robotPoints[i];
-    const newLabel = String(i + 1);
     keyPoints[newLabel] = { ...pt, label: newLabel };
   }
 
@@ -1512,26 +1498,22 @@ function initializeRobots() {
   // 清空旧机器人
   for (const id in robots) delete robots[id];
 
-  // 初始化指定数量的机器人，每个机器人从对应的robot keyPoint出发
+  // 找第一个轮巡点作为所有机器人的起始位置
+  let startPt = null;
+  for (const [label, pt] of Object.entries(keyPoints)) {
+    if (pt.type === 'patrol') {
+      startPt = pt;
+      break;
+    }
+  }
+
+  if (!startPt) {
+    console.warn('[机器人] 未找到轮巡点，机器人无法初始化');
+    return;
+  }
+
+  // 初始化指定数量的机器人，都从第一个轮巡点出发
   for (let i = 1; i <= robotCount; i++) {
-    const robotLabel = String(i);
-    let startPt = keyPoints[robotLabel];
-
-    // 如果没有对应的robot keyPoint，使用第一个patrol point作为后备
-    if (!startPt) {
-      for (const [label, pt] of Object.entries(keyPoints)) {
-        if (pt.type === 'patrol') {
-          startPt = pt;
-          break;
-        }
-      }
-    }
-
-    if (!startPt) {
-      console.warn(`[机器人] 未找到机器人${i}的起始位置（缺少robot keyPoint或patrol点）`);
-      continue;
-    }
-
     robots[i] = {
       x: startPt.x,
       y: startPt.y,
@@ -1552,7 +1534,7 @@ function initializeRobots() {
   }
 
   updateSpeedSettings();
-  console.log(`[机器人] 已初始化${robotCount}个机器人（从robot keyPoints出发）`);
+  console.log(`[机器人] 已初始化${robotCount}个机器人于${startPt.label}(${startPt.x}, ${startPt.y})`);
 }
 
 function setRobotCount(count) {
@@ -1817,27 +1799,14 @@ function generateDefaultLayout() {
   selectedPointLabel = null;
   pointCreationMode = null;
 
-  // 生成机器人点（左侧）
-  const robotSpacing = 50 / (numRobots + 1);
-  for (let i = 1; i <= numRobots; i++) {
-    const label = String(i);
-    keyPoints[label] = {
-      x: 10,
-      y: 10 + i * robotSpacing,
-      label: label,
-      color: '#3b82f6',
-      type: 'robot'
-    };
-  }
-
-  // 生成轮巡点（中间，两列）
+  // 生成轮巡点（左侧到中间，两列）
   const patrolPerCol = Math.ceil(numPatrol / 2);
   let patrolIdx = 0;
   for (let col = 0; col < 2 && patrolIdx < numPatrol; col++) {
     for (let row = 0; row < patrolPerCol && patrolIdx < numPatrol; row++) {
       const label = String.fromCharCode(65 + patrolIdx); // A, B, C, ...
       keyPoints[label] = {
-        x: 25 + col * 15,
+        x: 15 + col * 15,
         y: 15 + row * (45 / (patrolPerCol + 1)),
         label: label,
         color: '#10b981',
