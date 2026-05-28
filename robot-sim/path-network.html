@@ -790,10 +790,15 @@ canvas.addEventListener('mousedown', (e) => {
   const mx = x / SCALE;
   const my = y / SCALE;
 
-  // 检查点击到哪个点，但只允许拖动已选中的点
+  // 检查点击到哪个点
   for (const [label, pt] of Object.entries(keyPoints)) {
     const dist = Math.sqrt(Math.pow(mx - pt.x, 2) + Math.pow(my - pt.y, 2));
     if (dist < 2.0) {
+      // 如果没有选中任何点，点击时选中
+      if (!selectedPointLabel) {
+        selectedPointLabel = label;
+        updatePointList();
+      }
       // 只有点击到已选中的点时，才设置拖动状态
       if (label === selectedPointLabel) {
         draggedPointLabel = label;
@@ -1134,21 +1139,41 @@ function updatePointList() {
   const typeNames = { robot: '机器人', patrol: '轮巡点', call: '呼叫点' };
 
   for (const [label, pt] of Object.entries(keyPoints)) {
+    const isSelected = selectedPointLabel === label;
     const item = document.createElement('div');
-    item.style.padding = '6px 8px';
+    item.style.padding = '8px';
     item.style.marginBottom = '4px';
     item.style.borderRadius = '4px';
-    item.style.background = '#f1f5f9';
-    item.style.border = '1px solid #e2e8f0';
+    item.style.background = isSelected ? '#dbeafe' : '#f1f5f9';
+    item.style.border = isSelected ? '2px solid #0ea5e9' : '1px solid #e2e8f0';
     item.style.display = 'flex';
     item.style.justifyContent = 'space-between';
     item.style.alignItems = 'center';
     item.style.fontSize = '11px';
+    item.style.cursor = 'pointer';
+    item.style.transition = 'all 0.2s';
+    item.style.userSelect = 'none';
+
+    // 点击选择/取消选择
+    item.onclick = (e) => {
+      if (e.target.closest('button')) return; // 点击删除按钮时不选择
+      selectedPointLabel = isSelected ? null : label;
+      draggedPointLabel = null;
+      updatePointList();
+    };
+
+    item.onmouseover = () => {
+      item.style.background = isSelected ? '#bfdbfe' : '#e8eef7';
+    };
+    item.onmouseout = () => {
+      item.style.background = isSelected ? '#dbeafe' : '#f1f5f9';
+    };
 
     const typeIcon = typeIcons[pt.type] || '?';
     const typeName = typeNames[pt.type] || '?';
     const info = document.createElement('span');
     info.innerHTML = `${typeIcon} <strong>${label}</strong> (${pt.x.toFixed(0)},${pt.y.toFixed(0)})`;
+    info.style.cursor = 'pointer';
 
     const deleteBtn = document.createElement('button');
     deleteBtn.textContent = '✕';
@@ -1159,7 +1184,13 @@ function updatePointList() {
     deleteBtn.style.fontSize = '12px';
     deleteBtn.style.fontWeight = 'bold';
     deleteBtn.style.padding = '0 4px';
-    deleteBtn.onclick = () => deletePoint(label);
+    deleteBtn.style.transition = 'color 0.2s';
+    deleteBtn.onmouseover = () => { deleteBtn.style.color = '#dc2626'; };
+    deleteBtn.onmouseout = () => { deleteBtn.style.color = '#ef4444'; };
+    deleteBtn.onclick = (e) => {
+      e.stopPropagation();
+      deletePoint(label);
+    };
 
     item.appendChild(info);
     item.appendChild(deleteBtn);
