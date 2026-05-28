@@ -1774,7 +1774,16 @@ function importPresets(event) {
 }
 
 function generateDefaultLayout() {
-  // 使用默认值（输入框已移除）
+  // 如果已有点位，直接进入编辑模式（保留现有编辑）
+  if (Object.keys(keyPoints).length > 0) {
+    console.log('[点位] 已有现存点位，保留编辑');
+    // 保存备份，用于取消编辑时还原
+    pointConfigBackup = JSON.parse(JSON.stringify(keyPoints));
+    togglePointEditMode();
+    return;
+  }
+
+  // 第一次调用：生成默认布局
   const numRobots = 3;
   const numPatrol = 5;
   const numCall = 3;
