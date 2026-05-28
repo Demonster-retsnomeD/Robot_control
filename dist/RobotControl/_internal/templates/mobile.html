@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="机器人控制台">
+<meta name="theme-color" content="#0ea5e9">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon-192.svg">
+<title>机器人控制</title>
+<style>
+:root{
+  --bg:#0f172a;--panel:#1e293b;--border:#334155;
+  --accent:#0ea5e9;--green:#22c55e;--red:#ef4444;--yellow:#f59e0b;
+  --text:#f1f5f9;--text2:#94a3b8;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;touch-action:none}
+
+/* ── Layout ── */
+#app{display:flex;flex-direction:column;height:100%;max-height:100dvh}
+
+/* ── Status bar ── */
+#statusbar{
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--panel);border-bottom:1px solid var(--border);
+  padding:10px 14px;flex-shrink:0;gap:10px
+}
+.sb-item{display:flex;align-items:center;gap:6px;font-size:.8rem}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--red);flex-shrink:0}
+.dot.on{background:var(--green)}.dot.sim{background:var(--yellow)}
+#bat-text{font-weight:700;color:var(--accent)}
+#nav-text{font-size:.72rem;color:var(--text2);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#user-info{font-size:.72rem;color:var(--text2)}
+
+/* ── Tabs ── */
+#tabs{display:flex;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0}
+.tab{flex:1;padding:11px 0;text-align:center;font-size:.82rem;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:700}
+
+/* ── Panels ── */
+.panel{flex:1;overflow:hidden;display:none;flex-direction:column}
+.panel.active{display:flex}
+
+/* ── Manual control panel ── */
+#panel-manual{align-items:center;justify-content:space-evenly;padding:16px 20px;gap:12px}
+
+/* Joystick */
+#joystick-wrap{position:relative;width:min(200px,44vw);height:min(200px,44vw);flex-shrink:0}
+#joystick-ring{
+  width:100%;height:100%;
+  background:var(--panel);border:2px solid var(--border);border-radius:50%;
+  position:relative;cursor:pointer;
+  box-shadow:0 0 0 1px var(--border) inset
+}
+#jcross-v{position:absolute;width:1px;height:100%;left:50%;background:var(--border)}
+#jcross-h{position:absolute;height:1px;width:100%;top:50%;background:var(--border)}
+#jthumb{
+  position:absolute;width:28%;height:28%;
+  background:radial-gradient(circle,var(--accent),#1e40af);
+  border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);
+  pointer-events:none;transition:box-shadow .1s;
+  box-shadow:0 0 18px rgba(14,165,233,.5)
+}
+#jthumb.active{box-shadow:0 0 32px rgba(14,165,233,.9)}
+
+/* Arrow buttons */
+#arrows{display:grid;grid-template-areas:'..up.' 'left.right' '..dn.';grid-template-columns:1fr 1fr 1fr;gap:8px;width:min(180px,40vw);flex-shrink:0}
+.abtn{
+  background:var(--panel);border:1.5px solid var(--border);border-radius:10px;
+  color:var(--text);font-size:1.4rem;padding:12px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all .1s;user-select:none;min-height:52px
+}
+.abtn:active,.abtn.pressed{background:var(--accent);border-color:var(--accent);color:#fff;transform:scale(.93)}
+[data-d=up]{grid-area:up}[data-d=left]{grid-area:left}[data-d=right]{grid-area:right}[data-d=dn]{grid-area:dn}
+
+/* Speed sliders */
+#speed-controls{width:100%;max-width:340px}
+.speed-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.speed-row label{font-size:.72rem;color:var(--text2);width:36px;flex-shrink:0}
+input[type=range]{flex:1;-webkit-appearance:none;height:4px;background:var(--border);border-radius:4px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;background:var(--accent);border-radius:50%;cursor:pointer;box-shadow:0 0 8px rgba(14,165,233,.4)}
+.speed-val{font-size:.8rem;color:var(--accent);font-weight:700;min-width:36px;text-align:right}
+
+/* E-STOP */
+#estop{
+  width:100%;max-width:340px;padding:16px;
+  background:linear-gradient(135deg,#7f1d1d,#991b1b);
+  border:2px solid var(--red);border-radius:12px;
+  color:#fff;font-size:1rem;font-weight:700;
+  cursor:pointer;letter-spacing:2px;text-align:center;
+  box-shadow:0 0 24px rgba(239,68,68,.3);flex-shrink:0
+}
+#estop:active{background:var(--red);box-shadow:0 0 40px rgba(239,68,68,.7)}
+
+/* ── Navigation panel ── */
+#panel-nav{padding:14px;gap:10px}
+
+.section-title{font-size:.68rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+
+/* Nav status card */
+#nav-card{
+  background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px;flex-shrink:0
+}
+#nav-status-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+#nav-label{font-size:.85rem;font-weight:700}
+#nav-dist{font-size:.75rem;color:var(--text2)}
+#nav-progress{height:4px;background:var(--border);border-radius:4px;overflow:hidden}
+#nav-bar{height:100%;background:var(--accent);border-radius:4px;width:0;transition:width .5s}
+
+/* Nav buttons */
+.nav-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.nav-btn{flex:1;min-width:80px;padding:10px 8px;border-radius:8px;font-size:.78rem;
+  cursor:pointer;border:1.5px solid var(--border);background:var(--panel);color:var(--text);text-align:center}
+.nav-btn:active{opacity:.7}
+.btn-cancel{border-color:var(--red);color:var(--red)}
+.btn-charge{border-color:var(--yellow);color:var(--yellow)}
+
+/* Waypoints */
+#waypoint-list{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.wp-btn{
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--panel);border:1px solid var(--border);border-radius:8px;
+  padding:13px 14px;margin-bottom:8px;cursor:pointer;transition:all .15s;
+  font-size:.88rem
+}
+.wp-btn:active{border-color:var(--accent);background:rgba(14,165,233,.12)}
+.wp-type{font-size:.65rem;color:var(--text2);background:var(--bg);padding:2px 7px;border-radius:4px}
+.wp-go{font-size:.72rem;color:var(--accent);font-weight:700}
+.no-wp{color:var(--text2);font-size:.8rem;text-align:center;padding:20px}
+
+/* ── Status panel ── */
+#panel-status{padding:14px;gap:10px;overflow-y:auto}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center}
+.stat-val{font-size:1.4rem;font-weight:700;color:var(--accent)}
+.stat-label{font-size:.68rem;color:var(--text2);margin-top:3px}
+#bat-bar-wrap{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px}
+#bat-bar-bg{background:var(--border);border-radius:6px;height:10px;overflow:hidden;margin-top:8px}
+#bat-bar-fill{height:100%;background:linear-gradient(90deg,var(--red),var(--yellow),var(--green));border-radius:6px;transition:width .5s}
+.log-item{display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border);font-size:.75rem}
+.log-time{color:var(--text2);flex-shrink:0}
+.log-ok{color:var(--green)}.log-err{color:var(--red)}
+#log-list{flex:1;overflow-y:auto}
+
+/* Toast */
+#toast{
+  position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);
+  background:#1e293b;border:1px solid var(--border);border-radius:8px;
+  padding:10px 20px;font-size:.82rem;color:var(--text);
+  transition:transform .25s;z-index:999;white-space:nowrap;
+  box-shadow:0 4px 20px rgba(0,0,0,.4)
+}
+#toast.show{transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Status bar -->
+  <div id="statusbar">
+    <div class="sb-item">
+      <div class="dot" id="conn-dot"></div>
+      <span id="bat-text">--%</span>
+    </div>
+    <span id="nav-text">待机</span>
+    <span id="user-info">{{ username }}</span>
+  </div>
+
+  <!-- Tabs -->
+  <div id="tabs">
+    <div class="tab active" data-tab="manual">手动</div>
+    <div class="tab" data-tab="nav">导航</div>
+    <div class="tab" data-tab="status">状态</div>
+  </div>
+
+  <!-- Manual control panel -->
+  <div class="panel active" id="panel-manual">
+    <div id="joystick-wrap">
+      <div id="joystick-ring">
+        <div id="jcross-v"></div>
+        <div id="jcross-h"></div>
+        <div id="jthumb"></div>
+      </div>
+    </div>
+
+    <div id="arrows">
+      <div class="abtn" data-d="up">↑</div>
+      <div class="abtn" data-d="left">←</div>
+      <div class="abtn" data-d="right">→</div>
+      <div class="abtn" data-d="dn">↓</div>
+    </div>
+
+    <div id="speed-controls">
+      <div class="speed-row">
+        <label>线速</label>
+        <input type="range" id="vx-slider" min="0.1" max="1.0" step="0.05" value="0.3">
+        <span class="speed-val" id="vx-val">0.30</span>
+      </div>
+      <div class="speed-row">
+        <label>角速</label>
+        <input type="range" id="vth-slider" min="0.1" max="1.5" step="0.05" value="0.5">
+        <span class="speed-val" id="vth-val">0.50</span>
+      </div>
+    </div>
+
+    <button id="estop">⛔ 紧急停止</button>
+  </div>
+
+  <!-- Navigation panel -->
+  <div class="panel" id="panel-nav">
+    <div id="nav-card">
+      <div id="nav-status-row">
+        <span id="nav-label">待机</span>
+        <span id="nav-dist"></span>
+      </div>
+      <div id="nav-progress"><div id="nav-bar"></div></div>
+      <div class="nav-actions">
+        <button class="nav-btn btn-cancel" id="btn-cancel">✕ 取消导航</button>
+        <button class="nav-btn btn-charge" id="btn-charge">⚡ 去充电</button>
+      </div>
+    </div>
+
+    <div class="section-title">导航点</div>
+    <div id="waypoint-list"><div class="no-wp">加载中…</div></div>
+  </div>
+
+  <!-- Status panel -->
+  <div class="panel" id="panel-status">
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-val" id="s-x">-</div><div class="stat-label">X (m)</div></div>
+      <div class="stat-card"><div class="stat-val" id="s-y">-</div><div class="stat-label">Y (m)</div></div>
+      <div class="stat-card"><div class="stat-val" id="s-vx">-</div><div class="stat-label">线速 m/s</div></div>
+      <div class="stat-card"><div class="stat-val" id="s-vth">-</div><div class="stat-label">角速 r/s</div></div>
+    </div>
+    <div id="bat-bar-wrap">
+      <div style="display:flex;justify-content:space-between;font-size:.8rem">
+        <span>电量</span><span id="s-bat" style="color:var(--accent);font-weight:700">--%</span>
+      </div>
+      <div id="bat-bar-bg"><div id="bat-bar-fill" style="width:0%"></div></div>
+    </div>
+    <div class="section-title">操作日志</div>
+    <div id="log-list"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('panel-' + t.dataset.tab).classList.add('active');
+    if (t.dataset.tab === 'nav') loadWaypoints();
+    if (t.dataset.tab === 'status') loadLog();
+  });
+});
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ── API helpers ───────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  try {
+    const r = await fetch(path, {
+      method, credentials: 'include',
+      headers: body ? {'Content-Type': 'application/json'} : {},
+      body: body ? JSON.stringify(body) : undefined
+    });
+    if (r.status === 401) { location.href = '/login'; return null; }
+    return await r.json();
+  } catch { return null; }
+}
+
+// ── Status polling ────────────────────────────────────────────────────────────
+const NAV_LABELS = {0:'待机',1:'导航中',2:'已暂停',3:'已到达',4:'已取消',5:'错误'};
+const NAV_COLORS = {0:'var(--text2)',1:'var(--accent)',2:'var(--yellow)',3:'var(--green)',4:'var(--text2)',5:'var(--red)'};
+
+async function pollStatus() {
+  const d = await api('GET', '/api/status');
+  if (!d || !d.ok) return;
+
+  const dot = document.getElementById('conn-dot');
+  dot.className = 'dot ' + (d.source === 'simulation' ? 'sim' : 'on');
+
+  const bat = d.battery ?? '--';
+  document.getElementById('bat-text').textContent = bat + '%';
+  document.getElementById('s-bat').textContent = bat + '%';
+  document.getElementById('bat-bar-fill').style.width = (bat || 0) + '%';
+
+  const nav = d.nav || {};
+  const res = nav.res ?? 0;
+  const label = NAV_LABELS[res] || '未知';
+  const goal = nav.goal ? ` → ${nav.goal}` : '';
+  document.getElementById('nav-text').textContent = label + goal;
+  document.getElementById('nav-label').textContent = label + goal;
+  document.getElementById('nav-label').style.color = NAV_COLORS[res] || 'var(--text)';
+  const dist = nav.dist;
+  document.getElementById('nav-dist').textContent = dist ? `${dist.toFixed(1)}m` : '';
+  document.getElementById('nav-bar').style.width = res === 1 ? '60%' : res === 3 ? '100%' : '0%';
+
+  const pose = d.pose || {};
+  document.getElementById('s-x').textContent = pose.x != null ? pose.x.toFixed(2) : '-';
+  document.getElementById('s-y').textContent = pose.y != null ? pose.y.toFixed(2) : '-';
+  const spd = d.speed || {};
+  document.getElementById('s-vx').textContent = spd.vx != null ? spd.vx.toFixed(2) : '-';
+  document.getElementById('s-vth').textContent = spd.vth != null ? spd.vth.toFixed(2) : '-';
+}
+
+setInterval(pollStatus, 1500);
+pollStatus();
+
+// ── Speed sliders ─────────────────────────────────────────────────────────────
+const vxSlider  = document.getElementById('vx-slider');
+const vthSlider = document.getElementById('vth-slider');
+vxSlider.addEventListener('input',  () => document.getElementById('vx-val').textContent  = (+vxSlider.value).toFixed(2));
+vthSlider.addEventListener('input', () => document.getElementById('vth-val').textContent = (+vthSlider.value).toFixed(2));
+
+// ── Manual speed sender ───────────────────────────────────────────────────────
+let cmdVx = 0, cmdVth = 0, sending = false;
+let cmdInterval = null;
+
+function startSending() {
+  if (cmdInterval) return;
+  cmdInterval = setInterval(sendSpeed, 300);
+}
+function stopSending() {
+  clearInterval(cmdInterval);
+  cmdInterval = null;
+}
+async function sendSpeed() {
+  if (sending) return;
+  sending = true;
+  await api('POST', '/api/speed', {vx: cmdVx, vth: cmdVth});
+  sending = false;
+}
+async function stopRobot() {
+  cmdVx = 0; cmdVth = 0;
+  stopSending();
+  await api('POST', '/api/speed', {vx: 0, vth: 0});
+}
+
+// ── Arrow buttons ─────────────────────────────────────────────────────────────
+document.querySelectorAll('.abtn').forEach(btn => {
+  const dir = btn.dataset.d;
+  const press = () => {
+    btn.classList.add('pressed');
+    const vx  = +vxSlider.value;
+    const vth = +vthSlider.value;
+    if (dir === 'up')    { cmdVx = vx;  cmdVth = 0; }
+    if (dir === 'dn')    { cmdVx = -vx; cmdVth = 0; }
+    if (dir === 'left')  { cmdVx = 0;   cmdVth = vth; }
+    if (dir === 'right') { cmdVx = 0;   cmdVth = -vth; }
+    startSending(); sendSpeed();
+  };
+  const release = () => { btn.classList.remove('pressed'); stopRobot(); };
+  btn.addEventListener('touchstart', e => { e.preventDefault(); press(); }, {passive:false});
+  btn.addEventListener('touchend',   e => { e.preventDefault(); release(); }, {passive:false});
+  btn.addEventListener('mousedown',  press);
+  btn.addEventListener('mouseup',    release);
+  btn.addEventListener('mouseleave', release);
+});
+
+// ── Joystick ──────────────────────────────────────────────────────────────────
+(function(){
+  const ring  = document.getElementById('joystick-ring');
+  const thumb = document.getElementById('jthumb');
+  let active = false, originX = 0, originY = 0;
+  const R = () => ring.offsetWidth / 2;
+
+  function getPos(e) {
+    const t = e.touches ? e.touches[0] : e;
+    return {x: t.clientX, y: t.clientY};
+  }
+  function onStart(e) {
+    e.preventDefault();
+    active = true;
+    thumb.classList.add('active');
+    const rect = ring.getBoundingClientRect();
+    originX = rect.left + rect.width / 2;
+    originY = rect.top  + rect.height / 2;
+    startSending();
+  }
+  function onMove(e) {
+    if (!active) return;
+    e.preventDefault();
+    const {x, y} = getPos(e);
+    let dx = x - originX, dy = y - originY;
+    const r = R();
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist > r) { dx = dx/dist*r; dy = dy/dist*r; }
+    const pct = r > 0 ? dist/r : 0;
+    thumb.style.left = (50 + dx/ring.offsetWidth*100) + '%';
+    thumb.style.top  = (50 + dy/ring.offsetHeight*100) + '%';
+    const vx  = +vxSlider.value;
+    const vth = +vthSlider.value;
+    // dy negative = up = forward; dx positive = right = clockwise = negative vth
+    cmdVx  = -dy/r * vx;
+    cmdVth =  -dx/r * vth;
+  }
+  function onEnd(e) {
+    e.preventDefault();
+    active = false;
+    thumb.classList.remove('active');
+    thumb.style.left = '50%';
+    thumb.style.top  = '50%';
+    stopRobot();
+  }
+  ring.addEventListener('touchstart', onStart, {passive:false});
+  ring.addEventListener('touchmove',  onMove,  {passive:false});
+  ring.addEventListener('touchend',   onEnd,   {passive:false});
+  ring.addEventListener('mousedown',  onStart);
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup',  onEnd);
+})();
+
+// ── E-STOP ────────────────────────────────────────────────────────────────────
+document.getElementById('estop').addEventListener('click', async () => {
+  await stopRobot();
+  toast('已发送紧急停止');
+});
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+document.getElementById('btn-cancel').addEventListener('click', async () => {
+  const r = await api('POST', '/api/cancel', {});
+  toast(r ? '已取消导航' : '取消失败');
+});
+document.getElementById('btn-charge').addEventListener('click', async () => {
+  const r = await api('POST', '/api/charge', {});
+  toast(r ? '前往充电桩…' : '发送失败');
+});
+
+async function loadWaypoints() {
+  const list = document.getElementById('waypoint-list');
+  list.innerHTML = '<div class="no-wp">加载中…</div>';
+  const d = await api('GET', '/api/waypoints');
+  if (!d || !d.waypoints || !d.waypoints.length) {
+    list.innerHTML = '<div class="no-wp">没有导航点</div>';
+    return;
+  }
+  list.innerHTML = '';
+  d.waypoints.forEach(wp => {
+    const el = document.createElement('div');
+    el.className = 'wp-btn';
+    el.innerHTML = `
+      <span>${wp.name}</span>
+      <span style="display:flex;align-items:center;gap:8px">
+        <span class="wp-type">${wp.type || ''}</span>
+        <span class="wp-go">GO →</span>
+      </span>`;
+    el.addEventListener('click', async () => {
+      el.style.opacity = '.5';
+      const r = await api('POST', '/api/nav_name', {point: wp.name});
+      el.style.opacity = '';
+      toast(r && !r.error ? `导航至 ${wp.name}` : `失败: ${(r && r.error) || '网络错误'}`);
+    });
+    list.appendChild(el);
+  });
+}
+
+// ── Log ───────────────────────────────────────────────────────────────────────
+async function loadLog() {
+  const d = await api('GET', '/api/log');
+  const el = document.getElementById('log-list');
+  if (!d || !d.log || !d.log.length) { el.innerHTML = '<div class="no-wp">暂无记录</div>'; return; }
+  el.innerHTML = d.log.map(l => `
+    <div class="log-item">
+      <span class="log-time">${l.time}</span>
+      <span class="${l.ok ? 'log-ok' : 'log-err'}">${l.ok ? '✓' : '✗'}</span>
+      <span>${l.action} ${l.msg ? '· ' + l.msg : ''}</span>
+    </div>`).join('');
+}
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js', {scope: '/'}).catch(() => {});
+}
+(function(){
+  let _v=null;
+  setInterval(async()=>{
+    try{const d=await(await fetch('/api/version',{cache:'no-store'})).json();
+      if(_v===null){_v=d.v;return;}
+      if(d.v!==_v){location.reload();}
+    }catch(e){}
+  },2000);
+})();
+</script>
+</body>
+</html>

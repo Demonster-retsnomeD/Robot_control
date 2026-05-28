@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>多任务机器人仿真系统 - EST算法</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 1200px;
+      width: 100%;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      border: 1px solid #e2e8f0;
+    }
+    h1 {
+      margin-bottom: 24px;
+      text-align: center;
+      font-size: 28px;
+    }
+    .content {
+      display: grid;
+      grid-template-columns: 1fr 300px;
+      gap: 24px;
+    }
+    .canvas-wrapper {
+      background: #ffffff;
+      border-radius: 8px;
+      border: 2px solid #0ea5e9;
+      display: flex;
+      justify-content: center;
+      padding: 16px;
+    }
+    canvas {
+      display: block;
+      cursor: crosshair;
+    }
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .control-panel {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .control-panel h3 {
+      font-size: 14px;
+      margin-bottom: 12px;
+      color: #0ea5e9;
+    }
+    button {
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+      margin-bottom: 8px;
+    }
+    .btn-primary {
+      background: #0ea5e9;
+      color: #fff;
+    }
+    .btn-primary:hover { background: #0284c7; }
+    .btn-primary:disabled {
+      background: #cbd5e1;
+      cursor: not-allowed;
+    }
+    .queue-item {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 12px;
+      margin-bottom: 8px;
+      border-left: 3px solid #0ea5e9;
+    }
+    .queue-item.assigned {
+      border-left-color: #10b981;
+      background: #f0fdf4;
+    }
+    .robot-status {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 11px;
+      line-height: 1.5;
+      font-family: 'Courier New', monospace;
+      margin-bottom: 8px;
+    }
+    .robot-status.busy {
+      background: #fef3c7;
+      border-color: #f59e0b;
+    }
+    .robot-status.idle {
+      background: #dcfce7;
+      border-color: #10b981;
+    }
+    .label { color: #64748b; font-weight: 600; }
+    .value { color: #0ea5e9; }
+    .stats-panel {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 12px;
+    }
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .stat-row:last-child { border: none; margin: 0; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>🤖 多任务机器人仿真 (EST算法)</h1>
+
+  <div class="content">
+    <div class="canvas-wrapper">
+      <canvas id="map" width="700" height="700"></canvas>
+    </div>
+
+    <div class="sidebar">
+      <div class="control-panel">
+        <h3>⚙️ 控制</h3>
+        <button id="btnStart" class="btn-primary" onclick="toggleSimulation()">▶️ 开始</button>
+        <button class="btn-primary" onclick="generateTaskAtPoint(0)" style="background: #8b5cf6;">📍 呼叫点C</button>
+        <button class="btn-primary" onclick="generateTaskAtPoint(1)" style="background: #f59e0b;">📍 呼叫点D</button>
+        <button class="btn-primary" onclick="generateTaskAtPoint(2)" style="background: #06b6d4;">📍 呼叫点E</button>
+      </div>
+
+      <div class="control-panel">
+        <h3>📋 任务队列</h3>
+        <div id="queue" style="max-height: 200px; overflow-y: auto;"></div>
+      </div>
+
+      <div class="control-panel">
+        <h3>🤖 机器人状态</h3>
+        <div id="robots" style="max-height: 200px; overflow-y: auto;"></div>
+      </div>
+
+      <div class="stats-panel">
+        <div class="stat-row">
+          <span>时间:</span>
+          <span class="value" id="time">0.0s</span>
+        </div>
+        <div class="stat-row">
+          <span>总任务数:</span>
+          <span class="value" id="totalTasks">0</span>
+        </div>
+        <div class="stat-row">
+          <span>完成数:</span>
+          <span class="value" id="completedTasks">0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('map');
+const ctx = canvas.getContext('2d');
+const SCALE = 10; // 10px = 1m
+
+// 地图参数
+const map = { width: 700, height: 700, minX: 0, maxX: 70, minY: 0, maxY: 70 };
+
+// 固定点
+const points = {
+  A: { x: 10, y: 35, label: 'A' },
+  B: { x: 60, y: 35, label: 'B' }
+};
+
+// 接收点（动态任务的目标）
+const receivePoints = [
+  { x: 30, y: 20, label: 'C', color: '#8b5cf6' },
+  { x: 50, y: 50, label: 'D', color: '#8b5cf6' },
+  { x: 20, y: 55, label: 'E', color: '#8b5cf6' }
+];
+
+// 三个机器人定义
+const robots = {
+  1: {
+    x: points.A.x,
+    y: points.A.y,
+    vx: 0, vy: 0,
+    speed: 5,
+    color: '#ef4444',
+    targetX: points.B.x,
+    targetY: points.B.y,
+    pathStart: { x: points.A.x, y: points.A.y },
+    pathEnd: { x: points.B.x, y: points.B.y },
+    status: 'idle', // idle / moving / serving
+    currentTask: null,
+    serviceTimeLeft: 0,
+    serviceStartTime: 0
+  },
+  2: {
+    x: points.B.x,
+    y: points.B.y,
+    vx: 0, vy: 0,
+    speed: 10,
+    color: '#3b82f6',
+    targetX: points.A.x,
+    targetY: points.A.y,
+    pathStart: { x: points.B.x, y: points.B.y },
+    pathEnd: { x: points.A.x, y: points.A.y },
+    status: 'idle',
+    currentTask: null,
+    serviceTimeLeft: 0,
+    serviceStartTime: 0
+  },
+  3: {
+    x: points.A.x + 5,
+    y: points.A.y + 5,
+    vx: 0, vy: 0,
+    speed: 3,
+    color: '#06b6d4',
+    targetX: points.B.x,
+    targetY: points.B.y,
+    pathStart: { x: points.A.x, y: points.A.y },
+    pathEnd: { x: points.B.x, y: points.B.y },
+    status: 'idle',
+    currentTask: null,
+    serviceTimeLeft: 0,
+    serviceStartTime: 0
+  }
+};
+
+// 全局状态
+let isRunning = false;
+let time = 0;
+let taskQueue = [];
+let completedTasks = 0;
+let nextTaskId = 0;
+
+function getDistance(x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+// EST 算法：估算每个机器人到达任务点的时间
+function calculateEST(robot, taskX, taskY) {
+  let idleTime = 0;
+  let predictedX = robot.x, predictedY = robot.y;
+
+  if (robot.status === 'serving') {
+    // 完成服务（3s）并返回起点
+    idleTime = robot.serviceTimeLeft + getDistance(taskX, taskY, robot.pathStart.x, robot.pathStart.y) / robot.speed;
+    predictedX = robot.pathStart.x;
+    predictedY = robot.pathStart.y;
+  } else if (robot.status === 'moving') {
+    // 完成当前往返任务
+    const distToTarget = getDistance(robot.x, robot.y, robot.targetX, robot.targetY);
+    const distToStart = getDistance(robot.targetX, robot.targetY, robot.pathStart.x, robot.pathStart.y);
+    idleTime = distToTarget / robot.speed + distToStart / robot.speed;
+    predictedX = robot.pathStart.x;
+    predictedY = robot.pathStart.y;
+  }
+
+  const distToTask = getDistance(predictedX, predictedY, taskX, taskY);
+  const arrivalTime = idleTime + distToTask / robot.speed;
+
+  return { arrivalTime, idleTime, predictedX, predictedY };
+}
+
+// 任务分配：EST 算法选择最快到达的机器人
+function assignTask(taskX, taskY) {
+  let bestRobot = null;
+  let bestEST = Infinity;
+  let estimates = {};
+
+  for (const [id, robot] of Object.entries(robots)) {
+    const est = calculateEST(robot, taskX, taskY);
+    estimates[id] = est;
+    if (est.arrivalTime < bestEST) {
+      bestEST = est.arrivalTime;
+      bestRobot = parseInt(id);
+    }
+  }
+
+  return { robotId: bestRobot, estimates, EST: bestEST };
+}
+
+// 生成指定点的任务
+function generateTaskAtPoint(pointIndex) {
+  const point = receivePoints[pointIndex];
+  const task = {
+    id: nextTaskId++,
+    x: point.x,
+    y: point.y,
+    label: point.label,
+    createdAt: time,
+    assignedRobot: null,
+    status: 'pending' // pending / assigned / completed
+  };
+  taskQueue.push(task);
+  updateQueue();
+}
+
+// 更新任务队列 UI
+function updateQueue() {
+  const queueEl = document.getElementById('queue');
+  queueEl.innerHTML = taskQueue.slice(0, 5).map(t => `
+    <div class="queue-item ${t.status === 'assigned' ? 'assigned' : ''}">
+      <strong>${t.label}</strong> (${t.x.toFixed(0)},${t.y.toFixed(0)})
+      ${t.assignedRobot ? `<br/>→ R${t.assignedRobot}` : ''}
+    </div>
+  `).join('');
+}
+
+// 更新机器人状态 UI
+function updateRobotUI() {
+  const robotsEl = document.getElementById('robots');
+  robotsEl.innerHTML = Object.entries(robots).map(([id, r]) => `
+    <div class="robot-status ${r.status === 'idle' ? 'idle' : 'busy'}">
+      <span class="label">R${id}</span> ${r.status === 'serving' ? '🔄 服务中' : '⏳ 待命'}<br/>
+      位置: (${r.x.toFixed(1)}, ${r.y.toFixed(1)})m<br/>
+      速度: ${r.speed} m/s
+      ${r.currentTask ? `<br/>→ ${r.currentTask.label}` : ''}
+    </div>
+  `).join('');
+}
+
+// 处理机器人运动和任务分配
+function updateRobots(dt) {
+  // 处理任务队列
+  for (let i = 0; i < taskQueue.length; i++) {
+    const task = taskQueue[i];
+    if (task.status === 'pending') {
+      const { robotId, EST } = assignTask(task.x, task.y);
+      task.assignedRobot = robotId;
+      task.status = 'assigned';
+      robots[robotId].currentTask = task;
+      robots[robotId].status = 'moving';
+      robots[robotId].targetX = task.x;
+      robots[robotId].targetY = task.y;
+    }
+  }
+
+  // 更新机器人位置
+  for (const [id, robot] of Object.entries(robots)) {
+    if (robot.status === 'idle') {
+      // 往返 A ↔ B
+      const dist = getDistance(robot.x, robot.y, robot.targetX, robot.targetY);
+      if (dist < 0.5) {
+        // 锁定位置到目标点
+        robot.x = robot.targetX;
+        robot.y = robot.targetY;
+        // 反向
+        if (robot.targetX === robot.pathEnd.x && robot.targetY === robot.pathEnd.y) {
+          robot.targetX = robot.pathStart.x;
+          robot.targetY = robot.pathStart.y;
+        } else {
+          robot.targetX = robot.pathEnd.x;
+          robot.targetY = robot.pathEnd.y;
+        }
+      } else {
+        const vx = (robot.targetX - robot.x) / dist * robot.speed;
+        const vy = (robot.targetY - robot.y) / dist * robot.speed;
+        robot.x += vx * dt;
+        robot.y += vy * dt;
+      }
+    }
+
+    if (robot.status === 'moving') {
+      const task = robot.currentTask;
+      const dist = getDistance(robot.x, robot.y, task.x, task.y);
+      if (dist < 0.5) {
+        // 到达任务点，开始服务
+        robot.status = 'serving';
+        robot.serviceTimeLeft = 3;
+        robot.serviceStartTime = time;
+        robot.x = task.x;
+        robot.y = task.y;
+      } else {
+        const vx = (task.x - robot.x) / dist * robot.speed;
+        const vy = (task.y - robot.y) / dist * robot.speed;
+        robot.x += vx * dt;
+        robot.y += vy * dt;
+      }
+    }
+
+    if (robot.status === 'serving') {
+      robot.serviceTimeLeft -= dt;
+      if (robot.serviceTimeLeft <= 0) {
+        // 服务完成，返回往返路径
+        const task = robot.currentTask;
+        task.status = 'completed';
+        completedTasks++;
+        robot.status = 'idle';
+        robot.currentTask = null;
+        // 返回最近的往返路径起点
+        if (getDistance(robot.x, robot.y, robot.pathStart.x, robot.pathStart.y) <
+            getDistance(robot.x, robot.y, robot.pathEnd.x, robot.pathEnd.y)) {
+          robot.targetX = robot.pathEnd.x;
+          robot.targetY = robot.pathEnd.y;
+        } else {
+          robot.targetX = robot.pathStart.x;
+          robot.targetY = robot.pathStart.y;
+        }
+      }
+    }
+  }
+
+  // 清理完成的任务
+  taskQueue = taskQueue.filter(t => t.status !== 'completed');
+}
+
+// 绘制地图
+function drawMap() {
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, map.width, map.height);
+
+  // 网格
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 7; i++) {
+    const pos = i * SCALE * 10;
+    ctx.beginPath();
+    ctx.moveTo(pos, 0);
+    ctx.lineTo(pos, map.height);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, pos);
+    ctx.lineTo(map.width, pos);
+    ctx.stroke();
+  }
+
+  // A、B 点
+  for (const [key, point] of Object.entries(points)) {
+    const px = point.x * SCALE, py = point.y * SCALE;
+    ctx.fillStyle = '#10b981';
+    ctx.beginPath();
+    ctx.arc(px, py, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 16px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(key, px, py);
+  }
+
+  // 接收点（C、D、E）
+  for (const point of receivePoints) {
+    const px = point.x * SCALE, py = point.y * SCALE;
+    ctx.fillStyle = point.color;
+    ctx.beginPath();
+    ctx.arc(px, py, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(point.label, px, py);
+  }
+
+  // 机器人
+  for (const [id, robot] of Object.entries(robots)) {
+    const px = robot.x * SCALE, py = robot.y * SCALE;
+    ctx.fillStyle = robot.color + '20';
+    ctx.beginPath();
+    ctx.arc(px, py, 12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = robot.color;
+    ctx.beginPath();
+    ctx.arc(px, py, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(id, px, py);
+  }
+}
+
+// 主动画循环
+let lastTime = Date.now();
+function animate() {
+  const now = Date.now();
+  const dt = (now - lastTime) / 1000;
+  lastTime = now;
+
+  if (isRunning) {
+    time += dt;
+    updateRobots(dt);
+    updateQueue();
+    updateRobotUI();
+    document.getElementById('time').textContent = time.toFixed(1) + 's';
+    document.getElementById('totalTasks').textContent = completedTasks + taskQueue.length;
+    document.getElementById('completedTasks').textContent = completedTasks;
+  }
+
+  drawMap();
+  requestAnimationFrame(animate);
+}
+
+function toggleSimulation() {
+  isRunning = !isRunning;
+  document.getElementById('btnStart').textContent = isRunning ? '⏸️ 暂停' : '▶️ 开始';
+}
+
+// 启动
+drawMap();
+updateRobotUI();
+requestAnimationFrame(animate);
+</script>
+
+</body>
+</html>

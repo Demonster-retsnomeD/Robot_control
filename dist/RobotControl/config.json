@@ -1,0 +1,9 @@
+{
+  "robot_ip": "172.29.19.11",
+  "robot_port": 80,
+  "linear_speed": 0.3,
+  "angular_speed": 0.5,
+  "simulation_mode": false,
+  "timeout": 5,
+  "cmd_interval_ms": 300
+}

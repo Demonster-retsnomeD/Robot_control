@@ -202,6 +202,37 @@
   <div class="content">
     <div class="left-panel">
       <div class="panel">
+        <h3 id="lbl_point_config">⚙️ 点位配置</h3>
+        <div style="font-size: 11px; margin-bottom: 12px;">
+          <div style="margin-bottom: 6px;">
+            <label style="display: block; margin-bottom: 4px;">🤖 机器人数</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <button onclick="adjustPointCount('robots', -1)" style="width: 28px; height: 28px; padding: 0; cursor: pointer;">−</button>
+              <input type="number" id="configRobots" value="3" min="1" max="10" style="width: 50px; text-align: center; font-size: 11px;" onchange="adjustPointCount('robots', 0)">
+              <button onclick="adjustPointCount('robots', 1)" style="width: 28px; height: 28px; padding: 0; cursor: pointer;">+</button>
+            </div>
+          </div>
+          <div style="margin-bottom: 6px;">
+            <label style="display: block; margin-bottom: 4px;">📍 轮巡点数</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <button onclick="adjustPointCount('patrol', -1)" style="width: 28px; height: 28px; padding: 0; cursor: pointer;">−</button>
+              <input type="number" id="configPatrol" value="2" min="2" max="10" style="width: 50px; text-align: center; font-size: 11px;" onchange="adjustPointCount('patrol', 0)">
+              <button onclick="adjustPointCount('patrol', 1)" style="width: 28px; height: 28px; padding: 0; cursor: pointer;">+</button>
+            </div>
+          </div>
+          <div style="margin-bottom: 6px;">
+            <label style="display: block; margin-bottom: 4px;">📞 呼叫点数</label>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <button onclick="adjustPointCount('call', -1)" style="width: 28px; height: 28px; padding: 0; cursor: pointer;">−</button>
+              <input type="number" id="configCall" value="2" min="0" max="10" style="width: 50px; text-align: center; font-size: 11px;" onchange="adjustPointCount('call', 0)">
+              <button onclick="adjustPointCount('call', 1)" style="width: 28px; height: 28px; padding: 0; cursor: pointer;">+</button>
+            </div>
+          </div>
+        </div>
+        <button id="btnGenerate" class="btn-primary" onclick="generateDefaultLayout()" style="background: #f59e0b; margin-bottom: 8px;">🎯 生成默认布局</button>
+      </div>
+
+      <div class="panel">
         <h3 id="lbl_robot_settings">🤖 机器人设置</h3>
         <div style="font-size: 12px; margin-bottom: 12px; padding: 8px; background: #f1f5f9; border-radius: 4px;">
           <label style="display: flex; align-items: center; gap: 4px;">
@@ -1528,6 +1559,91 @@ function resetRobots() {
   // 重置UI
   document.getElementById('btnStart').textContent = '▶️ 开始';
   updateSpeedSettings();
+}
+
+// 点位配置函数
+function adjustPointCount(type, delta) {
+  const inputs = {
+    robots: 'configRobots',
+    patrol: 'configPatrol',
+    call: 'configCall'
+  };
+  const input = document.getElementById(inputs[type]);
+  let val = parseInt(input.value) + delta;
+  const constraints = { robots: [1, 10], patrol: [2, 10], call: [0, 10] };
+  const [min, max] = constraints[type];
+  val = Math.max(min, Math.min(max, val));
+  input.value = val;
+}
+
+function generateDefaultLayout() {
+  const numRobots = parseInt(document.getElementById('configRobots').value) || 3;
+  const numPatrol = parseInt(document.getElementById('configPatrol').value) || 2;
+  const numCall = parseInt(document.getElementById('configCall').value) || 2;
+
+  // 清空现有点位
+  keyPoints = {};
+  pathNetwork = {};
+  patrolRoute = [];
+  selectedPointLabel = null;
+  pointCreationMode = null;
+
+  // 生成机器人点（左侧）
+  const robotSpacing = 50 / (numRobots + 1);
+  for (let i = 1; i <= numRobots; i++) {
+    const label = String(i);
+    keyPoints[label] = {
+      x: 10,
+      y: 10 + i * robotSpacing,
+      label: label,
+      color: '#3b82f6',
+      type: 'robot'
+    };
+  }
+
+  // 生成轮巡点（中间，两列）
+  const patrolPerCol = Math.ceil(numPatrol / 2);
+  let patrolIdx = 0;
+  for (let col = 0; col < 2 && patrolIdx < numPatrol; col++) {
+    for (let row = 0; row < patrolPerCol && patrolIdx < numPatrol; row++) {
+      const label = String.fromCharCode(65 + patrolIdx); // A, B, C, ...
+      keyPoints[label] = {
+        x: 25 + col * 15,
+        y: 15 + row * (45 / (patrolPerCol + 1)),
+        label: label,
+        color: '#10b981',
+        type: 'patrol'
+      };
+      patrolIdx++;
+    }
+  }
+
+  // 生成呼叫点（右侧）
+  const callSpacing = 50 / (numCall + 1);
+  for (let i = 0; i < numCall; i++) {
+    const label = toRoman(i + 1); // I, II, III, ...
+    keyPoints[label] = {
+      x: 55,
+      y: 10 + (i + 1) * callSpacing,
+      label: label,
+      color: '#8b5cf6',
+      type: 'call'
+    };
+  }
+
+  // 保存配置
+  savePointConfig();
+  initializeRobots();
+  initializeCallStates();
+
+  // 更新UI
+  updatePointList();
+  updateCallButtons();
+  updatePointConfigDisplay();
+  document.getElementById('btnEdit').disabled = Object.keys(pathNetwork).length === 0;
+  document.getElementById('btnStart').disabled = true;
+
+  console.log(`[配置] 生成布局：${numRobots}机器人, ${numPatrol}轮巡点, ${numCall}呼叫点`);
 }
 
 // Dijkstra 找最短路径 — 支持虚拟连接（直线补全），使用缓存
