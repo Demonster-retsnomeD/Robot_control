@@ -230,6 +230,7 @@
     <div class="sidebar">
       <div class="panel">
         <button id="btnPointEdit" class="btn-primary" onclick="generateDefaultLayout()" style="background: #3b82f6; width: 100%; margin-bottom: 12px;">✏️ 编辑点位</button>
+        <div id="pointConfigPanel" style="display: none;"></div>
 
         <div id="pointEditPanel" style="display: none; margin-top: 12px; padding: 12px; border: 2px dashed #0ea5e9; border-radius: 6px;">
           <div style="font-size: 12px; color: #0ea5e9; margin-bottom: 8px; font-weight: bold;">🎯 拖动调整 | 或点击新增:</div>
@@ -1773,9 +1774,10 @@ function importPresets(event) {
 }
 
 function generateDefaultLayout() {
-  const numRobots = parseInt(document.getElementById('configRobots').value) || 3;
-  const numPatrol = parseInt(document.getElementById('configPatrol').value) || 2;
-  const numCall = parseInt(document.getElementById('configCall').value) || 2;
+  // 使用默认值（输入框已移除）
+  const numRobots = 3;
+  const numPatrol = 5;
+  const numCall = 3;
 
   // 清空现有点位
   keyPoints = {};
