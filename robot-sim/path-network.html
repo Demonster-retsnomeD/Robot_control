@@ -2370,7 +2370,7 @@ function diagnosticRobotPositions() {
 
 function updateRobots(dt) {
   // 第1步：检测碰撞避障（仅反向行驶时减速）
-  const AVOID_DISTANCE = 5;        // 触发避障距离（<5单位）
+  const AVOID_DISTANCE = 2.5;      // 触发避障距离（<2.5单位）
   const RESUME_DISTANCE = 8;       // 恢复原速距离（>8单位）
   const SLOWDOWN_SPEED = 2;        // 避障减速：2m/s
 
