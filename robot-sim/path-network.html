@@ -1506,25 +1506,29 @@ function toggleSimulation() {
 }
 
 function initializeRobots() {
-  // 找第一个轮巡点作为所有机器人的起始位置
-  let startPt = null;
-  for (const [label, pt] of Object.entries(keyPoints)) {
-    if (pt.type === 'patrol') {
-      startPt = pt;
-      break;
-    }
-  }
-
-  if (!startPt) {
-    console.warn('[机器人] 未找到轮巡点，机器人无法初始化');
-    return;
-  }
-
   // 清空旧机器人
   for (const id in robots) delete robots[id];
 
-  // 初始化指定数量的机器人
+  // 初始化指定数量的机器人，每个机器人从对应的robot keyPoint出发
   for (let i = 1; i <= robotCount; i++) {
+    const robotLabel = String(i);
+    let startPt = keyPoints[robotLabel];
+
+    // 如果没有对应的robot keyPoint，使用第一个patrol point作为后备
+    if (!startPt) {
+      for (const [label, pt] of Object.entries(keyPoints)) {
+        if (pt.type === 'patrol') {
+          startPt = pt;
+          break;
+        }
+      }
+    }
+
+    if (!startPt) {
+      console.warn(`[机器人] 未找到机器人${i}的起始位置（缺少robot keyPoint或patrol点）`);
+      continue;
+    }
+
     robots[i] = {
       x: startPt.x,
       y: startPt.y,
@@ -1545,7 +1549,7 @@ function initializeRobots() {
   }
 
   updateSpeedSettings();
-  console.log(`[机器人] 已初始化${robotCount}个机器人于${startPt.label}(${startPt.x}, ${startPt.y})`);
+  console.log(`[机器人] 已初始化${robotCount}个机器人（从robot keyPoints出发）`);
 }
 
 function setRobotCount(count) {
