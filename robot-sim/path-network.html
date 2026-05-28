@@ -2856,6 +2856,11 @@ function drawMap() {
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, map.width, map.height);
 
+  // 绘制地图边界线
+  ctx.strokeStyle = '#0ea5e9';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(0, 0, map.width, map.height);
+
   // 点位编辑模式：只显示点位
   if (pointEditMode) {
     drawPoints();
