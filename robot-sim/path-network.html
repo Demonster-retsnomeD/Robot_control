@@ -2382,7 +2382,7 @@ function updateRobots(dt) {
     if (robot.avoidanceMode === undefined) robot.avoidanceMode = false;
     if (robot.prevX === undefined) robot.prevX = robot.x;
     if (robot.prevY === undefined) robot.prevY = robot.y;
-    if (robot.prevDist === undefined) robot.prevDist = Infinity;
+    if (robot.minClosestDist === undefined) robot.minClosestDist = Infinity;
 
     // 计算当前机器人的运动方向向量
     const robotDx = robot.x - robot.prevX;
@@ -2420,36 +2420,38 @@ function updateRobots(dt) {
       }
     }
 
-    // 避障判断：反向 && 距离减小 && 距离<5 → 减速；否则 → 恢复
-    const distanceDelta = minDistToOther - robot.prevDist;
-    const shouldAvoid = closestOtherId && isOppositeDirection && minDistToOther < AVOID_DISTANCE && distanceDelta <= 0;
+    // 避障判断：反向 && 距离<5 → 进入减速；距离开始增大 → 恢复
+    const shouldAvoid = closestOtherId && isOppositeDirection && minDistToOther < AVOID_DISTANCE;
 
     if (shouldAvoid) {
-      // 进入或保持避障模式：双方都减速
+      // 进入或保持避障模式：双方都减速，更新最小距离记录
       robot.avoidanceMode = true;
+      robot.minClosestDist = Math.min(robot.minClosestDist, minDistToOther);
       robot.speed = SLOWDOWN_SPEED;
 
       const other = robots[closestOtherId];
       if (other) {
         other.avoidanceMode = true;
+        other.minClosestDist = Math.min(other.minClosestDist, minDistToOther);
         other.speed = SLOWDOWN_SPEED;
       }
-    } else if (robot.avoidanceMode) {
-      // 避障条件不满足，恢复原速
+    } else if (robot.avoidanceMode && minDistToOther > robot.minClosestDist) {
+      // 距离已大于最近接近距离 = 开始相离 → 恢复原速
       robot.avoidanceMode = false;
+      robot.minClosestDist = Infinity;
       robot.speed = robot.originalSpeed;
 
       const other = robots[closestOtherId];
       if (other && other.avoidanceMode) {
         other.avoidanceMode = false;
+        other.minClosestDist = Infinity;
         other.speed = other.originalSpeed;
       }
     }
 
-    // 记录当前位置和距离作为下一帧的参考（必须在速度调整后）
+    // 记录当前位置作为下一帧的前一位置（必须在速度调整后）
     robot.prevX = robot.x;
     robot.prevY = robot.y;
-    robot.prevDist = minDistToOther;
   }
 
   for (const [id, robot] of Object.entries(robots)) {
