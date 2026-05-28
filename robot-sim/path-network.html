@@ -619,22 +619,37 @@ let callStates = {};
 
 function initializeCallStates() {
   callStates = {};
+  console.log(`[初始化] 开始初始化呼叫点状态...`);
+  console.log(`[初始化] 当前keyPoints中的所有点: ${Object.keys(keyPoints).join(', ')}`);
+
   for (const key of Object.keys(keyPoints)) {
     const pt = keyPoints[key];
+    console.log(`  检查 ${key}: type=${pt.type}`);
     if (pt.type === 'call') {  // 只有call类型的点位是呼叫点
       callStates[key] = {
         state: 'idle',            // idle/pending/assigned/completed
         assignedRobotId: null,    // 分配的机器人ID，null表示未分配
         hasPending: false         // 是否有待处理呼叫
       };
+      console.log(`  ✓ 创建呼叫状态: ${key}`);
     }
   }
+
+  console.log(`[初始化] 完成! 创建了 ${Object.keys(callStates).length} 个呼叫点: [${Object.keys(callStates).join(', ')}]\n`);
 }
 
 let robotStateBeforeEdit = null; // 编辑前保存机器人状态
 let cachedGraph = null; // 缓存的路径图
 let cachedPathLengths = null;
 let cachedEdges = null;
+
+// 清除寻路缓存（当pathNetwork或keyPoints改变时调用）
+function clearPathCache() {
+  cachedGraph = null;
+  cachedPathLengths = null;
+  cachedEdges = null;
+  console.log(`[缓存] 已清除`);
+}
 
 // 加载路径网络
 function loadPaths() {
@@ -646,7 +661,7 @@ function loadPaths() {
 // 保存路径网络，并清缓存
 function savePaths() {
   localStorage.setItem('pathNetwork', JSON.stringify(pathNetwork));
-  cachedGraph = null; // 清缓存
+  clearPathCache();
 }
 
 
@@ -1102,6 +1117,7 @@ function savePointConfigUI() {
   }
 
   savePointConfig();
+  clearPathCache();  // 点位改变，路径图需要重建
   initializeRobots();
   initializeCallStates();
   pointEditMode = false;
@@ -1251,11 +1267,32 @@ function updateCallButtons() {
   const container = document.getElementById('callButtonsContainer');
   container.innerHTML = '';
 
+  console.log(`\n[UI] ═══════════════════════════════════════════`);
+  console.log(`[UI] 更新呼叫点按钮...`);
+
   const colors = ['#8b5cf6', '#f59e0b', '#06b6d4', '#ec4899', '#14b8a6'];
   const callPoints = Object.entries(keyPoints).filter(([_, pt]) => pt.type === 'call');
 
+  console.log(`[UI] keyPoints中的呼叫点数: ${callPoints.length}`);
+  console.log(`[UI] callStates中的点数: ${Object.keys(callStates).length}`);
+
+  // ⚠️ 检查同步性
+  const keyPointsCallLabels = new Set(callPoints.map(([label]) => label));
+  const callStatesLabels = new Set(Object.keys(callStates));
+
+  if (keyPointsCallLabels.size !== callStatesLabels.size ||
+      ![...keyPointsCallLabels].every(l => callStatesLabels.has(l))) {
+    console.log(`⚠ 警告: keyPoints和callStates不同步!`);
+    console.log(`  keyPoints呼叫点: [${[...keyPointsCallLabels].join(', ')}]`);
+    console.log(`  callStates点: [${[...callStatesLabels].join(', ')}]`);
+    console.log(`  正在重新初始化callStates...`);
+    initializeCallStates();
+  }
+
   if (callPoints.length === 0) {
     container.innerHTML = '<div style="font-size: 11px; color: #64748b;">无呼叫点</div>';
+    console.log(`[UI] 无呼叫点`);
+    console.log(`[UI] ═══════════════════════════════════════════\n`);
     return;
   }
 
@@ -1267,10 +1304,25 @@ function updateCallButtons() {
     btn.style.marginBottom = '4px';
     btn.style.padding = '6px 8px';
     btn.style.fontSize = '12px';
-    btn.onclick = () => generateRequest(label);
+
+    // 创建闭包，确保button.onclick时使用当前的label和pt（不被后续迭代覆盖）
+    (function(currentLabel, currentPt) {
+      btn.onclick = function() {
+        console.log(`\n[按钮点击] 点击呼叫点按钮: "${currentLabel}" @ (${currentPt.x.toFixed(1)}, ${currentPt.y.toFixed(1)})`);
+        generateRequest(currentLabel);
+      };
+    })(label, pt);
+
     btn.textContent = `📞 ${label}`;
     container.appendChild(btn);
+
+    const inCallStates = label in callStates;
+    console.log(`[UI]   ✓ "${label}" @ (${pt.x.toFixed(1)}, ${pt.y.toFixed(1)}) | callStates: ${inCallStates ? '✓' : '✗'}`);
   }
+
+  console.log(`[UI] 按钮更新完成!`);
+  console.log(`[UI] 当前callStates包含: [${Object.keys(callStates).join(', ')}]`);
+  console.log(`[UI] ═══════════════════════════════════════════\n`);
 }
 
 function togglePatrolRouteEditMode() {
@@ -1659,11 +1711,24 @@ function loadPreset(name) {
     return;
   }
 
+  console.log(`\n=== 开始加载预设: "${name}" ===`);
   const preset = presets[name];
   keyPoints = JSON.parse(JSON.stringify(preset.keyPoints));
   pathNetwork = JSON.parse(JSON.stringify(preset.pathNetwork));
   patrolRoute = [...preset.patrolRoute];
   robotCount = preset.robotCount;
+
+  // ⚠️ 清除寻路缓存——新地图需要重新构建图
+  clearPathCache();
+
+  // 加载后显示所有关键点
+  console.log(`[预设] 加载的所有关键点:`, Object.keys(keyPoints).sort());
+  console.log(`[预设] 呼叫点数: ${Object.values(keyPoints).filter(pt => pt.type === 'call').length}`);
+  const callPointsList = Object.entries(keyPoints)
+    .filter(([_, pt]) => pt.type === 'call')
+    .map(([label, _]) => label)
+    .sort();
+  console.log(`[预设] 呼叫点标签: [${callPointsList.join(', ')}]`);
 
   // 停止运行并重置机器人
   isRunning = false;
@@ -1680,7 +1745,7 @@ function loadPreset(name) {
   resetEditPath();
   document.getElementById('btnStart').textContent = '▶️ 开始';
 
-  console.log(`[预设] 已加载"${name}"`);
+  console.log(`[预设] 已加载"${name}"✓\n`);
 }
 
 function deletePreset(name) {
@@ -1848,6 +1913,16 @@ function generateDefaultLayout() {
 
 // Dijkstra 找最短路径 — 支持虚拟连接（直线补全），使用缓存
 function findShortestPath(start, end) {
+  console.log(`[寻路] 查询: ${start} → ${end}`);
+
+  // 检查端点是否在keyPoints中
+  if (!keyPoints[start]) {
+    console.log(`[寻路] 警告: 起点 "${start}" 不在keyPoints中`);
+  }
+  if (!keyPoints[end]) {
+    console.log(`[寻路] 警告: 终点 "${end}" 不在keyPoints中`);
+  }
+
   // 如果缓存存在，使用缓存；否则构建新图
   let graph, pathLengths, edges;
   let cacheUsed = false;
@@ -1857,7 +1932,9 @@ function findShortestPath(start, end) {
     pathLengths = cachedPathLengths;
     edges = cachedEdges;
     cacheUsed = true;
+    console.log(`[寻路] 使用缓存的路径图`);
   } else {
+    console.log(`[寻路] 构建新的路径图...`);
     // 构建图：从路径网络提取关键点连接
     graph = {};
     pathLengths = {};
@@ -1922,6 +1999,8 @@ function findShortestPath(start, end) {
     cachedGraph = graph;
     cachedPathLengths = pathLengths;
     cachedEdges = edges;
+
+    console.log(`[寻路] 图构建完成! 节点数: ${Object.keys(graph).length}, 关键点节点: ${Object.keys(graph).filter(k => Object.keys(keyPoints).includes(k)).join(', ')}`);
   }
 
 
@@ -1963,8 +2042,13 @@ function findShortestPath(start, end) {
 
   // 检查是否真的到达了目标
   if (!dist[end] || dist[end] === Infinity) {
+    console.log(`[寻路] ✗ 无法到达目标 "${end}". 距离: ${dist[end] === undefined ? 'undefined' : dist[end]}`);
+    console.log(`[寻路] 图中的节点: [${Object.keys(graph).join(', ')}]`);
+    console.log(`[寻路] start="${start}"在图中: ${start in graph}, end="${end}"在图中: ${end in graph}`);
     return [];
   }
+
+  console.log(`[寻路] 找到路径! 距离: ${dist[end].toFixed(2)}`);
 
   // 重建路径（检测循环）
   const path = [];
@@ -1987,8 +2071,8 @@ function findShortestPath(start, end) {
 
 
   // 检查是否用了虚拟边
+  let usedVirtual = false;
   if (path.length > 1) {
-    let usedVirtual = false;
     for (let i = 0; i < path.length - 1; i++) {
       const edgeKey = `${path[i]}-${path[i+1]}`;
       if (cachedEdges && cachedEdges[edgeKey] === 'virtual') {
@@ -1998,6 +2082,7 @@ function findShortestPath(start, end) {
     }
   }
 
+  console.log(`[寻路] 返回路径: [${path.join(' → ')}] (${path.length}个节点)${usedVirtual ? ' 【使用虚拟边】' : ''}\n`);
   return path;
 }
 
@@ -2018,6 +2103,7 @@ function getPathLength(points) {
 // 查找两个关键点之间的完整路径（支持伪标签）
 function findPathBetweenPoints(startLabel, endLabel) {
   try {
+    console.log(`  [findPathBetweenPoints] ${startLabel} → ${endLabel}`);
     let startPt = keyPoints[startLabel];
     let endPt = keyPoints[endLabel];
 
@@ -2025,14 +2111,20 @@ function findPathBetweenPoints(startLabel, endLabel) {
     if (!startPt && startLabel.match(/^\(\d+,\d+\)$/)) {
       const coords = startLabel.slice(1, -1).split(',');
       startPt = { x: parseInt(coords[0]), y: parseInt(coords[1]) };
+      console.log(`    起点是伪标签，坐标: (${startPt.x}, ${startPt.y})`);
     }
     if (!endPt && endLabel.match(/^\(\d+,\d+\)$/)) {
       const coords = endLabel.slice(1, -1).split(',');
       endPt = { x: parseInt(coords[0]), y: parseInt(coords[1]) };
+      console.log(`    终点是伪标签，坐标: (${endPt.x}, ${endPt.y})`);
     }
-    if (!startPt || !endPt) return [];
+    if (!startPt || !endPt) {
+      console.log(`    ✗ 解析失败: startPt=${startPt ? 'ok' : 'null'}, endPt=${endPt ? 'ok' : 'null'}`);
+      return [];
+    }
 
     // **方案1：查找完整的start→end路径**
+    console.log(`    [方案1] 查找完整路径...`);
     for (const [key, path] of Object.entries(pathNetwork)) {
       if (!path || path.length < 2) continue;
 
@@ -2042,6 +2134,7 @@ function findPathBetweenPoints(startLabel, endLabel) {
       const distEnd = Math.sqrt(Math.pow(pathEnd.x - endPt.x, 2) + Math.pow(pathEnd.y - endPt.y, 2));
 
       if (distStart < 0.5 && distEnd < 0.5) {
+        console.log(`      ✓ 找到路径"${key}" (${path.length}点)`);
         return [...path];  // 必须返回副本
       }
 
@@ -2049,12 +2142,15 @@ function findPathBetweenPoints(startLabel, endLabel) {
       const distEndReverse = Math.sqrt(Math.pow(pathStart.x - endPt.x, 2) + Math.pow(pathStart.y - endPt.y, 2));
       const distStartReverse = Math.sqrt(Math.pow(pathEnd.x - startPt.x, 2) + Math.pow(pathEnd.y - startPt.y, 2));
       if (distEndReverse < 0.5 && distStartReverse < 0.5) {
+        console.log(`      ✓ 找到反向路径"${key}" (${path.length}点)`);
         return [...path].reverse();
       }
     }
+    console.log(`    [方案1] 未找到完整路径`);
 
     // **方案2：查找包含start和end的路径（子路径）**
     // 用与图构建相同的逻辑为路径上的点生成标签，然后精确匹配
+    console.log(`    [方案2] 查找包含子路径的路径...`);
     for (const [key, path] of Object.entries(pathNetwork)) {
       if (!path || path.length < 2) continue;
 
@@ -2084,18 +2180,25 @@ function findPathBetweenPoints(startLabel, endLabel) {
       const startIdx = pointLabels.indexOf(startLabel);
       const endIdx = pointLabels.indexOf(endLabel);
 
+      if (startIdx !== -1 || endIdx !== -1) {
+        console.log(`      路径"${key}": startIdx=${startIdx}, endIdx=${endIdx}, 标签=[${pointLabels.join(', ')}]`);
+      }
+
       // 如果都找到了，提取子路径（必须返回副本）
       if (startIdx !== -1 && endIdx !== -1) {
         if (startIdx < endIdx) {
           const subPath = path.slice(startIdx, endIdx + 1);
+          console.log(`      ✓ 找到子路径 (${subPath.length}点)`);
           return [...subPath];  // 返回副本
         } else if (startIdx > endIdx) {
           const subPath = path.slice(endIdx, startIdx + 1).reverse();
+          console.log(`      ✓ 找到反向子路径 (${subPath.length}点)`);
           return [...subPath];  // 返回副本
         }
       }
     }
 
+    console.log(`    ✗ 无法在任何pathNetwork路径中找到子路径`);
     return [];
   } catch (err) {
     return [];
@@ -2105,28 +2208,35 @@ function findPathBetweenPoints(startLabel, endLabel) {
 function getFullPath(nodes) {
   try {
     if (!nodes || nodes.length === 0) {
+      console.log(`[getFullPath] 输入为空`);
       return [];
     }
 
+    console.log(`[getFullPath] 开始展开节点路由: [${nodes.join(' → ')}]`);
     const fullPath = [];
 
     for (let i = 0; i < nodes.length - 1; i++) {
       const start = nodes[i];
       const end = nodes[i + 1];
+      console.log(`[getFullPath]   展开段${i}: ${start} → ${end}`);
       const pathSegment = findPathBetweenPoints(start, end);
 
       if (pathSegment && pathSegment.length > 0) {
+        console.log(`[getFullPath]     ✓ 找到${pathSegment.length}个坐标点`);
         if (i === 0) {
           fullPath.push(...pathSegment);
         } else {
           fullPath.push(...pathSegment.slice(1));
         }
       } else {
+        console.log(`[getFullPath]     ✗ 无法找到路径段，返回空数组`);
         return [];
       }
     }
+    console.log(`[getFullPath] 完成! 总共${fullPath.length}个坐标点\n`);
     return fullPath;
   } catch (err) {
+    console.log(`[getFullPath] 异常: ${err.message}`);
     return [];
   }
 }
@@ -2145,12 +2255,34 @@ function setRobotSpeed(robotId, speed) {
 }
 
 function generateRequest(label) {
+  console.log(`\n${'═'.repeat(60)}`);
+  console.log(`>>> 生成呼叫请求: "${label}"`);
+  console.log(`${'═'.repeat(60)}`);
+
   if (!isRunning) {
     alert('请先启动仿真');
+    console.log(`✗ 仿真未运行`);
     return;
   }
 
+  // ⚠️ 关键检查：label是否在当前地图中
+  if (!keyPoints[label]) {
+    console.log(`✗ 错误！${label}不在当前地图的keyPoints中!`);
+    console.log(`  当前地图的呼叫点: [${Object.entries(keyPoints).filter(([_, pt]) => pt.type === 'call').map(([l]) => l).join(', ')}]`);
+    console.log(`  当前地图的所有点: [${Object.keys(keyPoints).join(', ')}]`);
+    alert(`呼叫点"${label}"不在当前地图中！`);
+    return;
+  }
+
+  if (keyPoints[label].type !== 'call') {
+    console.log(`✗ 错误！${label}不是呼叫点，类型为: ${keyPoints[label].type}`);
+    return;
+  }
+
+  console.log(`✓ 验证通过: "${label}" 在keyPoints中，坐标(${keyPoints[label].x.toFixed(1)}, ${keyPoints[label].y.toFixed(1)})`);
+
   if (!callStates[label]) {
+    console.log(`⚠ 警告: ${label}不在callStates中，创建新的`);
     callStates[label] = { state: 'idle', assignedRobotId: null, hasPending: false };
   }
 
@@ -2160,13 +2292,13 @@ function generateRequest(label) {
   if (state.state === 'assigned' && state.assignedRobotId !== null) {
     // 已有机器人前往：继续用同一机器人
     state.hasPending = true;
-    console.log(`[呼叫${label}] 已分配给机器人${state.assignedRobotId}，再次呼叫继续使用该机器人`);
+    console.log(`[呼叫${label}] 已分配给机器人${state.assignedRobotId}，再次呼叫继续使用该机器人 ✓`);
   } else {
     // idle、pending或completed：重新选择最近的机器人
     state.state = 'pending';
     state.assignedRobotId = null;  // 重置，让分配逻辑选择最近的
     state.hasPending = true;
-    console.log(`[呼叫${label}] 新呼叫，等待分配最近的机器人`);
+    console.log(`[呼叫${label}] 新呼叫，状态变为pending，等待分配最近的机器人 ✓`);
   }
 }
 
@@ -2460,10 +2592,11 @@ function updateRobots(dt) {
         }
 
         if (nearestLabel) {
+          console.log(`\n[机器人${id}] 接收呼叫 "${pendingTarget}"，从 "${nearestLabel}" 计算路由...`);
           const nodeRoute = findShortestPath(nearestLabel, pendingTarget);
-          console.log(`[机器人${id}]任务分配:nearestLabel=${nearestLabel}, target=${pendingTarget}, nodeRoute=${JSON.stringify(nodeRoute)}`);
 
           if (nodeRoute && nodeRoute.length > 0) {
+            console.log(`[机器人${id}] ✓ 寻路成功: [${nodeRoute.join(' → ')}]`);
             // 从最近点到目标的完整路径
             let fullPath = [];
 
@@ -2472,7 +2605,7 @@ function updateRobots(dt) {
 
             // 然后添加从nearestLabel到target的路径
             const routePath = getFullPath(nodeRoute);
-            console.log(`[机器人${id}]routePath长度=${routePath.length}, nodeRoute=${JSON.stringify(nodeRoute)}, fullPath长度=${fullPath.length}`);
+            console.log(`[机器人${id}] getFullPath返回${routePath ? routePath.length : 0}个坐标点`);
 
             if (routePath && routePath.length > 0) {
               // 确保routePath从nearestLabel开始（跳过之前的节点）
@@ -2485,7 +2618,7 @@ function updateRobots(dt) {
                   break;
                 }
               }
-              console.log(`[机器人${id}]routePath起点移动到index=${startIdx}`);
+              console.log(`[机器人${id}] 路径切片从index=${startIdx}开始`);
               fullPath.push(...routePath.slice(startIdx));
             }
 
@@ -2500,13 +2633,18 @@ function updateRobots(dt) {
               callStates[pendingTarget].assignedRobotId = parseInt(id);
               callStates[pendingTarget].hasPending = false;
 
-              console.log(`[机器人${id}]✅分配成功，路径${fullPath.length}个点，呼叫点${pendingTarget}状态→assigned`);
+              console.log(`[机器人${id}] ✅ 任务分配成功! 路径${fullPath.length}个点，状态: pending→assigned\n`);
             } else {
-              console.log(`[机器人${id}]❌分配失败，fullPath长度=${fullPath.length}`);
+              console.log(`[机器人${id}] ❌ 分配失败: fullPath长度不足 (${fullPath.length})\n`);
             }
           } else {
-            console.log(`[机器人${id}]❌nodeRoute为空或长度为0`);
+            console.log(`[机器人${id}] ❌ 寻路失败: 无法从 "${nearestLabel}" 到 "${pendingTarget}"`);
+            console.log(`[机器人${id}] callStates[${pendingTarget}]是否存在: ${pendingTarget in callStates}`);
+            console.log(`[机器人${id}] keyPoints[${pendingTarget}]是否存在: ${pendingTarget in keyPoints}`);
+            console.log(`[机器人${id}] keyPoints所有点: [${Object.keys(keyPoints).join(', ')}]\n`);
           }
+        } else {
+          console.log(`[机器人${id}] 警告: 无法找到最近点标签 (nearestLabel=${nearestLabel})`);
         }
       }
 
