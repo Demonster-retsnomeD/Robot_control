@@ -2679,14 +2679,14 @@ function updateRobots(dt) {
         if (!robot.returning) {
           // === 服务状态 ===
           const serviceElapsed = time - robot.serviceStart;
-          if (serviceElapsed >= 3) {
+          if (serviceElapsed >= 5) {
             if (hasNewServiceCall) {
-              // 有新呼叫，继续服务3秒
+              // 有新呼叫，继续服务5秒
               if (callStates[robot.serviceTarget]) {
                 callStates[robot.serviceTarget].hasPending = false;  // 清除pending标记
               }
               robot.serviceStart = time;
-              console.log(`[机器人${id}]${robot.serviceTarget}有新呼叫，延长服务3s`);
+              console.log(`[机器人${id}]${robot.serviceTarget}有新呼叫，延长服务5s`);
             } else {
               // 无新呼叫，进入返回状态（沿路径回到轮巡主路）
               robot.returning = true;
