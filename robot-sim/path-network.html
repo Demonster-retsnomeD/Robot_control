@@ -1514,7 +1514,6 @@ function initializeRobots() {
       serviceTarget: null,
       serviceStart: null,
       returning: false,
-      avoidanceMode: false,  // 避障状态标志
       distanceTraveled: 0    // 累计走过的距离
     };
   }
@@ -1575,9 +1574,8 @@ function resetRobots() {
   // 重置所有机器人到当前keyPoints位置
   initializeRobots();
 
-  // 重置避障和距离追踪
+  // 重置距离追踪
   for (const [id, robot] of Object.entries(robots)) {
-    robot.avoidanceMode = false;
     robot.distanceTraveled = 0;
   }
 
@@ -2369,110 +2367,6 @@ function diagnosticRobotPositions() {
 }
 
 function updateRobots(dt) {
-  // 第1步：检测碰撞避障（仅反向行驶时减速）
-  const AVOID_DISTANCE = 2.5;      // 触发避障距离（<2.5单位）
-  const RESUME_DISTANCE = 8;       // 恢复原速距离（>8单位）
-  const SLOWDOWN_SPEED = 2;        // 避障减速：2m/s
-
-  for (const [id, robot] of Object.entries(robots)) {
-    // 初始化避障字段（仅第一次）
-    if (robot.avoidanceMode === undefined) robot.avoidanceMode = false;
-    if (robot.avoidanceTargetId === undefined) robot.avoidanceTargetId = null;
-    if (robot.minClosestDist === undefined) robot.minClosestDist = Infinity;
-    if (robot.prevX === undefined) robot.prevX = robot.x;
-    if (robot.prevY === undefined) robot.prevY = robot.y;
-
-    // 计算当前机器人的运动方向向量
-    const robotDx = robot.x - robot.prevX;
-    const robotDy = robot.y - robot.prevY;
-    const robotDirLen = Math.sqrt(robotDx * robotDx + robotDy * robotDy);
-
-    // 调试：如果方向向量不为0，才进行碰撞检测
-    const hasMovement = robotDirLen > 0.001;
-
-    // 检测与其他机器人的距离和方向
-    let minDistToOther = Infinity;
-    let closestOtherId = null;
-    let isOppositeDirection = false;
-
-    for (const [otherId, other] of Object.entries(robots)) {
-      if (otherId === id) continue;
-
-      // 计算两机器人的距离
-      const dx = robot.x - other.x;
-      const dy = robot.y - other.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist < minDistToOther) {
-        minDistToOther = dist;
-        closestOtherId = otherId;
-
-        // 检测运动方向：计算点积判断是否反向
-        if (hasMovement && other.prevX !== undefined && other.prevY !== undefined) {
-          const otherDx = other.x - other.prevX;
-          const otherDy = other.y - other.prevY;
-          const dotProduct = robotDx * otherDx + robotDy * otherDy;
-          // 点积 < 0 = 反向，> 0 = 同向
-          isOppositeDirection = dotProduct < 0;
-        }
-      }
-    }
-
-    // 避障状态机：优先检查恢复，再检查进入
-    if (robot.avoidanceMode && robot.avoidanceTargetId) {
-      // 在避障模式：检查是否应该恢复
-      const targetRobot = robots[robot.avoidanceTargetId];
-      if (targetRobot) {
-        const dx = robot.x - targetRobot.x;
-        const dy = robot.y - targetRobot.y;
-        const distToTarget = Math.sqrt(dx * dx + dy * dy);
-
-        console.log(`[避障检查] 机器人${id} vs 目标${robot.avoidanceTargetId}: 当前距离=${distToTarget.toFixed(2)}, 最小距离=${robot.minClosestDist.toFixed(2)}`);
-
-        // 距离 > 最近接近距离 = 开始相离 → 恢复原速
-        if (distToTarget > robot.minClosestDist) {
-          console.log(`[恢复速度] 机器人${id}: ${robot.speed}m/s → ${robot.originalSpeed}m/s (距离${distToTarget.toFixed(2)} > 最小${robot.minClosestDist.toFixed(2)})`);
-          robot.avoidanceMode = false;
-          robot.avoidanceTargetId = null;
-          robot.minClosestDist = Infinity;
-          robot.speed = robot.originalSpeed;
-
-          if (targetRobot.avoidanceMode) {
-            console.log(`[恢复速度] 机器人${robot.avoidanceTargetId}: ${targetRobot.speed}m/s → ${targetRobot.originalSpeed}m/s`);
-            targetRobot.avoidanceMode = false;
-            targetRobot.avoidanceTargetId = null;
-            targetRobot.minClosestDist = Infinity;
-            targetRobot.speed = targetRobot.originalSpeed;
-          }
-        }
-      }
-    } else {
-      // 不在避障模式：检查是否应该进入
-      const shouldAvoid = closestOtherId && isOppositeDirection && minDistToOther < AVOID_DISTANCE;
-      if (shouldAvoid) {
-        // 进入避障模式：记录目标，重置最小距离为当前距离，双方都减速
-        console.log(`[进入减速] 机器人${id} 与 ${closestOtherId} 反向接近(距离=${minDistToOther.toFixed(2)}): ${robot.originalSpeed}m/s → 2m/s`);
-        robot.avoidanceMode = true;
-        robot.avoidanceTargetId = closestOtherId;
-        robot.minClosestDist = minDistToOther;  // 重置为当前距离，不用Math.min
-        robot.speed = SLOWDOWN_SPEED;
-
-        const other = robots[closestOtherId];
-        if (other) {
-          console.log(`[进入减速] 机器人${closestOtherId}: ${other.originalSpeed}m/s → 2m/s`);
-          other.avoidanceMode = true;
-          other.avoidanceTargetId = id;
-          other.minClosestDist = minDistToOther;  // 重置为当前距离
-          other.speed = SLOWDOWN_SPEED;
-        }
-      }
-    }
-
-    // 记录当前位置作为下一帧的前一位置（必须在速度调整后）
-    robot.prevX = robot.x;
-    robot.prevY = robot.y;
-  }
-
   for (const [id, robot] of Object.entries(robots)) {
     // 检查是否有呼叫请求（未分配的或已分配给本机器人的）
     let pendingTarget = null;
