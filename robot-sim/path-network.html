@@ -2159,21 +2159,27 @@ function diagnosticRobotPositions() {
 }
 
 function updateRobots(dt) {
-  // 第1步：检测碰撞避障
+  // 第1步：检测碰撞避障（仅反向行驶时减速）
   const AVOID_DISTANCE = 5;        // 触发避障距离（<5单位）
   const RESUME_DISTANCE = 8;       // 恢复原速距离（>8单位）
-  const SAFE_START_DISTANCE = 10;  // 安全起始距离（走过10单位后才检测）
   const SLOWDOWN_SPEED = 2;        // 避障减速：2m/s
 
   for (const [id, robot] of Object.entries(robots)) {
     // 初始化避障字段
     if (!robot.avoidanceMode) robot.avoidanceMode = false;
     if (!robot.originalSpeed) robot.originalSpeed = robot.speed;
-    if (!robot.distanceTraveled) robot.distanceTraveled = 0;
+    if (!robot.prevX) robot.prevX = robot.x;  // 上一帧位置
+    if (!robot.prevY) robot.prevY = robot.y;
 
-    // 检测与其他机器人的距离
+    // 计算当前机器人的运动方向向量
+    const robotDx = robot.x - robot.prevX;
+    const robotDy = robot.y - robot.prevY;
+    const robotDirLen = Math.sqrt(robotDx * robotDx + robotDy * robotDy);
+
+    // 检测与其他机器人的距离和方向
     let minDistToOther = Infinity;
     let closestOtherId = null;
+    let isOppositeDirection = false;
 
     for (const [otherId, other] of Object.entries(robots)) {
       if (otherId === id) continue;
@@ -2186,14 +2192,20 @@ function updateRobots(dt) {
       if (dist < minDistToOther) {
         minDistToOther = dist;
         closestOtherId = otherId;
+
+        // 检测运动方向：计算点积判断是否反向
+        if (robotDirLen > 0.01) {
+          const otherDx = other.x - (other.prevX || other.x);
+          const otherDy = other.y - (other.prevY || other.y);
+          const dotProduct = robotDx * otherDx + robotDy * otherDy;
+          // 点积 < 0 = 反向，> 0 = 同向
+          isOppositeDirection = dotProduct < 0;
+        }
       }
     }
 
-    // 如果两个机器人都已走过安全起始距离，才检测碰撞
-    const robotSafeStart = robot.distanceTraveled > SAFE_START_DISTANCE;
-    const otherSafeStart = closestOtherId ? robots[closestOtherId].distanceTraveled > SAFE_START_DISTANCE : true;
-
-    if (robotSafeStart && otherSafeStart) {
+    // 仅在反向行驶时检测碰撞
+    if (closestOtherId && isOppositeDirection) {
       if (minDistToOther < AVOID_DISTANCE) {
         // 进入避障模式
         robot.avoidanceMode = true;
@@ -2203,6 +2215,10 @@ function updateRobots(dt) {
         robot.avoidanceMode = false;
         robot.speed = robot.originalSpeed;
       }
+    } else if (!isOppositeDirection && robot.avoidanceMode) {
+      // 如果变成同向，立即恢复原速
+      robot.avoidanceMode = false;
+      robot.speed = robot.originalSpeed;
     }
   }
 
@@ -2253,6 +2269,10 @@ function updateRobots(dt) {
           }
         }
       }
+
+      // 保存当前位置作为下一帧的前一位置（用于方向计算）
+      robot.prevX = robot.x;
+      robot.prevY = robot.y;
 
       // 有呼叫时切换到服务模式
       if (pendingTarget) {
@@ -2406,6 +2426,10 @@ function updateRobots(dt) {
           }
         }
       }
+
+      // 保存当前位置作为下一帧的前一位置（用于方向计算）
+      robot.prevX = robot.x;
+      robot.prevY = robot.y;
 
       // 服务阶段或返回阶段
       if (robot.serviceStart !== null && !robot.path) {
