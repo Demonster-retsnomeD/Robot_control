@@ -2380,9 +2380,10 @@ function updateRobots(dt) {
   for (const [id, robot] of Object.entries(robots)) {
     // 初始化避障字段（仅第一次）
     if (robot.avoidanceMode === undefined) robot.avoidanceMode = false;
+    if (robot.avoidanceTargetId === undefined) robot.avoidanceTargetId = null;
+    if (robot.minClosestDist === undefined) robot.minClosestDist = Infinity;
     if (robot.prevX === undefined) robot.prevX = robot.x;
     if (robot.prevY === undefined) robot.prevY = robot.y;
-    if (robot.minClosestDist === undefined) robot.minClosestDist = Infinity;
 
     // 计算当前机器人的运动方向向量
     const robotDx = robot.x - robot.prevX;
@@ -2424,28 +2425,41 @@ function updateRobots(dt) {
     const shouldAvoid = closestOtherId && isOppositeDirection && minDistToOther < AVOID_DISTANCE;
 
     if (shouldAvoid) {
-      // 进入或保持避障模式：双方都减速，更新最小距离记录
+      // 进入避障模式：记录目标，双方都减速，更新最小距离记录
       robot.avoidanceMode = true;
+      robot.avoidanceTargetId = closestOtherId;
       robot.minClosestDist = Math.min(robot.minClosestDist, minDistToOther);
       robot.speed = SLOWDOWN_SPEED;
 
       const other = robots[closestOtherId];
       if (other) {
         other.avoidanceMode = true;
+        other.avoidanceTargetId = id;
         other.minClosestDist = Math.min(other.minClosestDist, minDistToOther);
         other.speed = SLOWDOWN_SPEED;
       }
-    } else if (robot.avoidanceMode && minDistToOther > robot.minClosestDist) {
-      // 距离已大于最近接近距离 = 开始相离 → 恢复原速
-      robot.avoidanceMode = false;
-      robot.minClosestDist = Infinity;
-      robot.speed = robot.originalSpeed;
+    } else if (robot.avoidanceMode && robot.avoidanceTargetId) {
+      // 检查与避障目标的距离，判断是否应该恢复
+      const targetRobot = robots[robot.avoidanceTargetId];
+      if (targetRobot) {
+        const dx = robot.x - targetRobot.x;
+        const dy = robot.y - targetRobot.y;
+        const distToTarget = Math.sqrt(dx * dx + dy * dy);
 
-      const other = robots[closestOtherId];
-      if (other && other.avoidanceMode) {
-        other.avoidanceMode = false;
-        other.minClosestDist = Infinity;
-        other.speed = other.originalSpeed;
+        // 距离 > 最近接近距离 = 开始相离 → 恢复原速
+        if (distToTarget > robot.minClosestDist) {
+          robot.avoidanceMode = false;
+          robot.avoidanceTargetId = null;
+          robot.minClosestDist = Infinity;
+          robot.speed = robot.originalSpeed;
+
+          if (targetRobot.avoidanceMode) {
+            targetRobot.avoidanceMode = false;
+            targetRobot.avoidanceTargetId = null;
+            targetRobot.minClosestDist = Infinity;
+            targetRobot.speed = targetRobot.originalSpeed;
+          }
+        }
       }
     }
 
