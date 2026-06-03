@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI赋能开发实践 — Kenny</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy:   #1E2761;
+    --ice:    #CADCFC;
+    --white:  #FFFFFF;
+    --accent: #4F8EF7;
+    --dark:   #0D1233;
+    --muted:  #8FA0C8;
+    --green:  #00C897;
+    --orange: #FF8C42;
+    --red:    #F96167;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--dark);
+    overflow: hidden;
+    color: var(--white);
+  }
+
+  /* ── Deck container ── */
+  #deck {
+    width: 100vw; height: 100vh;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ── Slides ── */
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 64px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .45s ease, transform .45s ease;
+    transform: translateX(60px);
+  }
+  .slide.active {
+    opacity: 1;
+    pointer-events: all;
+    transform: translateX(0);
+  }
+  .slide.exit {
+    opacity: 0;
+    transform: translateX(-60px);
+  }
+
+  /* ── Slide backgrounds ── */
+  .bg-dark   { background: var(--dark); }
+  .bg-navy   { background: var(--navy); }
+  .bg-split  { background: linear-gradient(135deg, var(--dark) 55%, var(--navy) 55%); }
+  .bg-green  { background: linear-gradient(135deg, #0a2e26 0%, #0D1233 100%); }
+  .bg-orange { background: linear-gradient(135deg, #2e1a0a 0%, #0D1233 100%); }
+
+  /* ── Noise texture overlay ── */
+  .slide::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.04'/%3E%3C/svg%3E");
+    opacity: .4;
+    pointer-events: none;
+  }
+
+  /* ── Typography ── */
+  .tag {
+    font-size: 11px; font-weight: 700; letter-spacing: 3px;
+    text-transform: uppercase; color: var(--accent);
+    margin-bottom: 16px;
+  }
+  .title-xl {
+    font-size: clamp(40px, 6vw, 72px);
+    font-weight: 900; line-height: 1.05;
+    color: var(--white);
+  }
+  .title-xl span { color: var(--accent); }
+  .title-lg {
+    font-size: clamp(28px, 4vw, 48px);
+    font-weight: 800; line-height: 1.1;
+  }
+  .subtitle {
+    font-size: clamp(14px, 1.8vw, 20px);
+    color: var(--muted); margin-top: 16px; font-weight: 300;
+  }
+  .body { font-size: 15px; color: var(--ice); line-height: 1.7; }
+
+  /* ── Layout helpers ── */
+  .row { display: flex; gap: 32px; width: 100%; }
+  .col { flex: 1; }
+  .center { text-align: center; align-items: center; }
+  .content-wrap { max-width: 1100px; width: 100%; }
+
+  /* ── Cards ── */
+  .card {
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 16px;
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::after {
+    content: attr(data-icon);
+    position: absolute;
+    right: 20px; top: 16px;
+    font-size: 36px; opacity: .15;
+  }
+  .card-title {
+    font-size: 17px; font-weight: 700;
+    color: var(--white); margin-bottom: 10px;
+  }
+  .card-body { font-size: 13px; color: var(--muted); line-height: 1.6; }
+
+  /* ── Stat callout ── */
+  .stat { text-align: center; }
+  .stat-num {
+    font-size: clamp(48px, 7vw, 80px);
+    font-weight: 900; line-height: 1;
+    background: linear-gradient(135deg, var(--accent), var(--green));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .stat-label { font-size: 13px; color: var(--muted); margin-top: 6px; letter-spacing: 1px; }
+
+  /* ── Pill / badge ── */
+  .pill {
+    display: inline-block;
+    padding: 4px 12px; border-radius: 99px;
+    font-size: 12px; font-weight: 600;
+    background: rgba(79,142,247,.2);
+    color: var(--accent); margin: 3px;
+  }
+  .pill.green  { background: rgba(0,200,151,.15); color: var(--green); }
+  .pill.orange { background: rgba(255,140,66,.15); color: var(--orange); }
+  .pill.red    { background: rgba(249,97,103,.15); color: var(--red); }
+
+  /* ── Tier table ── */
+  .tier {
+    display: flex; align-items: flex-start;
+    gap: 16px; padding: 16px 0;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+  }
+  .tier:last-child { border-bottom: none; }
+  .tier-num {
+    width: 36px; height: 36px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 15px; flex-shrink: 0;
+  }
+  .tier-num.t0 { background: rgba(0,200,151,.2); color: var(--green); }
+  .tier-num.t1 { background: rgba(79,142,247,.2); color: var(--accent); }
+  .tier-num.t2 { background: rgba(255,140,66,.2); color: var(--orange); }
+  .tier-head { font-size: 14px; font-weight: 700; color: var(--white); }
+  .tier-desc { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+
+  /* ── Timeline ── */
+  .timeline { display: flex; flex-direction: column; gap: 0; width: 100%; }
+  .tl-item { display: flex; gap: 20px; align-items: stretch; }
+  .tl-left { display: flex; flex-direction: column; align-items: center; }
+  .tl-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); flex-shrink: 0; margin-top: 4px;
+  }
+  .tl-line { flex: 1; width: 2px; background: rgba(79,142,247,.2); margin: 4px 0; min-height: 24px; }
+  .tl-content { padding-bottom: 20px; }
+  .tl-title { font-size: 14px; font-weight: 700; color: var(--white); }
+  .tl-sub { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+
+  /* ── Code block ── */
+  .code {
+    background: rgba(0,0,0,.4);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 10px; padding: 16px 20px;
+    font-family: 'Consolas', monospace;
+    font-size: 12px; color: #a8ff78;
+    line-height: 1.6;
+  }
+  .code .dim { color: #556; }
+  .code .kw  { color: var(--accent); }
+  .code .str { color: var(--orange); }
+
+  /* ── Nav ── */
+  #nav {
+    position: fixed; bottom: 32px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; align-items: center; gap: 16px;
+    background: rgba(255,255,255,.07);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 99px; padding: 10px 20px;
+    z-index: 100;
+  }
+  #nav button {
+    background: none; border: none; cursor: pointer;
+    color: var(--muted); font-size: 18px; padding: 4px 8px;
+    transition: color .2s;
+  }
+  #nav button:hover { color: var(--white); }
+  #counter { font-size: 13px; color: var(--muted); min-width: 48px; text-align: center; }
+  .dot-nav { display: flex; gap: 6px; }
+  .dot-nav span {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: rgba(255,255,255,.2); cursor: pointer;
+    transition: background .2s, transform .2s;
+  }
+  .dot-nav span.on { background: var(--accent); transform: scale(1.4); }
+
+  /* ── Progress bar ── */
+  #progress {
+    position: fixed; top: 0; left: 0; height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--green));
+    transition: width .4s ease; z-index: 200;
+  }
+
+  /* ── Decorative circles ── */
+  .deco {
+    position: absolute; border-radius: 50%;
+    background: radial-gradient(circle, var(--accent) 0%, transparent 70%);
+    opacity: .08; pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="progress"></div>
+<div id="deck">
+
+  <!-- ═══ SLIDE 1 — TITLE ═══ -->
+  <div class="slide bg-dark active" id="s0">
+    <div class="deco" style="width:600px;height:600px;top:-200px;right:-100px;"></div>
+    <div class="deco" style="width:300px;height:300px;bottom:-100px;left:-50px;background:radial-gradient(circle,#00C897,transparent 70%);"></div>
+    <div class="content-wrap center" style="display:flex;flex-direction:column;align-items:center;">
+      <div class="tag">Kenny · 2026</div>
+      <div class="title-xl" style="text-align:center;">
+        AI赋能<span>开发实践</span>
+      </div>
+      <div class="subtitle" style="text-align:center;max-width:600px;margin-top:20px;">
+        机器人路径仿真 · Ball Dungeon 游戏<br>
+        从本地AI到 GitHub Pages 的完整流程
+      </div>
+      <div style="margin-top:40px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
+        <span class="pill">🤖 路径仿真</span>
+        <span class="pill green">🎮 AI游戏</span>
+        <span class="pill orange">💡 Token节省</span>
+        <span class="pill">🚀 GitHub Pages</span>
+      </div>
+      <div style="margin-top:48px;font-size:12px;color:var(--muted);">← → 或点击下方按钮切换幻灯片</div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 2 — 两个项目概览 ═══ -->
+  <div class="slide bg-navy" id="s1">
+    <div class="content-wrap">
+      <div class="tag">项目概览</div>
+      <div class="title-lg" style="margin-bottom:36px;">两个系统，都用 <span style="color:var(--accent)">AI驱动</span> 完成</div>
+      <div class="row">
+        <div class="card col" data-icon="🤖">
+          <div class="card-title">机器人路径网络仿真</div>
+          <div class="card-body">
+            3机器人调度系统。用户绘制路径 → Dijkstra自动寻路 → 状态机执行任务。<br><br>
+            <span class="pill">2763行 HTML/JS</span>
+            <span class="pill green">零依赖</span>
+            <span class="pill orange">Canvas渲染</span>
+          </div>
+          <div style="margin-top:16px;">
+            <a href="https://demonster-retsnomed.github.io/Robot_control/" target="_blank"
+               style="display:inline-block;padding:8px 16px;background:var(--accent);color:white;border-radius:8px;text-decoration:none;font-size:12px;font-weight:600;">
+              🔗 打开网站 →
+            </a>
+          </div>
+        </div>
+        <div class="card col" data-icon="🎮">
+          <div class="card-title">Ball Dungeon — AI生成游戏</div>
+          <div class="card-body">
+            地牢探索平台跳跃游戏，关卡、敌人、技能系统全由 Claude 生成。<br><br>
+            <span class="pill">160KB 单文件</span>
+            <span class="pill green">关卡JSON配置</span>
+            <span class="pill orange">养成解锁</span>
+          </div>
+          <div style="margin-top:16px;">
+            <a href="https://demonster-retsnomed.github.io/Game_AI_generated/" target="_blank"
+               style="display:inline-block;padding:8px 16px;background:var(--green);color:white;border-radius:8px;text-decoration:none;font-size:12px;font-weight:600;">
+              🔗 打开网站 →
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 3 — 机器人仿真核心算法 ═══ -->
+  <div class="slide bg-dark" id="s2">
+    <div class="content-wrap">
+      <div class="tag">核心算法</div>
+      <div class="title-lg" style="margin-bottom:32px;">机器人仿真用了哪些 <span style="color:var(--green)">AI/算法</span> 知识</div>
+      <div class="row" style="gap:20px;">
+        <div class="col" style="display:flex;flex-direction:column;gap:16px;">
+          <div class="card" data-icon="🗺️">
+            <div class="card-title">Dijkstra 最短路径</div>
+            <div class="card-body">路径网络图 → 自动找最短路线。带缓存，切地图时清除，防跨地图污染。</div>
+          </div>
+          <div class="card" data-icon="⚙️">
+            <div class="card-title">有限状态机 FSM</div>
+            <div class="card-body">机器人三态：<b style="color:var(--accent)">轮巡</b> ↔ <b style="color:var(--green)">服务</b> ↔ <b style="color:var(--orange)">返回</b>。呼叫点四态：idle → pending → assigned → idle。</div>
+          </div>
+        </div>
+        <div class="col" style="display:flex;flex-direction:column;gap:16px;">
+          <div class="card" data-icon="📍">
+            <div class="card-title">线性插值定位</div>
+            <div class="card-body"><code style="color:var(--accent)">getPositionOnPath()</code> 基于 progress 0~1 实时计算机器人坐标，实现平滑移动。</div>
+          </div>
+          <div class="card" data-icon="🎯">
+            <div class="card-title">粘性任务分配</div>
+            <div class="card-body">同一呼叫点优先分配已绑定机器人，距离兜底。防止机器人反复切换目标。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 4 — AI开发方式 ═══ -->
+  <div class="slide bg-split" id="s3">
+    <div class="content-wrap">
+      <div class="tag">AI辅助开发</div>
+      <div class="title-lg" style="margin-bottom:32px;">用 <span style="color:var(--accent)">Claude Code</span> 写代码</div>
+      <div class="row" style="align-items:flex-start;">
+        <div class="col">
+          <div class="timeline">
+            <div class="tl-item">
+              <div class="tl-left"><div class="tl-dot"></div><div class="tl-line"></div></div>
+              <div class="tl-content">
+                <div class="tl-title">描述需求 → 生成代码</div>
+                <div class="tl-sub">用自然语言描述功能，Claude 直接写出完整实现，包含边界处理和注释。</div>
+              </div>
+            </div>
+            <div class="tl-item">
+              <div class="tl-left"><div class="tl-dot" style="background:var(--green)"></div><div class="tl-line"></div></div>
+              <div class="tl-content">
+                <div class="tl-title">Bug → AI调试</div>
+                <div class="tl-sub">报错截图或描述现象，AI分析根因、定位代码行、给出精确修复。</div>
+              </div>
+            </div>
+            <div class="tl-item">
+              <div class="tl-left"><div class="tl-dot" style="background:var(--orange)"></div><div class="tl-line"></div></div>
+              <div class="tl-content">
+                <div class="tl-title">迭代重构</div>
+                <div class="tl-sub">功能稳定后用 /simplify 清理冗余代码，减少文件体积，提升可读性。</div>
+              </div>
+            </div>
+            <div class="tl-item">
+              <div class="tl-left"><div class="tl-dot" style="background:var(--red)"></div></div>
+              <div class="tl-content">
+                <div class="tl-title">Git提交信息自动生成</div>
+                <div class="tl-sub">free-scanner 本地AI生成 commit message，100% 节省Claude token。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="code">
+<span class="dim"># 典型对话模式</span>
+
+<span class="kw">用户:</span> <span class="str">"机器人切换地图后呼叫失败"</span>
+
+<span class="kw">Claude分析:</span>
+  └─ 寻路缓存未清除
+  └─ 旧地图路径污染新地图
+
+<span class="kw">修复:</span> addclearPathCache()
+  └─ 在 loadPreset() 调用
+  └─ 在 savePaths() 调用
+
+<span class="kw">结果:</span> commit a9fd3d1 ✅
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 5 — Token节省策略 ═══ -->
+  <div class="slide bg-green" id="s4">
+    <div class="content-wrap">
+      <div class="tag">Token节省策略</div>
+      <div class="title-lg" style="margin-bottom:32px;">三层架构，<span style="color:var(--green)">最小化</span> Claude消耗</div>
+      <div style="display:flex;flex-direction:column;gap:0;">
+        <div class="tier">
+          <div class="tier-num t0">0</div>
+          <div>
+            <div class="tier-head">零Token — 纯Bash命令</div>
+            <div class="tier-desc">磁盘空间、git状态、进程列表、端口监听 → 直接跑命令，Claude不介入分析</div>
+          </div>
+        </div>
+        <div class="tier">
+          <div class="tier-num t1">1</div>
+          <div>
+            <div class="tier-head">Ollama本地AI — free-scanner MCP</div>
+            <div class="tier-desc">
+              扫描目录结构、理解代码库、语义搜索、生成commit消息、解释报错<br>
+              <span class="pill green" style="margin-top:6px;display:inline-block">qwen2.5:3b 本地运行</span>
+              <span class="pill green">零费用</span>
+              <span class="pill green">节省85-100%</span>
+            </div>
+          </div>
+        </div>
+        <div class="tier">
+          <div class="tier-num t2">2</div>
+          <div>
+            <div class="tier-head">Claude — 仅用于复杂任务</div>
+            <div class="tier-desc">新功能开发、架构设计决策、复杂bug分析。前两层搞不定才用Claude。</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:24px;display:flex;gap:12px;">
+        <div class="stat" style="flex:1;background:rgba(0,200,151,.1);border-radius:12px;padding:20px;">
+          <div class="stat-num" style="font-size:40px;">90%</div>
+          <div class="stat-label">目录扫描节省</div>
+        </div>
+        <div class="stat" style="flex:1;background:rgba(0,200,151,.1);border-radius:12px;padding:20px;">
+          <div class="stat-num" style="font-size:40px;">100%</div>
+          <div class="stat-label">Commit消息节省</div>
+        </div>
+        <div class="stat" style="flex:1;background:rgba(0,200,151,.1);border-radius:12px;padding:20px;">
+          <div class="stat-num" style="font-size:40px;">85%</div>
+          <div class="stat-label">报错解释节省</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 6 — Caveman Mode ═══ -->
+  <div class="slide bg-dark" id="s5">
+    <div class="content-wrap">
+      <div class="tag">Prompt工程</div>
+      <div class="title-lg" style="margin-bottom:32px;"><span style="color:var(--orange)">Caveman Mode</span> — 对话Token压缩</div>
+      <div class="row">
+        <div class="col">
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-title">什么是 Caveman Mode</div>
+            <div class="card-body">
+              通过 Claude Code 的 hooks 系统，每次对话自动注入指令：去掉冠词、废话、客套语，用简洁语言回复。<br><br>
+              <span class="pill orange">每条回复节省30-50% token</span>
+            </div>
+          </div>
+          <div class="code">
+<span class="dim"># 传统输出 (多余)</span>
+<span class="str">"Sure! I'd be happy to help you
+with that. The issue you're
+experiencing is likely caused by..."</span>
+
+<span class="dim"># Caveman输出 (精准)</span>
+<span class="kw">"Bug in auth middleware.
+Token expiry check use < not <=.
+Fix:"</span>
+          </div>
+        </div>
+        <div class="col" style="display:flex;flex-direction:column;gap:16px;">
+          <div class="card" data-icon="⚡">
+            <div class="card-title">Hooks 系统</div>
+            <div class="card-body">settings.json 配置自动化行为。每次 Claude 回复前/后自动执行脚本，无需手动提示。</div>
+          </div>
+          <div class="card" data-icon="🔄">
+            <div class="card-title">三种强度</div>
+            <div class="card-body">
+              <code style="color:var(--accent)">/caveman lite</code> — 轻度压缩<br>
+              <code style="color:var(--orange)">/caveman full</code> — 标准模式<br>
+              <code style="color:var(--red)">/caveman ultra</code> — 极简输出
+            </div>
+          </div>
+          <div class="card" data-icon="🛡️">
+            <div class="card-title">自动豁免</div>
+            <div class="card-body">安全警告、不可逆操作确认时自动切回正常语言，保证关键信息完整。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 7 — GitHub部署流程 ═══ -->
+  <div class="slide bg-orange" id="s6">
+    <div class="content-wrap">
+      <div class="tag">部署流程</div>
+      <div class="title-lg" style="margin-bottom:32px;">GitHub Pages 全自动部署</div>
+      <div class="row" style="align-items:flex-start;gap:24px;">
+        <div class="col">
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div class="card" style="border-left:3px solid var(--accent);">
+              <div class="card-title">① 本地开发</div>
+              <div class="card-body">Claude Code 写代码 → 测试 → git commit</div>
+            </div>
+            <div style="text-align:center;font-size:20px;color:var(--muted);">↓</div>
+            <div class="card" style="border-left:3px solid var(--green);">
+              <div class="card-title">② git push → GitHub</div>
+              <div class="card-body">推送到 master 分支，自动触发 GitHub Actions</div>
+            </div>
+            <div style="text-align:center;font-size:20px;color:var(--muted);">↓</div>
+            <div class="card" style="border-left:3px solid var(--orange);">
+              <div class="card-title">③ Actions 自动打包</div>
+              <div class="card-body">workflow 复制 robot-sim/ 到 gh-pages 分支</div>
+            </div>
+            <div style="text-align:center;font-size:20px;color:var(--muted);">↓</div>
+            <div class="card" style="border-left:3px solid var(--red);">
+              <div class="card-title">④ 全球可访问</div>
+              <div class="card-body">1-2分钟后任何设备打开网站，无需登录</div>
+            </div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="code" style="margin-bottom:16px;">
+<span class="dim"># .github/workflows/deploy.yml</span>
+
+<span class="kw">on:</span>
+  push:
+    branches: [master]
+
+<span class="kw">jobs:</span>
+  deploy:
+    <span class="kw">steps:</span>
+      - uses: actions/checkout@v4
+      - uses: peaceiris/actions-gh-pages@v4
+        <span class="kw">with:</span>
+          publish_dir: ./robot-sim
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            <div style="background:rgba(255,255,255,.06);border-radius:10px;padding:14px;">
+              <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">机器人仿真</div>
+              <div style="font-size:13px;color:var(--accent);">demonster-retsnomed.github.io/Robot_control/</div>
+            </div>
+            <div style="background:rgba(255,255,255,.06);border-radius:10px;padding:14px;">
+              <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">AI游戏合集</div>
+              <div style="font-size:13px;color:var(--accent);">demonster-retsnomed.github.io/Game_AI_generated/</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 8 — 成果统计 ═══ -->
+  <div class="slide bg-navy" id="s7">
+    <div class="deco" style="width:500px;height:500px;top:-200px;right:-150px;"></div>
+    <div class="content-wrap center" style="display:flex;flex-direction:column;align-items:center;">
+      <div class="tag">项目成果</div>
+      <div class="title-lg" style="text-align:center;margin-bottom:40px;">数字说话</div>
+      <div class="row" style="justify-content:center;gap:24px;flex-wrap:wrap;">
+        <div class="stat" style="background:rgba(255,255,255,.06);border-radius:16px;padding:28px 36px;min-width:160px;">
+          <div class="stat-num">2763</div>
+          <div class="stat-label">机器人仿真代码行</div>
+        </div>
+        <div class="stat" style="background:rgba(255,255,255,.06);border-radius:16px;padding:28px 36px;min-width:160px;">
+          <div class="stat-num">0</div>
+          <div class="stat-label">外部依赖库</div>
+        </div>
+        <div class="stat" style="background:rgba(255,255,255,.06);border-radius:16px;padding:28px 36px;min-width:160px;">
+          <div class="stat-num">3</div>
+          <div class="stat-label">Bug大修复</div>
+        </div>
+        <div class="stat" style="background:rgba(255,255,255,.06);border-radius:16px;padding:28px 36px;min-width:160px;">
+          <div class="stat-num">90%</div>
+          <div class="stat-label">平均Token节省</div>
+        </div>
+      </div>
+      <div style="margin-top:36px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
+        <span class="pill">✅ Dijkstra寻路</span>
+        <span class="pill">✅ 有限状态机</span>
+        <span class="pill green">✅ Ollama本地AI</span>
+        <span class="pill green">✅ GitHub Actions CI/CD</span>
+        <span class="pill orange">✅ Caveman Mode</span>
+        <span class="pill orange">✅ 零服务器部署</span>
+        <span class="pill red">✅ 单文件架构</span>
+        <span class="pill red">✅ localStorage持久化</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SLIDE 9 — 结尾 ═══ -->
+  <div class="slide bg-dark" id="s8">
+    <div class="deco" style="width:700px;height:700px;top:-300px;left:-200px;background:radial-gradient(circle,var(--navy),transparent 70%);opacity:.3;"></div>
+    <div class="deco" style="width:400px;height:400px;bottom:-150px;right:-100px;background:radial-gradient(circle,var(--green),transparent 70%);"></div>
+    <div class="content-wrap center" style="display:flex;flex-direction:column;align-items:center;">
+      <div class="title-xl" style="text-align:center;">
+        AI是工具，<br><span style="color:var(--accent)">思路是核心</span>
+      </div>
+      <div class="subtitle" style="text-align:center;max-width:560px;margin-top:24px;">
+        算法设计、架构决策、问题拆解 — 这些仍然需要人来完成。<br>
+        AI加速实现，让想法快速落地。
+      </div>
+      <div style="margin-top:48px;display:flex;gap:16px;flex-wrap:wrap;justify-content:center;">
+        <a href="https://demonster-retsnomed.github.io/Robot_control/" target="_blank"
+           style="padding:14px 28px;background:var(--accent);color:white;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px;box-shadow:0 4px 20px rgba(79,142,247,.4);">
+          🤖 机器人路径仿真
+        </a>
+        <a href="https://demonster-retsnomed.github.io/Game_AI_generated/" target="_blank"
+           style="padding:14px 28px;background:var(--green);color:white;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px;box-shadow:0 4px 20px rgba(0,200,151,.4);">
+          🎮 Ball Dungeon 游戏
+        </a>
+        <a href="https://github.com/Demonster-retsnomeD" target="_blank"
+           style="padding:14px 28px;background:rgba(255,255,255,.1);color:white;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px;">
+          📦 GitHub
+        </a>
+      </div>
+      <div style="margin-top:40px;font-size:13px;color:var(--muted);">Kenny · Built with Claude Code + Ollama</div>
+    </div>
+  </div>
+
+</div><!-- /#deck -->
+
+<!-- ── Nav ── -->
+<div id="nav">
+  <button onclick="go(-1)">←</button>
+  <div class="dot-nav" id="dots"></div>
+  <span id="counter">1 / 9</span>
+  <button onclick="go(1)">→</button>
+</div>
+
+<script>
+const slides = document.querySelectorAll('.slide');
+const total = slides.length;
+let cur = 0;
+
+// Build dots
+const dotsEl = document.getElementById('dots');
+slides.forEach((_, i) => {
+  const d = document.createElement('span');
+  d.onclick = () => goTo(i);
+  dotsEl.appendChild(d);
+});
+
+function goTo(n) {
+  if (n < 0 || n >= total) return;
+  slides[cur].classList.remove('active');
+  slides[cur].classList.add('exit');
+  setTimeout(() => slides[cur < total ? cur : 0].classList.remove('exit'), 500);
+  const prev = cur;
+  cur = n;
+  slides[cur].classList.add('active');
+  setTimeout(() => slides[prev].classList.remove('exit'), 500);
+
+  // Progress
+  document.getElementById('progress').style.width = ((cur + 1) / total * 100) + '%';
+  // Counter
+  document.getElementById('counter').textContent = (cur + 1) + ' / ' + total;
+  // Dots
+  dotsEl.querySelectorAll('span').forEach((d, i) => d.classList.toggle('on', i === cur));
+}
+
+function go(dir) { goTo(cur + dir); }
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === ' ') go(1);
+  if (e.key === 'ArrowLeft') go(-1);
+});
+
+// Touch swipe
+let tx = 0;
+document.addEventListener('touchstart', e => tx = e.touches[0].clientX);
+document.addEventListener('touchend', e => {
+  const dx = tx - e.changedTouches[0].clientX;
+  if (Math.abs(dx) > 50) go(dx > 0 ? 1 : -1);
+});
+
+// Init
+goTo(0);
+</script>
+</body>
+</html>
