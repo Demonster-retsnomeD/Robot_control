@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI开发实践 / AI Development Practice</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:     #FAFBFD;
+    --white:  #FFFFFF;
+    --blue:   #1D4ED8;
+    --blue-l: #EFF6FF;
+    --blue-m: #BFDBFE;
+    --green:  #047857;
+    --green-l:#ECFDF5;
+    --orange: #B45309;
+    --orange-l:#FFFBEB;
+    --text:   #1E293B;
+    --sub:    #64748B;
+    --light:  #94A3B8;
+    --border: #E2E8F0;
+    --shadow: 0 1px 4px rgba(0,0,0,.06), 0 4px 20px rgba(0,0,0,.05);
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    font-family: 'Times New Roman', Times, Georgia, serif;
+    background: var(--bg);
+    overflow: hidden;
+    color: var(--text);
+  }
+
+  /* ── Deck ── */
+  #deck { width: 100vw; height: 100vh; position: relative; overflow: hidden; }
+
+  .slide {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    padding: 60px 80px;
+    background: var(--bg);
+    opacity: 0; pointer-events: none;
+    transition: opacity .4s ease, transform .4s ease;
+    transform: translateX(40px);
+  }
+  .slide.active  { opacity: 1; pointer-events: all; transform: translateX(0); }
+  .slide.exit    { opacity: 0; transform: translateX(-40px); }
+
+  /* Subtle top accent line per slide */
+  .slide::before {
+    content: '';
+    position: absolute; top: 0; left: 80px; right: 80px;
+    height: 2px;
+    background: linear-gradient(90deg, var(--blue) 0%, transparent 100%);
+    opacity: .5;
+  }
+
+  .wrap { max-width: 1060px; width: 100%; }
+
+  /* ── Typography ── */
+  .eyebrow {
+    font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--blue); font-family: 'Times New Roman', serif;
+    font-style: italic; margin-bottom: 14px;
+  }
+  .h1 {
+    font-size: clamp(38px, 5.5vw, 66px);
+    font-weight: 700; line-height: 1.08; color: var(--text);
+    font-family: 'Times New Roman', serif;
+  }
+  .h1 em { color: var(--blue); font-style: normal; }
+  .h2 {
+    font-size: clamp(26px, 3.5vw, 42px);
+    font-weight: 700; line-height: 1.12; color: var(--text);
+    font-family: 'Times New Roman', serif;
+  }
+  .h2 em { color: var(--blue); font-style: normal; }
+  .lead {
+    font-size: clamp(14px, 1.6vw, 18px);
+    color: var(--sub); margin-top: 16px; line-height: 1.7;
+    font-family: 'Times New Roman', serif;
+  }
+  p, li { font-family: 'Times New Roman', serif; }
+
+  /* ── Row / Col ── */
+  .row { display: flex; gap: 24px; width: 100%; }
+  .col { flex: 1; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px 26px;
+    box-shadow: var(--shadow);
+  }
+  .card + .card { margin-top: 14px; }
+  .card-head {
+    font-size: 15px; font-weight: 700; color: var(--text);
+    margin-bottom: 8px; font-family: 'Times New Roman', serif;
+  }
+  .card-body {
+    font-size: 13.5px; color: var(--sub); line-height: 1.65;
+    font-family: 'Times New Roman', serif;
+  }
+  .card-icon { font-size: 26px; margin-bottom: 10px; }
+
+  /* Left-border accent variants */
+  .accent-blue   { border-left: 4px solid var(--blue); }
+  .accent-green  { border-left: 4px solid var(--green); }
+  .accent-orange { border-left: 4px solid var(--orange); }
+
+  /* ── Pill ── */
+  .pill {
+    display: inline-block; padding: 3px 10px; border-radius: 99px;
+    font-size: 11px; font-weight: 600; margin: 2px;
+    font-family: 'Times New Roman', serif; letter-spacing: .3px;
+  }
+  .pill-blue   { background: var(--blue-l); color: var(--blue); border: 1px solid var(--blue-m); }
+  .pill-green  { background: var(--green-l); color: var(--green); border: 1px solid #A7F3D0; }
+  .pill-orange { background: var(--orange-l); color: var(--orange); border: 1px solid #FDE68A; }
+
+  /* ── Stat box ── */
+  .stat {
+    background: var(--white); border: 1px solid var(--border);
+    border-radius: 12px; padding: 22px 28px; text-align: center;
+    box-shadow: var(--shadow);
+  }
+  .stat-num {
+    font-size: clamp(40px, 5.5vw, 68px); font-weight: 700; line-height: 1;
+    color: var(--blue); font-family: 'Times New Roman', serif;
+  }
+  .stat-label {
+    font-size: 12px; color: var(--sub); margin-top: 6px;
+    font-family: 'Times New Roman', serif; font-style: italic;
+  }
+
+  /* ── Step list ── */
+  .step { display: flex; gap: 16px; align-items: flex-start; padding: 14px 0; border-bottom: 1px solid var(--border); }
+  .step:last-child { border-bottom: none; }
+  .step-num {
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px;
+    background: var(--blue-l); color: var(--blue);
+    font-family: 'Times New Roman', serif;
+  }
+  .step-title { font-size: 14px; font-weight: 700; color: var(--text); font-family: 'Times New Roman', serif; }
+  .step-sub   { font-size: 12.5px; color: var(--sub); margin-top: 3px; line-height: 1.55; font-family: 'Times New Roman', serif; }
+
+  /* ── Tier ── */
+  .tier { display: flex; gap: 14px; align-items: flex-start; padding: 14px 18px; border-radius: 10px; margin-bottom: 10px; }
+  .tier-0 { background: var(--green-l); }
+  .tier-1 { background: var(--blue-l); }
+  .tier-2 { background: var(--orange-l); }
+  .tier-badge {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px; flex-shrink: 0;
+    font-family: 'Times New Roman', serif;
+  }
+  .tb-0 { background: #A7F3D0; color: var(--green); }
+  .tb-1 { background: var(--blue-m); color: var(--blue); }
+  .tb-2 { background: #FDE68A; color: var(--orange); }
+  .tier-head { font-size: 14px; font-weight: 700; color: var(--text); font-family: 'Times New Roman', serif; }
+  .tier-desc { font-size: 12.5px; color: var(--sub); margin-top: 3px; line-height: 1.5; font-family: 'Times New Roman', serif; }
+
+  /* ── Link button ── */
+  .btn {
+    display: inline-block; padding: 11px 22px; border-radius: 8px;
+    font-size: 14px; font-weight: 700; text-decoration: none;
+    font-family: 'Times New Roman', serif; letter-spacing: .3px;
+    transition: opacity .2s, transform .15s;
+  }
+  .btn:hover { opacity: .85; transform: translateY(-1px); }
+  .btn-blue  { background: var(--blue); color: #fff; }
+  .btn-green { background: var(--green); color: #fff; }
+  .btn-ghost { background: var(--white); color: var(--text); border: 1px solid var(--border); }
+
+  /* ── Lang toggle ── */
+  #lang-btn {
+    position: fixed; top: 22px; right: 24px; z-index: 200;
+    background: var(--white); border: 1px solid var(--border);
+    border-radius: 99px; padding: 7px 16px; cursor: pointer;
+    font-size: 13px; font-family: 'Times New Roman', serif;
+    color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    transition: background .2s;
+  }
+  #lang-btn:hover { background: var(--blue-l); }
+
+  /* ── Nav ── */
+  #nav {
+    position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 14px;
+    background: var(--white); border: 1px solid var(--border);
+    border-radius: 99px; padding: 8px 20px; z-index: 100;
+    box-shadow: 0 2px 12px rgba(0,0,0,.07);
+  }
+  #nav button {
+    background: none; border: none; cursor: pointer;
+    color: var(--sub); font-size: 17px; padding: 4px 8px;
+    font-family: serif; transition: color .2s;
+  }
+  #nav button:hover { color: var(--text); }
+  #counter { font-size: 13px; color: var(--sub); min-width: 44px; text-align: center; font-family: 'Times New Roman', serif; }
+  .dots { display: flex; gap: 6px; }
+  .dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--border); cursor: pointer; transition: background .2s, transform .2s; }
+  .dots span.on { background: var(--blue); transform: scale(1.4); }
+
+  /* ── Progress ── */
+  #progress { position: fixed; top: 0; left: 0; height: 2px; background: linear-gradient(90deg, var(--blue), #60A5FA); transition: width .4s; z-index: 300; }
+
+  /* ── Lang show/hide ── */
+  [data-zh], [data-en] { display: none; }
+  body.zh [data-zh] { display: revert; }
+  body.en [data-en] { display: revert; }
+
+  /* ── Slide-specific tints ── */
+  .tint-blue   { background: #FFFFFF; }
+  .tint-green  { background: #FAFFFE; }
+  .tint-orange { background: #FFFEFB; }
+  .tint-plain  { background: var(--white); }
+
+  /* quote style */
+  blockquote {
+    border-left: 3px solid var(--blue-m); padding-left: 16px;
+    color: var(--sub); font-style: italic;
+    font-family: 'Times New Roman', serif; font-size: 14px; line-height: 1.6;
+    margin: 12px 0;
+  }
+</style>
+</head>
+<body class="zh">
+
+<div id="progress"></div>
+<button id="lang-btn" onclick="toggleLang()">🌐 English</button>
+<div id="deck">
+
+<!-- ═══ S0 · TITLE ═══ -->
+<div class="slide tint-blue active" id="s0">
+  <div class="wrap" style="text-align:center;display:flex;flex-direction:column;align-items:center;">
+    <div class="eyebrow">Kenny &nbsp;·&nbsp; 2026</div>
+    <div class="h1">
+      <span data-zh>用 AI <em>辅助开发</em> 的实践分享</span>
+      <span data-en>How I Build Software <em>With AI</em></span>
+    </div>
+    <div class="lead" style="max-width:560px;">
+      <span data-zh>两个亲手做的项目 · 怎样用 AI 写代码 · 怎样省钱省时间 · 怎样发布到网上</span>
+      <span data-en>Two real projects · How to code with AI · How to save time and cost · How to publish online</span>
+    </div>
+    <div style="margin-top:30px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
+      <span class="pill pill-blue">🤖 <span data-zh>机器人调度</span><span data-en>Robot Dispatch</span></span>
+      <span class="pill pill-orange">💡 <span data-zh>节省费用</span><span data-en>Cost Saving</span></span>
+      <span class="pill pill-blue">🚀 GitHub Pages</span>
+    </div>
+    <div style="margin-top:36px;font-size:12px;color:var(--light);font-style:italic;font-family:'Times New Roman',serif;">
+      <span data-zh>按 ← → 键翻页，或点击下方圆点</span>
+      <span data-en>Press ← → to navigate, or click the dots below</span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S1 · TWO PROJECTS ═══ -->
+<div class="slide tint-plain" id="s1">
+  <div class="wrap">
+    <div class="eyebrow"><span data-zh>项目介绍</span><span data-en>The Projects</span></div>
+    <div class="h2" style="margin-bottom:26px;">
+      <span data-zh><em>机器人调度系统</em>，由 AI 帮忙完成</span>
+      <span data-en><em>Robot Dispatch System</em>, Built With AI Help</span>
+    </div>
+    <div class="card accent-blue" style="max-width:680px;">
+      <div class="card-icon">🤖</div>
+      <div class="card-head"><span data-zh>机器人路径调度系统</span><span data-en>Robot Path Dispatch System</span></div>
+      <div class="card-body">
+        <span data-zh>在地图上画路线，三台机器人自动找路、执行任务、来回巡逻。有人按呼叫键，最近的机器人过去服务。</span>
+        <span data-en>Draw paths on a map. Three robots automatically find routes, run tasks, and patrol. When someone presses a call button, the nearest robot goes to serve.</span>
+      </div>
+      <div style="margin-top:14px;">
+        <span class="pill pill-blue"><span data-zh>2763行代码</span><span data-en>2763 lines</span></span>
+        <span class="pill pill-green"><span data-zh>无需安装</span><span data-en>no install</span></span>
+        <span class="pill pill-orange"><span data-zh>单个网页文件</span><span data-en>single HTML file</span></span>
+      </div>
+      <div style="margin-top:14px;">
+        <a href="https://demonster-retsnomed.github.io/Robot_control/" target="_blank" class="btn btn-blue" style="font-size:13px;padding:9px 18px;">
+          🔗 <span data-zh>打开网站</span><span data-en>Open Site</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S2 · HOW AI HELPS ═══ -->
+<div class="slide tint-blue" id="s2">
+  <div class="wrap">
+    <div class="eyebrow"><span data-zh>AI 的作用</span><span data-en>How AI Helps</span></div>
+    <div class="h2" style="margin-bottom:26px;">
+      <span data-zh>AI 怎样帮我 <em>写程序</em></span>
+      <span data-en>How AI Helps Me <em>Write Code</em></span>
+    </div>
+    <div class="row" style="gap:20px;">
+      <div class="col" style="display:flex;flex-direction:column;gap:0;">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div>
+            <div class="step-title"><span data-zh>用普通话描述想法</span><span data-en>Describe the idea in plain language</span></div>
+            <div class="step-sub"><span data-zh>告诉 AI 想要什么功能，它直接写出完整代码，包括各种特殊情况的处理。</span><span data-en>Tell AI what you want. It writes complete code including edge cases.</span></div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div>
+            <div class="step-title"><span data-zh>出错了让 AI 找原因</span><span data-en>Let AI find the root cause of bugs</span></div>
+            <div class="step-sub"><span data-zh>把错误截图或描述给 AI，它分析问题根源，精确指出哪一行有问题，给出修改方案。</span><span data-en>Share the error or describe the symptom. AI finds the exact line and gives the fix.</span></div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div>
+            <div class="step-title"><span data-zh>功能稳定后整理代码</span><span data-en>Clean up code after features stabilise</span></div>
+            <div class="step-sub"><span data-zh>用 /simplify 命令让 AI 删除多余代码，文件更小，更容易读懂。</span><span data-en>Run /simplify to let AI remove redundant code — smaller files, easier to read.</span></div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div>
+            <div class="step-title"><span data-zh>自动写提交说明</span><span data-en>Auto-write commit messages</span></div>
+            <div class="step-sub"><span data-zh>每次保存代码到 GitHub，由本地 AI 自动生成说明文字，完全不花钱。</span><span data-en>Every time code is saved to GitHub, local AI auto-generates the message — completely free.</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card" style="background:var(--blue-l);border:1px solid var(--blue-m);">
+          <div class="card-head" style="color:var(--blue);">
+            <span data-zh>真实案例</span><span data-en>Real Example</span>
+          </div>
+          <blockquote>
+            <span data-zh>"机器人切换地图后，呼叫功能失效了"</span>
+            <span data-en>"After switching maps, the call function stopped working"</span>
+          </blockquote>
+          <div class="card-body" style="margin-top:10px;">
+            <b style="color:var(--blue)"><span data-zh>AI 分析：</span><span data-en>AI analysis:</span></b><br>
+            <span data-zh>旧地图的路径数据还留在内存里，影响了新地图的运算。<br><br>
+            <b>修复：</b>在切换地图时清除路径缓存，3行代码解决。</span>
+            <span data-en>Old map path data remained in memory, interfering with the new map.<br><br>
+            <b>Fix:</b> Clear the path cache on map switch — solved in 3 lines.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S3 · ALGORITHMS ═══ -->
+<div class="slide tint-plain" id="s3">
+  <div class="wrap">
+    <div class="eyebrow"><span data-zh>技术原理</span><span data-en>How It Works</span></div>
+    <div class="h2" style="margin-bottom:26px;">
+      <span data-zh>机器人系统里用到的 <em>核心技术</em></span>
+      <span data-en>The <em>Core Technologies</em> Inside the Robot System</span>
+    </div>
+    <div class="row" style="gap:16px;">
+      <div class="col" style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card accent-blue">
+          <div class="card-head">🗺️ <span data-zh>自动找最短路线</span><span data-en>Auto Find Shortest Route</span></div>
+          <div class="card-body">
+            <span data-zh>系统把所有路线当作一张图，用算法（Dijkstra）自动算出机器人走哪条路最快。结果会暂存，提高速度。</span>
+            <span data-en>The system treats all paths as a graph and uses an algorithm (Dijkstra) to find the fastest route. Results are cached to improve speed.</span>
+          </div>
+        </div>
+        <div class="card accent-blue">
+          <div class="card-head">📍 <span data-zh>实时计算机器人位置</span><span data-en>Real-time Robot Position</span></div>
+          <div class="card-body">
+            <span data-zh>每一帧根据机器人走了多远（0%~100%），用数学公式算出它在屏幕上的准确坐标，移动流畅不跳帧。</span>
+            <span data-en>Every frame, the robot's exact screen position is calculated mathematically from how far along its path it has travelled (0%–100%).</span>
+          </div>
+        </div>
+      </div>
+      <div class="col" style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card accent-green">
+          <div class="card-head">⚙️ <span data-zh>状态切换系统</span><span data-en>State Switching System</span></div>
+          <div class="card-body">
+            <span data-zh>每台机器人有三种状态：<b>巡逻中</b> → <b>去服务</b> → <b>返回</b>。每个呼叫点也有四种状态：等待 → 已呼叫 → 已分配 → 完成。</span>
+            <span data-en>Each robot has three states: <b>patrolling</b> → <b>serving</b> → <b>returning</b>. Each call point also has four states: idle → called → assigned → done.</span>
+          </div>
+        </div>
+        <div class="card accent-green">
+          <div class="card-head">🎯 <span data-zh>智能分配任务</span><span data-en>Smart Task Assignment</span></div>
+          <div class="card-body">
+            <span data-zh>同一个呼叫点优先派上次服务它的机器人，没有的话就派最近的。避免机器人频繁换目标。</span>
+            <span data-en>The same call point prefers the robot that served it before. If unavailable, the nearest robot is sent instead.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S4 · SAVING COSTS ═══ -->
+<div class="slide tint-green" id="s4">
+  <div class="wrap">
+    <div class="eyebrow"><span data-zh>省钱策略</span><span data-en>Cost Saving</span></div>
+    <div class="h2" style="margin-bottom:22px;">
+      <span data-zh>三个层次，<em>大幅减少</em> AI 费用</span>
+      <span data-en>Three Levels to <em>Drastically Cut</em> AI Costs</span>
+    </div>
+    <div style="margin-bottom:18px;">
+      <div class="tier tier-0">
+        <div class="tier-badge tb-0">0</div>
+        <div>
+          <div class="tier-head"><span data-zh>零费用 — 直接运行命令</span><span data-en>Zero Cost — Run Commands Directly</span></div>
+          <div class="tier-desc"><span data-zh>查磁盘空间、看代码改了什么、列出文件 → 直接运行电脑命令，不需要 AI 介入。</span><span data-en>Check disk space, see what changed, list files → run computer commands directly, no AI needed.</span></div>
+        </div>
+      </div>
+      <div class="tier tier-1">
+        <div class="tier-badge tb-1">1</div>
+        <div>
+          <div class="tier-head"><span data-zh>免费本地 AI — 小模型做简单任务</span><span data-en>Free Local AI — Small Model for Simple Tasks</span></div>
+          <div class="tier-desc">
+            <span data-zh>用电脑本地运行的小 AI（Ollama qwen2.5），扫描文件夹、理解代码、写提交说明，完全不花钱。</span>
+            <span data-en>A small AI running on your own computer (Ollama qwen2.5) scans folders, understands code, and writes commit messages — completely free.</span>
+          </div>
+        </div>
+      </div>
+      <div class="tier tier-2">
+        <div class="tier-badge tb-2">2</div>
+        <div>
+          <div class="tier-head"><span data-zh>Claude — 只用于复杂工作</span><span data-en>Claude — Only for Complex Work</span></div>
+          <div class="tier-desc"><span data-zh>设计新功能、解决复杂问题、重要的架构决策 — 只有前两层解决不了的才用付费 AI。</span><span data-en>Design new features, solve hard problems, make key architecture decisions — only use paid AI when the first two levels fall short.</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="row" style="gap:12px;margin-top:4px;">
+      <div class="stat col"><div class="stat-num">90%</div><div class="stat-label"><span data-zh>扫描文件节省</span><span data-en>file scan savings</span></div></div>
+      <div class="stat col"><div class="stat-num" style="color:var(--green);">100%</div><div class="stat-label"><span data-zh>提交说明节省</span><span data-en>commit msg savings</span></div></div>
+      <div class="stat col"><div class="stat-num" style="color:var(--orange);">85%</div><div class="stat-label"><span data-zh>报错解释节省</span><span data-en>error explain savings</span></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S5 · CAVEMAN MODE ═══ -->
+<div class="slide tint-plain" id="s5">
+  <div class="wrap">
+    <div class="eyebrow"><span data-zh>减少废话</span><span data-en>Cutting Out Fluff</span></div>
+    <div class="h2" style="margin-bottom:26px;">
+      <span data-zh><em>Caveman Mode</em> — 让 AI 说话更简洁</span>
+      <span data-en><em>Caveman Mode</em> — Making AI Responses Shorter</span>
+    </div>
+    <div class="row">
+      <div class="col">
+        <div class="card" style="margin-bottom:14px;">
+          <div class="card-head"><span data-zh>为什么要减少废话</span><span data-en>Why Cut the Fluff</span></div>
+          <div class="card-body">
+            <span data-zh>AI 默认回复很啰嗦，充满"当然可以""非常感谢您的问题"之类的废话。每条回复越长，花费越多。<br><br>通过设置，让 AI 只说重点，每条回复少 30–50% 的字数。</span>
+            <span data-en>By default, AI replies are wordy — full of phrases like "Of course!" and "Great question!" The longer the reply, the more it costs.<br><br>With a setting, AI only says the key points — 30–50% fewer words per response.</span>
+          </div>
+        </div>
+        <div class="card" style="background:var(--blue-l);border:1px solid var(--blue-m);">
+          <div class="card-head" style="color:var(--blue);"><span data-zh>对比</span><span data-en>Comparison</span></div>
+          <div class="card-body">
+            <div style="margin-bottom:8px;">
+              <span style="font-size:11px;color:var(--orange);font-weight:700;">❌ <span data-zh>啰嗦版</span><span data-en>Wordy</span></span><br>
+              <i>"Sure! I'd be happy to help you with that. The issue you're experiencing is likely caused by..."</i>
+            </div>
+            <div>
+              <span style="font-size:11px;color:var(--green);font-weight:700;">✅ <span data-zh>简洁版</span><span data-en>Terse</span></span><br>
+              <i>"Auth bug. Token check: use &lt; not &lt;=. Fix:"</i>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col" style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card accent-orange">
+          <div class="card-head">⚡ <span data-zh>自动设置，无需每次提醒</span><span data-en>Auto-applied, No Reminders Needed</span></div>
+          <div class="card-body">
+            <span data-zh>通过配置文件设好一次，之后每次对话都自动生效，不需要重复说"请简洁回答"。</span>
+            <span data-en>Set it once in a config file. From then on, every conversation applies it automatically — no need to keep saying "please be brief".</span>
+          </div>
+        </div>
+        <div class="card accent-orange">
+          <div class="card-head">🛡️ <span data-zh>重要时候自动恢复正常</span><span data-en>Reverts to Normal for Important Moments</span></div>
+          <div class="card-body">
+            <span data-zh>遇到安全警告、或者要做不可撤销的操作时，AI 自动切回完整说明，确保关键信息不丢失。</span>
+            <span data-en>For security warnings or irreversible actions, AI automatically switches back to full explanations so nothing critical is missed.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S6 · DEPLOYMENT ═══ -->
+<div class="slide tint-blue" id="s6">
+  <div class="wrap">
+    <div class="eyebrow"><span data-zh>发布上线</span><span data-en>Going Live</span></div>
+    <div class="h2" style="margin-bottom:26px;">
+      <span data-zh>代码推送后，<em>自动发布</em> 到网上</span>
+      <span data-en>Push Code Once — <em>Automatically Live</em> Online</span>
+    </div>
+    <div class="row" style="gap:24px;align-items:flex-start;">
+      <div class="col">
+        <div style="display:flex;flex-direction:column;gap:0;">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div>
+              <div class="step-title"><span data-zh>本地写好代码</span><span data-en>Write code locally</span></div>
+              <div class="step-sub"><span data-zh>AI 帮忙写 → 自己测试 → 保存到 Git</span><span data-en>AI helps write → test yourself → save to Git</span></div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div>
+              <div class="step-title"><span data-zh>推送到 GitHub</span><span data-en>Push to GitHub</span></div>
+              <div class="step-sub"><span data-zh>一条命令把代码上传，自动触发后续步骤</span><span data-en>One command uploads the code, which automatically triggers the next steps</span></div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div>
+              <div class="step-title"><span data-zh>GitHub 自动打包发布</span><span data-en>GitHub auto-packages and deploys</span></div>
+              <div class="step-sub"><span data-zh>配置好的自动化程序（Actions）把网站文件整理好，放到发布分支</span><span data-en>A configured automation (Actions) organises the site files and puts them on the publish branch</span></div>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">4</div>
+            <div>
+              <div class="step-title"><span data-zh>全世界都能访问</span><span data-en>Accessible worldwide</span></div>
+              <div class="step-sub"><span data-zh>1–2 分钟内，任何设备打开链接就能用。不需要服务器，不需要登录，完全免费。</span><span data-en>Within 1–2 minutes, anyone can open the link on any device. No server, no login, completely free.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col" style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card" style="background:var(--white);">
+          <div class="card-head"><span data-zh>已上线的网站</span><span data-en>Live Site</span></div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">
+            <a href="https://demonster-retsnomed.github.io/Robot_control/" target="_blank"
+               style="display:block;padding:12px 16px;background:var(--blue-l);border:1px solid var(--blue-m);border-radius:8px;text-decoration:none;">
+              <div style="font-size:11px;color:var(--sub);font-style:italic;margin-bottom:3px;font-family:'Times New Roman',serif;"><span data-zh>机器人调度系统</span><span data-en>Robot Dispatch System</span></div>
+              <div style="font-size:13px;color:var(--blue);font-family:'Times New Roman',serif;">demonster-retsnomed.github.io/Robot_control/ →</div>
+            </a>
+          </div>
+        </div>
+        <div class="card accent-orange" style="background:var(--orange-l);">
+          <div class="card-head"><span data-zh>为什么用 GitHub Pages</span><span data-en>Why GitHub Pages</span></div>
+          <div class="card-body">
+            <span data-zh>✅ 完全免费 &nbsp; ✅ 无需服务器 &nbsp; ✅ 代码即网站 &nbsp; ✅ 自动更新</span>
+            <span data-en>✅ Completely free &nbsp; ✅ No server &nbsp; ✅ Code is the site &nbsp; ✅ Auto-updates</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S7 · RESULTS ═══ -->
+<div class="slide tint-plain" id="s7">
+  <div class="wrap" style="text-align:center;display:flex;flex-direction:column;align-items:center;">
+    <div class="eyebrow"><span data-zh>成果总结</span><span data-en>Results</span></div>
+    <div class="h2" style="margin-bottom:34px;"><span data-zh>用数字说明成果</span><span data-en>Results in Numbers</span></div>
+    <div class="row" style="justify-content:center;gap:14px;margin-bottom:28px;">
+      <div class="stat col"><div class="stat-num">2763</div><div class="stat-label"><span data-zh>机器人系统代码行</span><span data-en>lines of robot code</span></div></div>
+      <div class="stat col"><div class="stat-num">0</div><div class="stat-label"><span data-zh>使用外部插件库</span><span data-en>external libraries used</span></div></div>
+      <div class="stat col"><div class="stat-num">1</div><div class="stat-label"><span data-zh>已上线的网站</span><span data-en>live website</span></div></div>
+      <div class="stat col"><div class="stat-num" style="color:var(--green);">90%</div><div class="stat-label"><span data-zh>平均节省 AI 费用</span><span data-en>avg AI cost saved</span></div></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+      <span class="pill pill-blue"><span data-zh>✅ 自动找最短路线</span><span data-en>✅ Auto shortest path</span></span>
+      <span class="pill pill-blue"><span data-zh>✅ 状态切换系统</span><span data-en>✅ State machine</span></span>
+      <span class="pill pill-green"><span data-zh>✅ 免费本地 AI</span><span data-en>✅ Free local AI</span></span>
+      <span class="pill pill-green"><span data-zh>✅ 自动发布上线</span><span data-en>✅ Auto deployment</span></span>
+      <span class="pill pill-orange"><span data-zh>✅ 减少 AI 废话</span><span data-en>✅ Terse AI mode</span></span>
+      <span class="pill pill-orange"><span data-zh>✅ 无服务器</span><span data-en>✅ Serverless</span></span>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ S8 · CLOSE ═══ -->
+<div class="slide tint-blue" id="s8">
+  <div class="wrap" style="text-align:center;display:flex;flex-direction:column;align-items:center;">
+    <div class="eyebrow">Kenny · 2026</div>
+    <div class="h1">
+      <span data-zh>AI 是工具，<em>想法是核心</em></span>
+      <span data-en>AI is the Tool.<br><em>Your Thinking is the Core.</em></span>
+    </div>
+    <div class="lead" style="max-width:560px;">
+      <span data-zh>设计思路、解决问题的方向、判断好坏 — 这些仍然是人做的事。<br>AI 帮你把想法快速变成现实。</span>
+      <span data-en>Deciding what to build, figuring out how to solve problems, judging what is good — these are still human work.<br>AI helps you turn ideas into reality faster.</span>
+    </div>
+    <div style="margin-top:34px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
+      <a href="https://demonster-retsnomed.github.io/Robot_control/" target="_blank" class="btn btn-blue">🤖 <span data-zh>机器人系统</span><span data-en>Robot System</span></a>
+      <a href="https://github.com/Demonster-retsnomeD" target="_blank" class="btn btn-ghost">📦 GitHub</a>
+    </div>
+    <div style="margin-top:32px;font-size:13px;color:var(--light);font-style:italic;font-family:'Times New Roman',serif;">Built with Claude Code + Ollama · Kenny</div>
+  </div>
+</div>
+
+</div><!-- /#deck -->
+
+<!-- Nav -->
+<div id="nav">
+  <button onclick="go(-1)">&#8592;</button>
+  <div class="dots" id="dots"></div>
+  <span id="counter">1 / 9</span>
+  <button onclick="go(1)">&#8594;</button>
+</div>
+
+<script>
+const slides = document.querySelectorAll('.slide');
+const total = slides.length;
+let cur = 0;
+
+const dotsEl = document.getElementById('dots');
+slides.forEach((_, i) => {
+  const d = document.createElement('span');
+  d.onclick = () => goTo(i);
+  dotsEl.appendChild(d);
+});
+
+function goTo(n) {
+  if (n < 0 || n >= total) return;
+  slides[cur].classList.remove('active');
+  slides[cur].classList.add('exit');
+  const prev = cur; cur = n;
+  slides[cur].classList.add('active');
+  setTimeout(() => slides[prev].classList.remove('exit'), 500);
+  document.getElementById('progress').style.width = ((cur+1)/total*100) + '%';
+  document.getElementById('counter').textContent = (cur+1) + ' / ' + total;
+  dotsEl.querySelectorAll('span').forEach((d,i) => d.classList.toggle('on', i===cur));
+}
+function go(dir) { goTo(cur+dir); }
+
+document.addEventListener('keydown', e => {
+  if (e.key==='ArrowRight'||e.key===' ') go(1);
+  if (e.key==='ArrowLeft') go(-1);
+});
+
+let tx = 0;
+document.addEventListener('touchstart', e => tx = e.touches[0].clientX);
+document.addEventListener('touchend', e => {
+  const dx = tx - e.changedTouches[0].clientX;
+  if (Math.abs(dx) > 50) go(dx > 0 ? 1 : -1);
+});
+
+function toggleLang() {
+  const isZh = document.body.classList.contains('zh');
+  document.body.classList.toggle('zh', !isZh);
+  document.body.classList.toggle('en', isZh);
+  document.getElementById('lang-btn').textContent = isZh ? '🌐 中文' : '🌐 English';
+}
+
+goTo(0);
+</script>
+</body>
+</html>
