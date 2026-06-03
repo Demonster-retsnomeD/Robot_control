@@ -277,6 +277,7 @@
           <span data-lang-zh>📁 导入图片</span><span data-lang-en style="display:none">📁 Import Image</span>
         </button>
         <input type="file" id="bgMapFile" accept="image/*" style="display:none;" onchange="loadBgMap(event)">
+
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
           <span style="font-size:11px;color:#64748b;white-space:nowrap;" data-lang-zh>透明度</span>
           <span style="font-size:11px;color:#64748b;white-space:nowrap;" data-lang-en style="display:none">Opacity</span>
@@ -285,10 +286,34 @@
             style="flex:1;">
           <span id="bgAlphaVal" style="font-size:11px;color:#64748b;min-width:30px;">60%</span>
         </div>
-        <button onclick="clearBgMap()" style="width:100%;font-size:11px;padding:5px;border:1px solid #e2e8f0;border-radius:4px;background:#fef2f2;color:#dc2626;cursor:pointer;">
-          <span data-lang-zh>🗑️ 清除背景</span><span data-lang-en style="display:none">🗑️ Clear</span>
+
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+          <span style="font-size:11px;color:#64748b;white-space:nowrap;" data-lang-zh>缩放</span>
+          <span style="font-size:11px;color:#64748b;white-space:nowrap;" data-lang-en style="display:none">Scale</span>
+          <input type="range" id="bgMapScaleSlider" min="10" max="400" value="100"
+            oninput="bgMapScale=this.value/100;document.getElementById('bgScaleVal').textContent=this.value+'%'"
+            style="flex:1;">
+          <span id="bgScaleVal" style="font-size:11px;color:#64748b;min-width:36px;">100%</span>
+        </div>
+
+        <button id="btnBgDrag" onclick="toggleBgDragMode()"
+          style="width:100%;font-size:11px;padding:5px;border:1px solid #cbd5e1;border-radius:4px;background:#f8fafc;color:#334155;cursor:pointer;margin-bottom:4px;">
+          <span data-lang-zh>🖱️ 拖动调整位置</span><span data-lang-en style="display:none">🖱️ Drag to Reposition</span>
         </button>
-        <div id="bgMapStatus" style="font-size:10px;color:#94a3b8;margin-top:5px;text-align:center;">
+        <div id="bgDragHint" style="font-size:10px;color:#94a3b8;text-align:center;margin-bottom:4px;display:none;">
+          <span data-lang-zh>拖动移位 · 滚轮缩放</span><span data-lang-en style="display:none">Drag to move · Scroll to zoom</span>
+        </div>
+
+        <div style="display:flex;gap:4px;margin-bottom:4px;">
+          <button onclick="resetBgMap()" style="flex:1;font-size:11px;padding:5px;border:1px solid #e2e8f0;border-radius:4px;background:#f8fafc;color:#334155;cursor:pointer;">
+            <span data-lang-zh>⟲ 重置位置</span><span data-lang-en style="display:none">⟲ Reset</span>
+          </button>
+          <button onclick="clearBgMap()" style="flex:1;font-size:11px;padding:5px;border:1px solid #e2e8f0;border-radius:4px;background:#fef2f2;color:#dc2626;cursor:pointer;">
+            <span data-lang-zh>🗑️ 清除</span><span data-lang-en style="display:none">🗑️ Clear</span>
+          </button>
+        </div>
+
+        <div id="bgMapStatus" style="font-size:10px;color:#94a3b8;text-align:center;">
           <span data-lang-zh>未加载</span><span data-lang-en style="display:none">Not loaded</span>
         </div>
       </div>
@@ -440,6 +465,15 @@ function updateLanguageUI() {
 // ── 背景地图 ──
 let bgMapImage = null;
 let bgMapAlpha = 0.6;
+let bgMapScale = 1.0;
+let bgMapX = 0;
+let bgMapY = 0;
+let bgMapDragMode = false;
+let bgMapDragging = false;
+let bgMapDragStartX = 0;
+let bgMapDragStartY = 0;
+let bgMapDragOriginX = 0;
+let bgMapDragOriginY = 0;
 
 function loadBgMap(event) {
   const file = event.target.files[0];
@@ -449,9 +483,11 @@ function loadBgMap(event) {
     const img = new Image();
     img.onload = () => {
       bgMapImage = img;
-      const status = document.getElementById('bgMapStatus');
-      status.innerHTML = `<span style="color:#10b981">✓ ${file.name}</span>`;
-      localStorage.setItem('bgMapData', e.target.result);
+      // 默认居中
+      bgMapX = (map.width - img.width * bgMapScale) / 2;
+      bgMapY = (map.height - img.height * bgMapScale) / 2;
+      document.getElementById('bgMapStatus').innerHTML = `<span style="color:#10b981">✓ ${file.name} (${img.width}×${img.height})</span>`;
+      saveBgMapState(e.target.result);
     };
     img.src = e.target.result;
   };
@@ -459,21 +495,63 @@ function loadBgMap(event) {
   event.target.value = '';
 }
 
+function saveBgMapState(dataUrl) {
+  try {
+    if (dataUrl) localStorage.setItem('bgMapData', dataUrl);
+    localStorage.setItem('bgMapPos', JSON.stringify({ x: bgMapX, y: bgMapY, scale: bgMapScale, alpha: bgMapAlpha }));
+  } catch(e) { /* 图片太大时忽略 */ }
+}
+
 function clearBgMap() {
   bgMapImage = null;
+  bgMapX = 0; bgMapY = 0; bgMapScale = 1.0;
   localStorage.removeItem('bgMapData');
-  const status = document.getElementById('bgMapStatus');
-  status.innerHTML = currentLanguage === 'zh' ? '<span>未加载</span>' : '<span>Not loaded</span>';
+  localStorage.removeItem('bgMapPos');
+  document.getElementById('bgMapStatus').innerHTML = currentLanguage === 'zh' ? '<span>未加载</span>' : '<span>Not loaded</span>';
+  if (bgMapDragMode) toggleBgDragMode();
+}
+
+function resetBgMap() {
+  if (!bgMapImage) return;
+  bgMapScale = 1.0;
+  bgMapX = (map.width - bgMapImage.width) / 2;
+  bgMapY = (map.height - bgMapImage.height) / 2;
+  document.getElementById('bgMapScaleSlider').value = 100;
+  document.getElementById('bgScaleVal').textContent = '100%';
+}
+
+function toggleBgDragMode() {
+  bgMapDragMode = !bgMapDragMode;
+  const btn = document.getElementById('btnBgDrag');
+  const hint = document.getElementById('bgDragHint');
+  if (bgMapDragMode) {
+    btn.style.background = '#eff6ff';
+    btn.style.color = '#2563eb';
+    btn.style.borderColor = '#93c5fd';
+    hint.style.display = 'block';
+    canvas.style.cursor = 'move';
+  } else {
+    btn.style.background = '#f8fafc';
+    btn.style.color = '#334155';
+    btn.style.borderColor = '#cbd5e1';
+    hint.style.display = 'none';
+    canvas.style.cursor = 'default';
+  }
 }
 
 // 启动时从 localStorage 恢复背景图
 (function restoreBgMap() {
   const data = localStorage.getItem('bgMapData');
   if (!data) return;
+  const pos = JSON.parse(localStorage.getItem('bgMapPos') || '{}');
+  if (pos.scale) { bgMapScale = pos.scale; document.getElementById('bgMapScaleSlider').value = Math.round(pos.scale*100); document.getElementById('bgScaleVal').textContent = Math.round(pos.scale*100)+'%'; }
+  if (pos.alpha) { bgMapAlpha = pos.alpha; document.getElementById('bgMapOpacity').value = Math.round(pos.alpha*100); document.getElementById('bgAlphaVal').textContent = Math.round(pos.alpha*100)+'%'; }
   const img = new Image();
   img.onload = () => {
     bgMapImage = img;
-    document.getElementById('bgMapStatus').innerHTML = '<span style="color:#10b981">✓ 已恢复</span>';
+    bgMapX = pos.x !== undefined ? pos.x : (map.width - img.width * bgMapScale) / 2;
+    bgMapY = pos.y !== undefined ? pos.y : (map.height - img.height * bgMapScale) / 2;
+    document.getElementById('bgMapStatus').innerHTML = `<span style="color:#10b981">✓ 已恢复 (${img.width}×${img.height})</span>`;
   };
   img.src = data;
 })();
@@ -805,6 +883,55 @@ function distanceToLineSegment(px, py, x1, y1, x2, y2) {
 }
 
 // 鼠标移动 — 检测悬停的点和线段
+// 背景地图拖动 & 滚轮缩放
+canvas.addEventListener('mousedown', (e) => {
+  if (!bgMapDragMode) return;
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  bgMapDragging = true;
+  bgMapDragStartX = (e.clientX - rect.left) * (canvas.width / rect.width);
+  bgMapDragStartY = (e.clientY - rect.top) * (canvas.height / rect.height);
+  bgMapDragOriginX = bgMapX;
+  bgMapDragOriginY = bgMapY;
+  canvas.style.cursor = 'grabbing';
+}, true);
+
+canvas.addEventListener('mousemove', (e) => {
+  if (bgMapDragMode && bgMapDragging) {
+    const rect = canvas.getBoundingClientRect();
+    const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const cy = (e.clientY - rect.top) * (canvas.height / rect.height);
+    bgMapX = bgMapDragOriginX + (cx - bgMapDragStartX);
+    bgMapY = bgMapDragOriginY + (cy - bgMapDragStartY);
+    return;
+  }
+}, true);
+
+canvas.addEventListener('mouseup', () => {
+  if (bgMapDragMode && bgMapDragging) {
+    bgMapDragging = false;
+    canvas.style.cursor = 'move';
+    if (bgMapImage) saveBgMapState(null);
+  }
+}, true);
+
+canvas.addEventListener('wheel', (e) => {
+  if (!bgMapDragMode || !bgMapImage) return;
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+  const delta = e.deltaY < 0 ? 1.05 : 0.95;
+  const newScale = Math.min(8, Math.max(0.1, bgMapScale * delta));
+  // 以鼠标位置为中心缩放
+  bgMapX = mx - (mx - bgMapX) * (newScale / bgMapScale);
+  bgMapY = my - (my - bgMapY) * (newScale / bgMapScale);
+  bgMapScale = newScale;
+  const pct = Math.round(bgMapScale * 100);
+  document.getElementById('bgMapScaleSlider').value = Math.min(400, pct);
+  document.getElementById('bgScaleVal').textContent = pct + '%';
+}, { passive: false });
+
 canvas.addEventListener('mousemove', (e) => {
   const rect = canvas.getBoundingClientRect();
   // 计算canvas显示大小与实际大小的缩放比例
@@ -2996,10 +3123,12 @@ function drawMap() {
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, map.width, map.height);
 
-  // 背景地图图片
+  // 背景地图图片（保持原比例，支持位移和缩放）
   if (bgMapImage) {
     ctx.globalAlpha = bgMapAlpha;
-    ctx.drawImage(bgMapImage, 0, 0, map.width, map.height);
+    const w = bgMapImage.width * bgMapScale;
+    const h = bgMapImage.height * bgMapScale;
+    ctx.drawImage(bgMapImage, bgMapX, bgMapY, w, h);
     ctx.globalAlpha = 1.0;
   }
 
