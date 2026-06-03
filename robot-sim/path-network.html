@@ -305,11 +305,17 @@
         </div>
 
         <div style="display:flex;gap:4px;margin-bottom:4px;">
-          <button onclick="resetBgMap()" style="flex:1;font-size:11px;padding:5px;border:1px solid #e2e8f0;border-radius:4px;background:#f8fafc;color:#334155;cursor:pointer;">
-            <span data-lang-zh>⟲ 重置位置</span><span data-lang-en style="display:none">⟲ Reset</span>
+          <button id="btnBgConfirm" onclick="confirmBgMap()" style="flex:1;font-size:11px;padding:5px;border:1px solid #a7f3d0;border-radius:4px;background:#ecfdf5;color:#059669;cursor:pointer;font-weight:600;">
+            <span data-lang-zh>✅ 确认锁定</span><span data-lang-en style="display:none">✅ Lock</span>
+          </button>
+          <button id="btnBgUnlock" onclick="unlockBgMap()" style="flex:1;font-size:11px;padding:5px;border:1px solid #fde68a;border-radius:4px;background:#fffbeb;color:#d97706;cursor:pointer;font-weight:600;display:none;">
+            <span data-lang-zh>🔓 解锁编辑</span><span data-lang-en style="display:none">🔓 Unlock</span>
+          </button>
+          <button onclick="resetBgMap()" id="btnBgReset" style="flex:1;font-size:11px;padding:5px;border:1px solid #e2e8f0;border-radius:4px;background:#f8fafc;color:#334155;cursor:pointer;">
+            <span data-lang-zh>⟲ 重置</span><span data-lang-en style="display:none">⟲ Reset</span>
           </button>
           <button onclick="clearBgMap()" style="flex:1;font-size:11px;padding:5px;border:1px solid #e2e8f0;border-radius:4px;background:#fef2f2;color:#dc2626;cursor:pointer;">
-            <span data-lang-zh>🗑️ 清除</span><span data-lang-en style="display:none">🗑️ Clear</span>
+            <span data-lang-zh>🗑️</span><span data-lang-en style="display:none">🗑️</span>
           </button>
         </div>
 
@@ -520,7 +526,39 @@ function resetBgMap() {
   document.getElementById('bgScaleVal').textContent = '100%';
 }
 
+let bgMapLocked = false;
+
+function confirmBgMap() {
+  if (!bgMapImage) return;
+  bgMapLocked = true;
+  if (bgMapDragMode) toggleBgDragMode();
+  // 禁用编辑控件
+  document.getElementById('btnBgDrag').disabled = true;
+  document.getElementById('btnBgDrag').style.opacity = '0.4';
+  document.getElementById('btnBgReset').disabled = true;
+  document.getElementById('btnBgReset').style.opacity = '0.4';
+  document.getElementById('bgMapScaleSlider').disabled = true;
+  document.getElementById('bgMapConfirm');
+  document.getElementById('btnBgConfirm').style.display = 'none';
+  document.getElementById('btnBgUnlock').style.display = 'flex';
+  document.getElementById('bgMapStatus').innerHTML = '<span style="color:#059669">🔒 已锁定</span>';
+  saveBgMapState(null);
+}
+
+function unlockBgMap() {
+  bgMapLocked = false;
+  document.getElementById('btnBgDrag').disabled = false;
+  document.getElementById('btnBgDrag').style.opacity = '1';
+  document.getElementById('btnBgReset').disabled = false;
+  document.getElementById('btnBgReset').style.opacity = '1';
+  document.getElementById('bgMapScaleSlider').disabled = false;
+  document.getElementById('btnBgUnlock').style.display = 'none';
+  document.getElementById('btnBgConfirm').style.display = 'flex';
+  document.getElementById('bgMapStatus').innerHTML = '<span style="color:#d97706">🔓 编辑中</span>';
+}
+
 function toggleBgDragMode() {
+  if (bgMapLocked) return;
   bgMapDragMode = !bgMapDragMode;
   const btn = document.getElementById('btnBgDrag');
   const hint = document.getElementById('bgDragHint');
@@ -885,7 +923,7 @@ function distanceToLineSegment(px, py, x1, y1, x2, y2) {
 // 鼠标移动 — 检测悬停的点和线段
 // 背景地图拖动 & 滚轮缩放
 canvas.addEventListener('mousedown', (e) => {
-  if (!bgMapDragMode) return;
+  if (!bgMapDragMode || bgMapLocked) return;
   e.preventDefault();
   const rect = canvas.getBoundingClientRect();
   bgMapDragging = true;
@@ -916,7 +954,7 @@ canvas.addEventListener('mouseup', () => {
 }, true);
 
 canvas.addEventListener('wheel', (e) => {
-  if (!bgMapDragMode || !bgMapImage) return;
+  if (!bgMapDragMode || !bgMapImage || bgMapLocked) return;
   e.preventDefault();
   const rect = canvas.getBoundingClientRect();
   const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
