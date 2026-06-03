@@ -272,6 +272,28 @@
       </div>
 
       <div class="panel">
+        <h3 data-lang-zh="🖼️ 背景地图" data-lang-en="🖼️ Background Map">🖼️ 背景地图</h3>
+        <button class="btn-primary" onclick="document.getElementById('bgMapFile').click()" style="width:100%;margin-bottom:6px;font-size:11px;">
+          <span data-lang-zh>📁 导入图片</span><span data-lang-en style="display:none">📁 Import Image</span>
+        </button>
+        <input type="file" id="bgMapFile" accept="image/*" style="display:none;" onchange="loadBgMap(event)">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+          <span style="font-size:11px;color:#64748b;white-space:nowrap;" data-lang-zh>透明度</span>
+          <span style="font-size:11px;color:#64748b;white-space:nowrap;" data-lang-en style="display:none">Opacity</span>
+          <input type="range" id="bgMapOpacity" min="10" max="100" value="60"
+            oninput="bgMapAlpha=this.value/100;document.getElementById('bgAlphaVal').textContent=this.value+'%'"
+            style="flex:1;">
+          <span id="bgAlphaVal" style="font-size:11px;color:#64748b;min-width:30px;">60%</span>
+        </div>
+        <button onclick="clearBgMap()" style="width:100%;font-size:11px;padding:5px;border:1px solid #e2e8f0;border-radius:4px;background:#fef2f2;color:#dc2626;cursor:pointer;">
+          <span data-lang-zh>🗑️ 清除背景</span><span data-lang-en style="display:none">🗑️ Clear</span>
+        </button>
+        <div id="bgMapStatus" style="font-size:10px;color:#94a3b8;margin-top:5px;text-align:center;">
+          <span data-lang-zh>未加载</span><span data-lang-en style="display:none">Not loaded</span>
+        </div>
+      </div>
+
+      <div class="panel">
         <h3>💾 地图预设</h3>
         <div style="font-size: 11px; margin-bottom: 8px; display: flex; gap: 4px;">
           <input type="text" id="presetName" placeholder="预设名称" style="flex: 1; padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11px;">
@@ -414,6 +436,47 @@ function updateLanguageUI() {
     if (el) el.textContent = t(key);
   }
 }
+
+// ── 背景地图 ──
+let bgMapImage = null;
+let bgMapAlpha = 0.6;
+
+function loadBgMap(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = () => {
+      bgMapImage = img;
+      const status = document.getElementById('bgMapStatus');
+      status.innerHTML = `<span style="color:#10b981">✓ ${file.name}</span>`;
+      localStorage.setItem('bgMapData', e.target.result);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  event.target.value = '';
+}
+
+function clearBgMap() {
+  bgMapImage = null;
+  localStorage.removeItem('bgMapData');
+  const status = document.getElementById('bgMapStatus');
+  status.innerHTML = currentLanguage === 'zh' ? '<span>未加载</span>' : '<span>Not loaded</span>';
+}
+
+// 启动时从 localStorage 恢复背景图
+(function restoreBgMap() {
+  const data = localStorage.getItem('bgMapData');
+  if (!data) return;
+  const img = new Image();
+  img.onload = () => {
+    bgMapImage = img;
+    document.getElementById('bgMapStatus').innerHTML = '<span style="color:#10b981">✓ 已恢复</span>';
+  };
+  img.src = data;
+})();
 
 const canvas = document.getElementById('map');
 const ctx = canvas.getContext('2d');
@@ -2932,6 +2995,13 @@ function drawReadOnlyPoints() {
 function drawMap() {
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, map.width, map.height);
+
+  // 背景地图图片
+  if (bgMapImage) {
+    ctx.globalAlpha = bgMapAlpha;
+    ctx.drawImage(bgMapImage, 0, 0, map.width, map.height);
+    ctx.globalAlpha = 1.0;
+  }
 
   // 绘制地图边界线
   ctx.strokeStyle = '#0ea5e9';
